@@ -1,0 +1,79 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Building2,
+  Tags,
+  Palette,
+  Radio,
+  ScrollText,
+} from "lucide-react";
+
+export function AdminNavLinks() {
+  const pathname = usePathname();
+
+  // Jangan render nav jika berada di /admin/login
+  if (pathname === "/admin/login") return null;
+
+  const links = [
+    {
+      name: "Dashboard Overview",
+      href: "/admin",
+      icon: LayoutDashboard,
+      exact: true,
+    },
+    {
+      name: "Manajemen Tenant",
+      href: "/admin/tenants",
+      icon: Building2,
+    },
+    {
+      name: "Katalog & Harga",
+      href: "/admin/catalog",
+      icon: Tags,
+    },
+    {
+      name: "Katalog Tema UI",
+      href: "/admin/themes",
+      icon: Palette,
+    },
+    {
+      name: "Broadcast Pesan",
+      href: "/admin/broadcast",
+      icon: Radio,
+    },
+    {
+      name: "Audit Logs",
+      href: "/admin/audit",
+      icon: ScrollText,
+    },
+  ];
+
+  return (
+    <nav className="space-y-1">
+      {links.map((link) => {
+        const Icon = link.icon;
+        const isActive = link.exact
+          ? pathname === link.href
+          : pathname.startsWith(link.href);
+
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+              isActive
+                ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {link.name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

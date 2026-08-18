@@ -58,6 +58,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedTier, setExpandedTier] = useState<string | null>(null);
 
   const isAnnual = billingCycle === "ANNUAL";
   const availableTiers = data.availableTiers || [];
@@ -345,7 +346,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-5 ${expandedTier === null ? 'items-stretch' : 'items-start'}`}>
           {availableTiers.map((tier: any) => {
             const isSelected = selectedTierId === tier.id;
             const isCurrentActive = tier.id === currentTierId && !isTrial && !isCycleChanged;
@@ -401,11 +402,11 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 ) : null}
 
                 <div className="space-y-4">
-                  <div>
+                  <div className="min-h-[4rem]">
                     <span className="text-xs font-black uppercase tracking-wider block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
                       {tier.name}
                     </span>
-                    <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-medium line-clamp-2">
                       {tier.code === "basic"
                         ? "Solusi ideal untuk 1 outlet usaha yang ingin serba otomatis."
                         : tier.code === "pro"
@@ -414,15 +415,19 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     </p>
                   </div>
 
-                  <div>
+                  <div className="min-h-[4.5rem] flex flex-col justify-center">
                     <div className="text-2xl sm:text-3xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                       {price === 0 && tier.code === "enterprise"
                         ? "Hubungi Sales"
                         : `Rp ${price.toLocaleString("id-ID")}`}
                     </div>
-                    {price > 0 && (
+                    {price > 0 ? (
                       <span className="text-[11px] font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
                         /{isAnnual ? "tahun (hemat 17%)" : "bulan"}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-medium text-transparent select-none">
+                        /bulan
                       </span>
                     )}
                   </div>
@@ -463,18 +468,23 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
                             <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
-                          </li>
+                          
+                          {expandedTier === tier.id && (
+                            <>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
+                              </li>
+                            </>
+                          )}
                         </>
                       )}
 
@@ -512,18 +522,51 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
                             <span>Monitoring Stok &amp; Mutasi Multi-Outlet</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Laporan Penjualan per Kasir &amp; Audit Transaksi</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Export Laporan Lengkap ke Excel / CSV / PDF</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Kustomisasi Layout POS &amp; Tema Dashboard</span>
-                          </li>
+
+                          {expandedTier === tier.id && (
+                            <>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Penjualan per Kasir &amp; Audit Transaksi</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Export Laporan Lengkap ke Excel / CSV / PDF</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kustomisasi Layout POS &amp; Tema Dashboard</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kasir POS Cepat &amp; Multi-Metode Bayar (QRIS, Tunai, Kartu)</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Manajemen Produk &amp; Kategori Tanpa Batas</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Manajemen Stok Produk &amp; Peringatan Stok Menipis</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
+                              </li>
+                            </>
+                          )}
                         </>
                       )}
 
@@ -555,31 +598,99 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Laporan Konsolidasi Holding &amp; Multi-Entitas</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
                             <span>Manajemen Multi-Gudang &amp; Distribusi Terpusat</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Akses Bebas Semua Koleksi Tema &amp; Struk Premium</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Dedicated Database Instance &amp; Backup Prioritas</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Dedicated Account Manager &amp; SLA 99.9% Uptime</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Prioritas Training On-Site &amp; CS Support 24/7</span>
-                          </li>
+
+                          {expandedTier === tier.id && (
+                            <>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Akses Bebas Semua Koleksi Tema &amp; Struk Premium</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Dedicated Database Instance &amp; Backup Prioritas</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Dedicated Account Manager &amp; SLA 99.9% Uptime</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Prioritas Training On-Site &amp; CS Support 24/7</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Hak Akses Role Admin Cabang Terisolasi</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Konsolidasi Seluruh Cabang</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Komparatif Laba Rugi Antar-Cabang</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Monitoring Stok &amp; Mutasi Multi-Outlet</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Penjualan per Kasir &amp; Audit Transaksi</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Export Laporan Lengkap ke Excel / CSV / PDF</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kustomisasi Layout POS &amp; Tema Dashboard</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kasir POS Cepat &amp; Multi-Metode Bayar (QRIS, Tunai, Kartu)</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Manajemen Produk &amp; Kategori Tanpa Batas</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Manajemen Stok Produk &amp; Peringatan Stok Menipis</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
+                              </li>
+                              <li className="flex items-start gap-2 animate-fadeIn">
+                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
+                              </li>
+                            </>
+                          )}
                         </>
                       )}
                     </ul>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setExpandedTier(expandedTier === tier.id ? null : tier.id); }}
+                      className="text-[11px] font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition mt-2"
+                    >
+                      {expandedTier === tier.id ? (
+                        <>Tutup Detail <AlertCircle className="w-3 h-3 hidden" /></> 
+                      ) : (
+                        <>Lihat Detail Paket <Info className="w-3 h-3" /></>
+                      )}
+                    </button>
                   </div>
 
                 </div>

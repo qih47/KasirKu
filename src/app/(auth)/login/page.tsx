@@ -126,8 +126,8 @@ export default function LoginPage() {
         style={{ backgroundColor: t.navBg, borderColor: t.navBorder }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="relative w-9 h-9 group-hover:scale-105 transition">
+          <Link href="/" className="flex items-center gap-1 group">
+            <div className="relative w-20 h-20 group-hover:scale-105 transition">
               <Image src="/smLogo.png" alt="Qassa" fill className="object-contain" priority />
             </div>
             <div>

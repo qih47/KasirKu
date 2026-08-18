@@ -1,566 +1,892 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
-  Store,
-  Scissors,
   Coffee,
+  Scissors,
   ShoppingBag,
   Shirt,
   User,
   Mail,
   Lock,
+  Phone,
+  MapPin,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   Loader2,
   CheckCircle2,
-  Zap,
-  CreditCard,
-  Building,
-  Sparkles,
   ShieldCheck,
+  Zap,
   Check,
+  Eye,
+  EyeOff,
+  Store,
+  Sparkles,
+  KeyRound,
+  RotateCcw,
+  Sun,
+  Moon,
 } from "lucide-react";
-import { registerTenantAndOwner } from "@/modules/auth/actions";
+import {
+  sendRegistrationOtpAction,
+  verifyOtpAndRegisterTenant,
+} from "@/modules/auth/actions";
 
-export function RegisterClient({
-  dbTiers = [],
-  dbPlugins = [],
-  initialPlan,
-  initialBilling = "MONTHLY",
-}: {
-  dbTiers: any[];
-  dbPlugins: any[];
-  initialPlan?: string;
-  initialBilling?: "MONTHLY" | "ANNUAL";
-}) {
+interface RegisterClientProps {
+  initialVertical?: string;
+}
+
+export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps) {
   const router = useRouter();
+  const [isDark, setIsDark] = useState(false);
 
-  // Mode Pendaftaran: "TRIAL" vs "PAID" (Jalur Resmi Berbayar)
-  const isPaidInitial = initialPlan && initialPlan.toLowerCase() !== "trial";
-  const [planType, setPlanType] = useState<"TRIAL" | "PAID">(isPaidInitial ? "PAID" : "TRIAL");
-
-  // State Pilihan Lisensi & Modul
-  const defaultTierCode = initialPlan?.toLowerCase() || "basic";
-  const [selectedTierCode, setSelectedTierCode] = useState<string>(
-    dbTiers.find((t) => t.code === defaultTierCode)?.code || "basic"
-  );
-  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">(initialBilling);
-
-  // State Plugins yang dipilih (Default: barbershop & cafe)
-  const [selectedPluginCodes, setSelectedPluginCodes] = useState<string[]>(["barbershop"]);
-
-  // Form Fields
-  const [businessName, setBusinessName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Helper Icon Plugin
-  const getPluginIcon = (code: string) => {
-    switch (code.toLowerCase()) {
-      case "barbershop":
-        return Scissors;
-      case "cafe":
-        return Coffee;
-      case "retail":
-        return ShoppingBag;
-      case "laundry":
-        return Shirt;
-      default:
-        return Store;
-    }
+  // Theme Tokens
+  const t = {
+    bg: isDark ? "#0B0F19" : "#F1F5F9",
+    cardBg: isDark ? "rgba(19,27,46,0.92)" : "rgba(255,255,255,0.96)",
+    cardBorder: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.25)",
+    text: isDark ? "#F8FAFC" : "#0F172A",
+    textSub: isDark ? "#94A3B8" : "#475569",
+    textMuted: isDark ? "#64748B" : "#94A3B8",
+    inputBg: isDark ? "#0B0F19" : "#FFFFFF",
+    inputBorder: isDark ? "#334155" : "#CBD5E1",
+    inputText: isDark ? "#F8FAFC" : "#0F172A",
+    inputPlaceholder: isDark ? "#475569" : "#94A3B8",
+    catCard: isDark ? "rgba(15,23,42,0.7)" : "#F8FAFC",
+    catCardBorder: isDark ? "#1E293B" : "#E2E8F0",
+    catCardSelected: isDark ? "rgba(79,70,229,0.12)" : "rgba(79,70,229,0.08)",
+    divider: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)",
+    navBg: isDark ? "rgba(11,15,25,0.85)" : "rgba(241,245,249,0.9)",
+    navBorder: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)",
+    toggleBg: isDark ? "#1E293B" : "#E2E8F0",
+    pillBg: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
+    pillBorder: isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.25)",
+    pillText: isDark ? "#A5B4FC" : "#4F46E5",
+    sectionLabel: isDark ? "#CBD5E1" : "#475569",
+    otpBg: isDark ? "#0B0F19" : "#F8FAFC",
+    otpBorder: isDark ? "#334155" : "#CBD5E1",
+    infoBg: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.06)",
+    infoBorder: isDark ? "rgba(99,102,241,0.28)" : "rgba(99,102,241,0.2)",
+    infoText: isDark ? "#C7D2FE" : "#4338CA",
+    gridColor: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)",
+    glow1: isDark ? "rgba(99,102,241,0.16)" : "rgba(99,102,241,0.06)",
+    footerText: isDark ? "#475569" : "#94A3B8",
+    footerBorder: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)",
   };
 
-  // Kalkulasi Harga Resmi Real-Time
-  const currentTierObj = useMemo(() => {
-    return (
-      dbTiers.find((t) => t.code === selectedTierCode) ||
-      dbTiers[0] || {
-        name: "Lisensi Basic",
-        priceMonthly: 150000,
-        priceAnnual: 1494000,
-        outletLimit: 1,
-        kasirLimitPerOutlet: 5,
-      }
-    );
-  }, [dbTiers, selectedTierCode]);
+  // Step State: 1 = Form Input, 2 = 6-Digit OTP Verification
+  const [step, setStep] = useState<1 | 2>(1);
 
-  const calculation = useMemo(() => {
-    const isAnnual = billingCycle === "ANNUAL";
-    const monthlyTier = Number(currentTierObj.priceMonthly) || 0;
-    const annualTier = Number(currentTierObj.priceAnnual) || Math.round(monthlyTier * 12 * 0.83);
+  // Form Fields
+  const [selectedVertical, setSelectedVertical] = useState<string>(initialVertical);
+  const [businessName, setBusinessName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-    let monthlyPlugins = 0;
-    let annualPlugins = 0;
+  // OTP State (6 Digits)
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [countdown, setCountdown] = useState<number>(60);
+  const [canResend, setCanResend] = useState<boolean>(false);
 
-    selectedPluginCodes.forEach((pCode) => {
-      const p = dbPlugins.find((item) => item.code === pCode);
-      if (p) {
-        monthlyPlugins += Number(p.priceMonthly) || 0;
-        annualPlugins += Number(p.priceAnnual) || Math.round((Number(p.priceMonthly) || 0) * 12 * 0.83);
-      }
-    });
+  // Loading & Feedback States
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successInfo, setSuccessInfo] = useState<string | null>(null);
 
-    const totalMonthly = monthlyTier + monthlyPlugins;
-    const totalAnnual = annualTier + annualPlugins;
-    const finalAmount = isAnnual ? totalAnnual : totalMonthly;
-    const totalSavings = Math.max(0, totalMonthly * 12 - totalAnnual);
+  // Countdown Timer for OTP Resend
+  useEffect(() => {
+    let timer: any;
+    if (step === 2 && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    } else if (countdown === 0) {
+      setCanResend(true);
+    }
+    return () => clearInterval(timer);
+  }, [step, countdown]);
 
-    return {
-      monthlyTier,
-      annualTier,
-      monthlyPlugins,
-      annualPlugins,
-      totalMonthly,
-      totalAnnual,
-      finalAmount,
-      totalSavings,
-      effectiveMonthly: isAnnual ? Math.round(totalAnnual / 12) : totalMonthly,
-    };
-  }, [currentTierObj, selectedPluginCodes, dbPlugins, billingCycle]);
+  const businessCategories = [
+    {
+      id: "cafe",
+      name: "Cafe, F&B & Resto",
+      icon: Coffee,
+      badge: "Populer F&B",
+      desc: "Manajemen denah meja, varian rasa minuman & kirim tiket dapur (KOT).",
+    },
+    {
+      id: "barbershop",
+      name: "Barbershop & Salon",
+      icon: Scissors,
+      badge: "Spesialis Barber",
+      desc: "Antrean kursi station, komisi kapster & treatment potong rambut.",
+    },
+    {
+      id: "retail",
+      name: "Supermarket & Retail",
+      icon: ShoppingBag,
+      badge: "High Speed",
+      desc: "Barcode scanner cepat, multi-satuan grosir & Numpad kasir.",
+    },
+    {
+      id: "laundry",
+      name: "Laundry Service",
+      icon: Shirt,
+      badge: "Tracking",
+      desc: "Timbangan Kg desimal, aroma parfum laundry & slot rak cucian.",
+    },
+  ];
 
-  const handleRegister = async (e: React.FormEvent) => {
+  // STEP 1 SUBMIT -> Kirim OTP
+  const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Konfirmasi kata sandi tidak cocok dengan kata sandi.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Kata sandi minimal harus 6 karakter.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await registerTenantAndOwner({
+      const res = await sendRegistrationOtpAction({
+        email,
+        phone,
         businessName,
         ownerName,
-        email,
-        password,
-        verticalCode: selectedPluginCodes[0] || "barbershop",
-        planType,
-        tierCode: selectedTierCode,
-        billingCycle,
-        pluginCodes: selectedPluginCodes,
       });
 
       if (!res.success) {
-        setError(res.message || "Gagal melakukan pendaftaran.");
+        setError(res.message);
         setLoading(false);
         return;
       }
 
-      // Auto login setelah registrasi berhasil
-      const loginRes = await signIn("credentials", {
-        redirect: false,
+      setSuccessInfo(res.message);
+      setStep(2);
+      setCountdown(60);
+      setCanResend(false);
+
+      // Auto focus ke kotak OTP pertama
+      setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 150);
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan saat mengirim kode verifikasi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // OTP Digit Change Handler
+  const handleOtpChange = (index: number, value: string) => {
+    if (value.length > 1) {
+      const cleanDigits = value.replace(/\D/g, "").slice(0, 6).split("");
+      if (cleanDigits.length > 1) {
+        const filled = [...otpDigits];
+        cleanDigits.forEach((d, i) => {
+          if (index + i < 6) filled[index + i] = d;
+        });
+        setOtpDigits(filled);
+        const nextIdx = Math.min(index + cleanDigits.length, 5);
+        otpInputRefs.current[nextIdx]?.focus();
+        return;
+      }
+      value = value.slice(-1);
+    }
+
+    const clean = value.replace(/\D/g, "");
+    const newOtp = [...otpDigits];
+    newOtp[index] = clean;
+    setOtpDigits(newOtp);
+
+    // Auto-advance ke input berikutnya jika ada angka
+    if (clean && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePasteOtp = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").trim().slice(0, 6);
+    if (!/^\d+$/.test(pasted)) return;
+
+    const newDigits = pasted.split("");
+    const filled = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      filled[i] = newDigits[i] || "";
+    }
+    setOtpDigits(filled);
+
+    const nextIndex = Math.min(pasted.length, 5);
+    otpInputRefs.current[nextIndex]?.focus();
+  };
+
+  // STEP 2 SUBMIT -> Verifikasi OTP & Finalisasi Registrasi
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const fullOtp = otpDigits.join("");
+    if (fullOtp.length !== 6) {
+      setError("Silakan masukkan 6-digit kode verifikasi lengkap.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const regRes = await verifyOtpAndRegisterTenant({
+        businessName,
+        ownerName,
+        phone,
+        address,
         email,
+        password,
+        verticalCode: selectedVertical,
+        otpCode: fullOtp,
+      });
+
+      if (!regRes.success) {
+        setError(regRes.message || "Verifikasi kode OTP gagal.");
+        setLoading(false);
+        return;
+      }
+
+      // Auto Login via NextAuth
+      const signInRes = await signIn("credentials", {
+        redirect: false,
+        email: email.toLowerCase().trim(),
         password,
       });
 
-      if (loginRes?.error) {
-        router.push("/login");
+      if (signInRes?.error) {
+        router.push("/login?registered=1");
       } else {
-        router.push("/dashboard");
+        router.push("/dashboard?welcome=1");
+        router.refresh();
       }
     } catch (err: any) {
-      setError(err?.message || "Terjadi kesalahan saat memproses registrasi.");
+      setError("Terjadi kendala saat verifikasi akun.");
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!canResend) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await sendRegistrationOtpAction({
+        email,
+        phone,
+        businessName,
+        ownerName,
+      });
+
+      if (res.success) {
+        setSuccessInfo("Kode verifikasi baru telah dikirim ulang!");
+        setCountdown(60);
+        setCanResend(false);
+        setOtpDigits(["", "", "", "", "", ""]);
+        otpInputRefs.current[0]?.focus();
+      } else {
+        setError(res.message);
+      }
+    } catch (err: any) {
+      setError("Gagal mengirim ulang kode verifikasi.");
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-600 selection:text-white relative">
-      {/* Header */}
-      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-40">
+    <div
+      className="min-h-screen flex flex-col justify-between font-sans relative overflow-hidden transition-colors duration-300"
+      style={{ backgroundColor: t.bg, color: t.text }}
+    >
+      {/* Background Vector Mesh & Ambient Glow */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, ${t.gridColor} 1px, transparent 1px),
+              linear-gradient(to bottom, ${t.gridColor} 1px, transparent 1px)
+            `,
+            backgroundSize: "40px 40px",
+          }}
+        />
+        <div
+          className="absolute -top-40 right-1/4 w-[600px] h-[600px] rounded-full blur-[120px]"
+          style={{ background: `radial-gradient(circle, ${t.glow1}, transparent 70%)` }}
+        />
+        <div className="absolute -bottom-40 left-1/4 w-[500px] h-[500px] rounded-full bg-cyan-600/10 blur-[120px]" />
+      </div>
+
+      {/* Top Navbar */}
+      <header
+        className="border-b backdrop-blur-xl sticky top-0 z-40 transition-colors duration-300"
+        style={{ backgroundColor: t.navBg, borderColor: t.navBorder }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/25">
-              <Store className="w-5 h-5" />
+          <Link href="/" className="flex items-center gap-1 group">
+            <div className="relative w-20 h-20 group-hover:scale-105 transition">
+              <Image src="/smLogo.png" alt="Qassa" fill className="object-contain" priority />
             </div>
             <div>
-              <span className="font-extrabold text-lg tracking-tight text-slate-950">
-                POS Universal
-              </span>
-              <span className="text-[10px] ml-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold border border-slate-200">
-                Registrasi Akun
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-xl tracking-tight" style={{ color: t.text }}>Qassa</span>
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-extrabold border uppercase tracking-wider"
+                  style={{ backgroundColor: "rgba(16,185,129,0.15)", borderColor: "rgba(16,185,129,0.3)", color: "#34D399" }}
+                >
+                  Trial 30 Hari
+                </span>
+              </div>
+              <p className="text-[10px] font-medium" style={{ color: t.textMuted }}>Pendaftaran Akun Baru</p>
             </div>
           </Link>
 
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">Sudah punya akun?</span>
+            {/* Dark/Light Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsDark(!isDark)}
+              title={isDark ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
+              className="w-8 h-8 rounded-xl flex items-center justify-center border transition hover:scale-105"
+              style={{ backgroundColor: t.toggleBg, borderColor: t.navBorder }}
+            >
+              {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
+            </button>
+            <span className="hidden sm:inline" style={{ color: t.textSub }}>Sudah memiliki akun?</span>
             <Link
               href="/login"
-              className="font-bold text-indigo-600 hover:text-indigo-700 underline"
+              className="px-4 py-2 rounded-xl font-bold border transition flex items-center gap-1"
+              style={{ backgroundColor: t.toggleBg, color: t.text, borderColor: t.navBorder }}
             >
-              Masuk di sini
+              <span>Masuk Akun</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Main Form Container */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 w-full space-y-8">
-        {/* Top Toggle: Trial vs Jalur Resmi Berbayar */}
-        <div className="text-center max-w-2xl mx-auto space-y-3">
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight">
-            Pendaftaran Akun POS Universal
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-600">
-            Pilih jalur pendaftaran sesuai kebutuhan operasional usaha Anda:
-          </p>
+      {/* Main Container */}
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10 my-4">
+        <div
+          className="w-full max-w-2xl backdrop-blur-2xl p-7 sm:p-10 rounded-[2.5rem] shadow-2xl space-y-7 border transition-colors duration-300"
+          style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}
+        >
 
-          {/* Mode Switcher */}
-          <div className="p-1 rounded-full bg-white border border-slate-200 shadow-sm inline-flex items-center gap-1 text-xs font-bold mt-2">
-            <button
-              type="button"
-              onClick={() => setPlanType("TRIAL")}
-              className={`px-5 py-2.5 rounded-full transition flex items-center gap-1.5 ${
-                planType === "TRIAL"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
+          {/* Header Title */}
+          <div className="text-center space-y-2">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border"
+              style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Jalur Trial 30 Hari (Gratis)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPlanType("PAID")}
-              className={`px-5 py-2.5 rounded-full transition flex items-center gap-1.5 ${
-                planType === "PAID"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Jalur Resmi Langganan Berbayar</span>
-              <span className="text-[9px] bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded-full font-black">
-                Langsung Aktif
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="max-w-3xl mx-auto p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-3">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <p className="font-semibold">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleRegister} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column (Data Bisnis & Akun Pemilik) */}
-          <div className="lg:col-span-7 p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h2 className="text-base font-bold text-slate-950 flex items-center gap-2">
-                <Store className="w-4 h-4 text-indigo-600" />
-                1. Informasi Usaha & Akun Pemilik
-              </h2>
-              <p className="text-xs text-slate-500">
-                Akun ini akan otomatis menjadi <strong>OWNER</strong> dengan hak kontrol penuh.
-              </p>
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Coba Gratis 30 Hari Penuh • Tanpa Kartu Kredit</span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: t.text }}>
+              {step === 1 ? "Mulai Bisnis Lebih Cepat dengan Qassa" : "Verifikasi Akun Usaha Anda"}
+            </h1>
+            <p className="text-xs sm:text-sm max-w-md mx-auto leading-relaxed" style={{ color: t.textSub }}>
+              {step === 1
+                ? "Daftarkan toko Anda sekarang dan nikmati kemudahan kelola kasir, stok, dan laporan keuangan."
+                : `Masukkan 6-digit kode OTP yang kami kirimkan ke ${email}`}
+            </p>
+          </div>
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">
-                  Nama Bisnis / Toko / Outlet Utama <span className="text-rose-500">*</span>
+          {error && (
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* STEP 1: FORM PENDAFTARAN LENGKAP */}
+          {step === 1 && (
+            <form onSubmit={handleRequestOtp} className="space-y-6">
+              {/* Seksi 1: Pemilihan Jenis Usaha */}
+              <div className="space-y-3">
+                <label
+                  className="block text-xs font-extrabold uppercase tracking-wider"
+                  style={{ color: t.sectionLabel }}
+                >
+                  1. Pilih Jenis Bidang Usaha Anda
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Barbershop Batavia, Kopi Kenangan, Minimarket Berkah"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 text-xs font-semibold text-slate-900 transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">
-                    Nama Pemilik (Owner) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nama lengkap Anda"
-                    value={ownerName}
-                    onChange={(e) => setOwnerName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 text-xs text-slate-900 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1.5">
-                    Email Login <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="email@bisnisanda.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 text-xs text-slate-900 transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">
-                  Password Login <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Minimal 6 karakter"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 text-xs text-slate-900 transition"
-                />
-              </div>
-            </div>
-
-            {/* Modul Add-on Selection */}
-            <div className="pt-4 border-t border-slate-100 space-y-3">
-              <label className="block font-bold text-slate-950 text-xs uppercase tracking-wider">
-                2. Pilih Modul Usaha Vertikal yang Diaktifkan
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {dbPlugins.map((p) => {
-                  const Icon = getPluginIcon(p.code);
-                  const isChecked = selectedPluginCodes.includes(p.code);
-                  const pPrice = Number(p.priceMonthly);
-
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedPluginCodes((prev) =>
-                          isChecked
-                            ? prev.length > 1
-                              ? prev.filter((c) => c !== p.code)
-                              : prev
-                            : [...prev, p.code]
-                        );
-                      }}
-                      className={`p-3.5 rounded-2xl border text-left transition flex items-center justify-between ${
-                        isChecked
-                          ? "bg-indigo-50/70 border-indigo-600 shadow-sm"
-                          : "bg-white border-slate-200 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                            isChecked ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{p.name}</p>
-                          <p className="text-[10px] text-slate-500">{p.description}</p>
-                        </div>
-                      </div>
-                      {planType === "PAID" && (
-                        <span className="text-xs font-bold text-indigo-600">
-                          +Rp {pPrice.toLocaleString("id-ID")}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column (Pilihan Paket & Ringkasan Tagihan) */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Jika Jalur Resmi: Tampilkan Selektor Paket Lisensi & Billing */}
-            {planType === "PAID" ? (
-              <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200 shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-5 text-left">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-bold text-slate-950 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-indigo-600" />
-                    3. Pilih Paket Lisensi Resmi
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Akun langsung berstatus <strong>ACTIVE</strong> resmi.
-                  </p>
-                </div>
-
-                {/* Billing Switcher */}
-                <div className="p-1 rounded-xl bg-slate-100 border border-slate-200 flex items-center text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setBillingCycle("MONTHLY")}
-                    className={`flex-1 py-2 rounded-lg transition text-center ${
-                      billingCycle === "MONTHLY" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-600"
-                    }`}
-                  >
-                    Bulanan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingCycle("ANNUAL")}
-                    className={`flex-1 py-2 rounded-lg transition text-center flex items-center justify-center gap-1 ${
-                      billingCycle === "ANNUAL" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-600"
-                    }`}
-                  >
-                    <span>Tahunan</span>
-                    <span className="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-black">
-                      -17%
-                    </span>
-                  </button>
-                </div>
-
-                {/* Tier Selector Cards */}
-                <div className="space-y-2.5">
-                  {dbTiers.map((tier) => {
-                    const isSel = selectedTierCode === tier.code;
-                    const monthlyNum = Number(tier.priceMonthly);
-                    const annualNum =
-                      Number(tier.priceAnnual) || Math.round(monthlyNum * 12 * 0.83);
-                    const displayAmt = billingCycle === "ANNUAL" ? annualNum : monthlyNum;
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {businessCategories.map((cat) => {
+                    const isSelected = selectedVertical === cat.id;
+                    const IconComp = cat.icon;
 
                     return (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => setSelectedTierCode(tier.code)}
-                        className={`w-full p-4 rounded-2xl border text-left transition flex items-center justify-between ${
-                          isSel
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20 border-indigo-600"
-                            : "bg-[#FAFAFC] border-slate-200 hover:border-slate-300 text-slate-900"
-                        }`}
+                      <div
+                        key={cat.id}
+                        onClick={() => setSelectedVertical(cat.id)}
+                        className="p-4 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-2.5"
+                        style={{
+                          backgroundColor: isSelected ? t.catCardSelected : t.catCard,
+                          borderColor: isSelected ? "#4F46E5" : t.catCardBorder,
+                          boxShadow: isSelected ? "0 0 0 2px rgba(79,70,229,0.25), 0 4px 20px rgba(79,70,229,0.1)" : "none",
+                        }}
                       >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs">{tier.name}</span>
-                            {tier.code === "pro" && (
-                              <span
-                                className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                                  isSel ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-700"
-                                }`}
-                              >
-                                Populer ⭐
-                              </span>
-                            )}
+                        <div className="flex items-center justify-between">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center border"
+                            style={{
+                              backgroundColor: isSelected ? "#4F46E5" : (isDark ? "#1E293B" : "#E2E8F0"),
+                              borderColor: isSelected ? "#4F46E5" : t.catCardBorder,
+                              color: isSelected ? "#FFFFFF" : t.textMuted,
+                            }}
+                          >
+                            <IconComp className="w-4 h-4" />
                           </div>
-                          <p className={`text-[10px] mt-0.5 ${isSel ? "text-indigo-100" : "text-slate-500"}`}>
-                            {tier.outletLimit ? `${tier.outletLimit} Outlet` : "Unlimited Outlet"} &bull;{" "}
-                            {tier.kasirLimitPerOutlet ? `${tier.kasirLimitPerOutlet} Kasir` : "Unlimited Kasir"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-black text-xs">
-                            {monthlyNum === 0 ? "Custom" : `Rp ${displayAmt.toLocaleString("id-ID")}`}
-                          </p>
-                          <span className={`text-[10px] ${isSel ? "text-indigo-200" : "text-slate-400"}`}>
-                            {billingCycle === "ANNUAL" ? "/ thn" : "/ bln"}
+                          <span
+                            className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border"
+                            style={{
+                              backgroundColor: isSelected ? t.pillBg : (isDark ? "#1E293B" : "#E2E8F0"),
+                              borderColor: isSelected ? t.pillBorder : t.catCardBorder,
+                              color: isSelected ? t.pillText : t.textMuted,
+                            }}
+                          >
+                            {cat.badge}
                           </span>
                         </div>
-                      </button>
+
+                        <div>
+                          <h4 className="font-black text-xs" style={{ color: isSelected ? "#4F46E5" : t.text }}>
+                            {cat.name}
+                          </h4>
+                          <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: t.textMuted }}>
+                            {cat.desc}
+                          </p>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Total Billing Breakdown */}
-                <div className="p-4 rounded-2xl bg-[#FAFAFC] border border-slate-200 space-y-2 text-xs">
-                  <div className="flex justify-between text-slate-600">
-                    <span>{currentTierObj.name} ({billingCycle === "ANNUAL" ? "1 Tahun" : "1 Bulan"}):</span>
-                    <span className="font-semibold">
-                      Rp {(billingCycle === "ANNUAL" ? calculation.annualTier : calculation.monthlyTier).toLocaleString("id-ID")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Add-on ({selectedPluginCodes.length} modul):</span>
-                    <span className="font-semibold">
-                      +Rp {(billingCycle === "ANNUAL" ? calculation.annualPlugins : calculation.monthlyPlugins).toLocaleString("id-ID")}
-                    </span>
-                  </div>
-                  {billingCycle === "ANNUAL" && (
-                    <div className="flex justify-between text-emerald-600 font-bold pt-1 border-t border-slate-200">
-                      <span>Hemat Diskon Tahunan:</span>
-                      <span>-Rp {calculation.totalSavings.toLocaleString("id-ID")}</span>
+              {/* Seksi 2: Informasi Toko & Pemilik */}
+              <div className="space-y-4 pt-2">
+                <label
+                  className="block text-xs font-extrabold uppercase tracking-wider"
+                  style={{ color: t.sectionLabel }}
+                >
+                  2. Informasi Toko &amp; Akun Pemilik
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Nama Bisnis */}
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Nama Bisnis / Toko <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Store className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type="text"
+                        required
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="Contoh: Kopi Senja / Barber House"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
                     </div>
-                  )}
-                  <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
-                    <span className="font-bold text-slate-900 text-sm">TOTAL TAGIHAN:</span>
-                    <span className="text-xl font-black text-indigo-600">
-                      Rp {calculation.finalAmount.toLocaleString("id-ID")}
-                    </span>
+                  </div>
+
+                  {/* Nama Pemilik */}
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Nama Pemilik (Owner) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type="text"
+                        required
+                        value={ownerName}
+                        onChange={(e) => setOwnerName(e.target.value)}
+                        placeholder="Nama Lengkap Anda"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Nomor HP / WhatsApp */}
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Nomor WhatsApp / HP <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type="tel"
+                        required
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="0812xxxxxxxx"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email Login — sejajar dengan WhatsApp */}
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Alamat Email Login <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="email@usahaanda.com"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Alamat Lengkap — full width */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Alamat Toko / Outlet <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type="text"
+                        required
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Jl. Sudirman No. 45, Jakarta"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kata Sandi */}
+                  <div>
+                    <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
+                      Kata Sandi (Min. 6 Karakter) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 transition"
+                        style={{ color: t.textMuted }}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Password Strength Indicator */}
+                    {password.length > 0 && (() => {
+                      const hasUpper = /[A-Z]/.test(password);
+                      const hasNum = /[0-9]/.test(password);
+                      const hasSpecial = /[^A-Za-z0-9]/.test(password);
+                      const score = (password.length >= 8 ? 1 : 0) + (hasUpper ? 1 : 0) + (hasNum ? 1 : 0) + (hasSpecial ? 1 : 0);
+                      const levels = [
+                        { label: "Lemah", color: "#EF4444" },
+                        { label: "Sedang", color: "#F59E0B" },
+                        { label: "Kuat", color: "#10B981" },
+                        { label: "Sangat Kuat", color: "#6366F1" },
+                      ];
+                      const lvl = score <= 1 ? 0 : score === 2 ? 1 : score === 3 ? 2 : 3;
+                      const { label, color } = levels[lvl];
+                      return (
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="flex gap-1 flex-1">
+                            {[0,1,2,3].map((i) => (
+                              <div
+                                key={i}
+                                className="h-1 flex-1 rounded-full transition-all duration-300"
+                                style={{ backgroundColor: i <= lvl ? color : (isDark ? "#1E293B" : "#E2E8F0") }}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Konfirmasi Kata Sandi */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold" style={{ color: t.textSub }}>
+                        Konfirmasi Kata Sandi <span className="text-rose-500">*</span>
+                      </label>
+                      {confirmPassword && (
+                        <span
+                          className={`text-[10px] font-bold ${password === confirmPassword ? "text-emerald-500" : "text-rose-500"}`}
+                        >
+                          {password === confirmPassword ? "✓ Cocok" : "✗ Tidak Cocok"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                        style={{ backgroundColor: t.inputBg, borderWidth: 1, borderStyle: "solid", borderColor: t.inputBorder, color: t.inputText }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            ) : (
-              /* Jalur Trial 30 Hari Summary Card */
-              <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200 shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-4 text-left">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <span className="text-xs font-bold uppercase text-slate-500">Ringkasan Trial</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    100% Gratis Coba
+
+              {/* Terms & Submit */}
+              <div className="pt-2 space-y-3">
+                {/* Checkbox Ketentuan Layanan */}
+                <label
+                  className="flex items-start gap-2.5 cursor-pointer select-none group"
+                  htmlFor="terms-checkbox"
+                >
+                  <div className="relative mt-0.5 flex-shrink-0">
+                    <input
+                      id="terms-checkbox"
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div
+                      className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200"
+                      style={{
+                        backgroundColor: agreedToTerms ? "#4F46E5" : "transparent",
+                        borderColor: agreedToTerms ? "#4F46E5" : t.inputBorder,
+                      }}
+                    >
+                      {agreedToTerms && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-[11px] leading-relaxed" style={{ color: t.textMuted }}>
+                    Saya menyetujui{" "}
+                    <a href="#" className="text-indigo-500 hover:text-indigo-400 font-semibold underline">Ketentuan Layanan</a>
+                    {" "}&amp;{" "}
+                    <a href="#" className="text-indigo-500 hover:text-indigo-400 font-semibold underline">Kebijakan Privasi</a>
+                    {" "}Qassa POS.
+                  </span>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading || !agreedToTerms}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Mengirim Kode OTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Registrasi</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center justify-center gap-4 text-[11px]" style={{ color: t.textMuted }}>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Gratis 30 Hari Penuh
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Tanpa Kartu Kredit
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Langsung Siap Pakai
                   </span>
                 </div>
+              </div>
+            </form>
+          )}
 
-                <div>
-                  <p className="text-2xl font-black text-slate-900">Rp 0</p>
-                  <p className="text-xs text-slate-500">Masa aktif 30 hari penuh tanpa kartu kredit.</p>
+          {/* STEP 2: VERIFIKASI KODE 6-DIGIT OTP */}
+          {step === 2 && (
+            <form onSubmit={handleVerifyOtp} className="space-y-6 animate-fadeIn">
+              {/* Notification Banner */}
+              <div
+                className="p-4 rounded-2xl border text-xs leading-relaxed space-y-2"
+                style={{
+                  backgroundColor: t.infoBg,
+                  borderColor: t.infoBorder,
+                  color: t.infoText,
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 font-bold"
+                  style={{ color: isDark ? "#FFFFFF" : "#312E81" }}
+                >
+                  <KeyRound className="w-4 h-4 text-indigo-500" />
+                  <span>Kode Verifikasi 6-Digit Telah Dikirim</span>
                 </div>
+                <p style={{ color: isDark ? "#C7D2FE" : "#4338CA" }}>
+                  Silakan periksa kotak masuk email <strong>{email}</strong> atau pesan WhatsApp nomor <strong>{phone}</strong> untuk melihat 6-digit kode verifikasi Anda.
+                </p>
+              </div>
 
-                <div className="space-y-2 text-xs text-slate-700 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>Akses Modul ({selectedPluginCodes.join(", ")})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>Layar Kasir POS, Shift & Barcode</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>Bebas upgrade ke paket berbayar kapan saja</span>
-                  </div>
+              {/* 6-Digit Auto Advancing Input Boxes */}
+              <div className="space-y-3">
+                <label
+                  className="block text-center text-xs font-bold uppercase tracking-wider"
+                  style={{ color: t.sectionLabel }}
+                >
+                  Masukkan 6-Digit Kode OTP:
+                </label>
+                <div className="flex items-center justify-center gap-2 sm:gap-3" onPaste={handlePasteOtp}>
+                  {otpDigits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        otpInputRefs.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                      className="w-11 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-black font-mono rounded-2xl border-2 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition shadow-sm"
+                      style={{
+                        backgroundColor: t.inputBg,
+                        borderColor: digit ? "#4F46E5" : t.inputBorder,
+                        color: t.inputText,
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
-            )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-xl shadow-indigo-600/25 transition flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Memproses Pendaftaran...</span>
-                </>
-              ) : planType === "PAID" ? (
-                <>
-                  <span>Aktifkan Langganan Resmi Sekarang</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              ) : (
-                <>
-                  <span>Mulai Uji Coba Gratis 30 Hari</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
+              {/* Countdown & Resend Option */}
+              <div
+                className="text-center text-xs flex items-center justify-center gap-2"
+                style={{ color: t.textMuted }}
+              >
+                <span>Tidak menerima kode?</span>
+                {canResend ? (
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={loading}
+                    className="font-bold text-indigo-500 hover:text-indigo-600 underline flex items-center gap-1 transition"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Kirim Ulang Kode</span>
+                  </button>
+                ) : (
+                  <span className="font-mono font-medium" style={{ color: t.textSub }}>
+                    Kirim ulang dalam {countdown}s
+                  </span>
+                )}
+              </div>
 
-            <p className="text-[11px] text-center text-slate-500">
-              Dengan mendaftar, Anda menyetujui Ketentuan Layanan POS Universal.
+              {/* Action Buttons */}
+              <div className="pt-2 space-y-3">
+                <button
+                  type="submit"
+                  disabled={loading || otpDigits.join("").length !== 6}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-black text-sm shadow-xl shadow-emerald-600/25 transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.99]"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Memverifikasi &amp; Menyiapkan Toko...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Verifikasi &amp; Buka Dashboard Qassa</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={loading}
+                  className="w-full py-2.5 text-xs transition flex items-center justify-center gap-1 font-semibold hover:underline"
+                  style={{ color: t.textMuted }}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Ubah Data atau Email Pendaftaran</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="pt-4 text-center border-t" style={{ borderColor: t.divider }}>
+            <p className="text-xs" style={{ color: t.textMuted }}>
+              Dengan mendaftar, Anda menyetujui Ketentuan Layanan &amp; Kebijakan Privasi Qassa POS.
             </p>
           </div>
-        </form>
+        </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        POS Universal SaaS Platform &copy; 2026. Jalur Pendaftaran Resmi & Trial 30 Hari.
+      <footer
+        className="border-t py-4 text-center text-xs transition-colors duration-300"
+        style={{ borderColor: t.footerBorder, color: t.footerText }}
+      >
+        <p>&copy; {new Date().getFullYear()} Qassa Inc. All rights reserved. Platform Kasir Cloud Multi-Vertikal.</p>
       </footer>
     </div>
   );

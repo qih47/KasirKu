@@ -37,11 +37,16 @@ export async function getSubscriptionData() {
         },
       },
     }),
-    prisma.licenseTier.findMany({ orderBy: { priceMonthly: "asc" } }),
+    prisma.licenseTier.findMany(),
     prisma.plugin.findMany({ where: { isActive: true }, orderBy: { priceMonthly: "asc" } }),
   ]);
 
   if (!tenant) throw new Error("Tenant tidak ditemukan.");
+
+  // Urutkan tier: Basic -> Pro -> Enterprise
+  const tierOrder: Record<string, number> = { basic: 1, pro: 2, enterprise: 3 };
+  availableTiers.sort((a, b) => (tierOrder[a.code.toLowerCase()] || 99) - (tierOrder[b.code.toLowerCase()] || 99));
+
 
   const activeSub = tenant.subscriptions[0];
   const now = new Date();
@@ -62,30 +67,52 @@ export async function getSubscriptionData() {
   const cashiersUsed = tenant.users.length;
 
   const currentTier = activeSub?.licenseTier || availableTiers[0];
-  const activePluginIds = activeSub?.plugins.map((p: any) => p.pluginId) || [];
+  let activePluginIds = activeSub?.plugins.map((p: any) => p.pluginId) || [];
 
-  return {
-    tenant: {
-      id: tenant.id,
-      businessName: tenant.businessName,
-      status: tenant.status,
-      trialEndAt: tenant.trialEndAt,
-      daysRemaining,
-      isExpired,
-    },
-    activeSubscription: activeSub,
-    currentTier,
-    activePlugins: activeSub?.plugins.map((p: any) => p.plugin) || [],
-    activePluginIds,
-    availableTiers,
-    availablePlugins,
-    quota: {
-      outletsUsed,
-      outletLimit: currentTier?.outletLimit ?? 1,
-      cashiersUsed,
-      kasirLimit: currentTier?.kasirLimitPerOutlet ?? 5,
-    },
-  };
+  if (activePluginIds.length === 0 && availablePlugins.length > 0) {
+    const nameLower = tenant.businessName.toLowerCase();
+    const defaultPlugin =
+      availablePlugins.find((p) => {
+        const code = p.code.toLowerCase();
+        if (nameLower.includes("cafe") || nameLower.includes("kopi") || nameLower.includes("coffee")) return code.includes("cafe");
+        if (nameLower.includes("barber") || nameLower.includes("potong")) return code.includes("barber");
+        if (nameLower.includes("retail") || nameLower.includes("mart") || nameLower.includes("toko")) return code.includes("retail");
+        if (nameLower.includes("laundry") || nameLower.includes("cuci")) return code.includes("laundry");
+        return false;
+      }) || availablePlugins[0];
+
+    if (defaultPlugin) {
+      activePluginIds = [defaultPlugin.id];
+    }
+  }
+
+  const activePlugins = availablePlugins.filter((p) => activePluginIds.includes(p.id));
+
+  return JSON.parse(
+    JSON.stringify({
+      tenant: {
+        id: tenant.id,
+        businessName: tenant.businessName,
+        status: tenant.status,
+        trialEndAt: tenant.trialEndAt,
+        daysRemaining,
+        isExpired,
+      },
+      activeSubscription: activeSub,
+      currentTier,
+      activePlugins,
+      activePluginIds,
+      availableTiers,
+      availablePlugins,
+      quota: {
+        outletsUsed,
+        outletLimit: currentTier?.outletLimit ?? 1,
+        cashiersUsed,
+        kasirLimit: currentTier?.kasirLimitPerOutlet ?? 5,
+      },
+    })
+  );
+
 }
 
 export async function upgradeSubscriptionAction(data: {

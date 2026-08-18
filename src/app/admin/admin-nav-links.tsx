@@ -35,11 +35,6 @@ export function AdminNavLinks() {
       icon: Tags,
     },
     {
-      name: "Katalog Tema UI",
-      href: "/admin/themes",
-      icon: Palette,
-    },
-    {
       name: "Broadcast Pesan",
       href: "/admin/broadcast",
       icon: Radio,

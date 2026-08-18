@@ -54,6 +54,7 @@ export function ProductClient({
   const [type, setType] = useState<ProductType>("BARANG");
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState<number | string>("");
+  const [imageUrl, setImageUrl] = useState("");
   const [barcode, setBarcode] = useState("");
   const [stockQty, setStockQty] = useState<number | string>("");
 
@@ -68,6 +69,7 @@ export function ProductClient({
     setType("BARANG");
     setCategory("");
     setPrice("");
+    setImageUrl("");
     setBarcode("");
     setStockQty(10);
     setError(null);
@@ -80,10 +82,26 @@ export function ProductClient({
     setType(p.type);
     setCategory(p.category || "");
     setPrice(Number(p.price));
+    setImageUrl(p.imageUrl || "");
     setBarcode(p.barcode || "");
     setStockQty(p.stockQty ?? "");
     setError(null);
     setShowModal(true);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError("Ukuran gambar maksimal 2MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -98,6 +116,7 @@ export function ProductClient({
           name,
           type,
           price: Number(price),
+          imageUrl,
           barcode,
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
@@ -116,6 +135,7 @@ export function ProductClient({
           name,
           type,
           price: Number(price),
+          imageUrl,
           barcode,
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
@@ -348,124 +368,131 @@ export function ProductClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((p) => {
-                  const isLoading = actionLoadingId === p.id;
-                  const isLowStock = p.type === "BARANG" && (p.stockQty ?? 0) <= 5;
+              {filteredProducts.map((p) => {
+                const isLoading = actionLoadingId === p.id;
+                const isLowStock = p.type === "BARANG" && (p.stockQty ?? 0) <= 5;
 
-                  return (
-                    <tr
-                      key={p.id}
-                      className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
-                    >
-                      <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-slate-100 text-sm">
-                        {p.name}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5">
-                          {p.type === "BARANG" ? (
-                            <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[10px] font-semibold">
-                              BARANG
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                              JASA
-                            </span>
-                          )}
-                          <span className="text-slate-500 text-[11px]">
-                            {p.category}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                        {p.barcode || "-"}
-                      </td>
-
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
-                        Rp {Number(p.price).toLocaleString("id-ID")}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        {p.type === "JASA" ? (
-                          <span className="text-slate-400 italic text-[11px]">
-                            Tidak terbatas
-                          </span>
+                return (
+                  <tr
+                    key={p.id}
+                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
+                  >
+                    <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                      <div className="flex items-center gap-3">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0 shadow-sm"
+                          />
                         ) : (
-                          <span
-                            className={`inline-flex items-center gap-1 font-semibold ${
-                              isLowStock
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {isLowStock && (
-                              <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 text-slate-400">
+                            {p.type === "BARANG" ? (
+                              <Package className="w-5 h-5 opacity-60" />
+                            ) : (
+                              <Sparkles className="w-5 h-5 opacity-60 text-emerald-500" />
                             )}
-                            {p.stockQty ?? 0} unit
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        {p.isActive ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                            Aktif
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-semibold">
-                            Nonaktif
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right">
-                        {isLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-600 inline" />
-                        ) : (
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              onClick={() => openEditModal(p)}
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
-                              title="Edit Produk"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleToggle(p.id)}
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition"
-                              title={
-                                p.isActive
-                                  ? "Nonaktifkan Produk"
-                                  : "Aktifkan Produk"
-                              }
-                            >
-                              <Power className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(p.id, p.name)}
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                              title="Hapus Produk"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="py-8 text-center text-slate-500 text-xs"
-                  >
-                    Belum ada produk atau jasa yang sesuai filter.
-                  </td>
-                </tr>
-              )}
+                        <div>
+                          <p className="font-bold text-slate-950 dark:text-slate-100">{p.name}</p>
+                          <span className="text-[10px] text-slate-400 font-mono sm:hidden">{p.barcode || ""}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-1.5">
+                        {p.type === "BARANG" ? (
+                          <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[10px] font-semibold">
+                            BARANG
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
+                            JASA
+                          </span>
+                        )}
+                        <span className="text-slate-500 text-[11px]">
+                          {p.category}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+                      {p.barcode || "-"}
+                    </td>
+
+                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
+                      Rp {Number(p.price).toLocaleString("id-ID")}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      {p.type === "JASA" ? (
+                        <span className="text-slate-400 italic text-[11px]">
+                          Tidak terbatas
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 font-semibold ${
+                            isLowStock
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {p.stockQty ?? 0} unit
+                          {isLowStock && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold">
+                              Menipis
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <button
+                        onClick={() => handleToggle(p.id)}
+                        disabled={isLoading}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold transition ${
+                          p.isActive
+                            ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            p.isActive ? "bg-emerald-500" : "bg-slate-400"
+                          }`}
+                        />
+                        {p.isActive ? "Aktif" : "Non-aktif"}
+                      </button>
+                    </td>
+
+                    <td className="py-3.5 px-4 text-right">
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
+                      ) : (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditModal(p)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                            title="Edit Produk"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p.id, p.name)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                            title="Hapus Produk"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -505,6 +532,57 @@ export function ProductClient({
             )}
 
             <form onSubmit={handleSave} className="space-y-3.5">
+              {/* Foto Produk / Jasa */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Foto / Gambar Item (Opsional)
+                </label>
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  {imageUrl ? (
+                    <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 flex-shrink-0 group">
+                      <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl("")}
+                        className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition"
+                        title="Hapus gambar"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 flex-shrink-0">
+                      <Package className="w-5 h-5 opacity-40" />
+                      <span className="text-[8px] font-bold mt-0.5">No Image</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <label className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] cursor-pointer shadow-sm transition flex items-center gap-1">
+                        <Plus className="w-3 h-3" />
+                        <span>Upload File</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[10px] text-slate-400">atau paste link gambar URL:</span>
+                    </div>
+
+                    <input
+                      type="url"
+                      value={imageUrl.startsWith("data:") ? "" : imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://example.com/foto-produk.jpg"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Nama Item
@@ -603,30 +681,26 @@ export function ProductClient({
                   type="text"
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
-                  placeholder="Scan barcode fisik atau ketik manual..."
+                  placeholder="Scan atau ketik kode barcode SKU..."
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-3">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="w-1/3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-2/3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50 transition flex items-center gap-2"
                 >
-                  {loading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Package className="w-3.5 h-3.5" />
-                  )}
-                  {editItem ? "Simpan Perubahan" : "Tambahkan ke Katalog"}
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editItem ? "Simpan Perubahan" : "Tambah Produk"}
                 </button>
               </div>
             </form>

@@ -22,7 +22,9 @@ export interface CartItemInput {
   name: string;
   staffId?: string;
   bookingId?: string;
+  notes?: string;
 }
+
 
 export async function createTransactionAction(data: {
   shiftId: string;

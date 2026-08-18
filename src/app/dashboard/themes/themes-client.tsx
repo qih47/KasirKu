@@ -14,24 +14,106 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import { applyThemeAction } from "@/modules/tenant/theme-actions";
+import { useDynamicTheme } from "@/components/theme/dynamic-theme-provider";
 
 interface ThemesClientProps {
-  themes: any[];
-  activeThemeId: string | null;
+  initialData?: {
+    themes: any[];
+    activeThemeId: string | null;
+  };
+  themes?: any[];
+  activeThemeId?: string | null;
 }
 
-export function ThemesClient({ themes, activeThemeId: initialActiveThemeId }: ThemesClientProps) {
-  const [activeThemeId, setActiveThemeId] = useState<string | null>(initialActiveThemeId);
+export function ThemesClient({
+  themes: propThemes,
+  activeThemeId: initialActiveThemeId,
+  initialData,
+}: ThemesClientProps) {
+  const themes = propThemes || initialData?.themes || [];
+  const defaultThemeId = initialActiveThemeId ?? initialData?.activeThemeId ?? null;
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(defaultThemeId);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const handleApplyTheme = async (themeId: string) => {
-    setLoadingId(themeId);
+  const { setActivePresetId, applyCustomPackage } = useDynamicTheme();
+
+  const handleApplyTheme = async (theme: any) => {
+    setLoadingId(theme.id);
     try {
-      const res = await applyThemeAction(themeId);
+      const res = await applyThemeAction(theme.id);
       if (res.success) {
-        setActiveThemeId(themeId);
-        setSuccessMsg(`Tema "${res.themeName}" berhasil diterapkan ke sistem kasir Anda!`);
+        setActiveThemeId(theme.id);
+        const code = (theme.code || "").toLowerCase();
+        if (code.includes("cyber") || code.includes("neon")) {
+          setActivePresetId("cyberpunk");
+        } else if (code.includes("cafe") || code.includes("emerald") || code.includes("bistro")) {
+          setActivePresetId("cafe_emerald");
+        } else if (theme.tokens?.colors || theme.tokens?.layouts) {
+          applyCustomPackage({
+            manifest: {
+              id: theme.code,
+              name: theme.name,
+              type: "THEME",
+              version: "1.0.0",
+              author: "Marketplace",
+              vertical: "GENERAL",
+              priceMonthly: theme.priceMonthly,
+              priceAnnual: theme.priceAnnual,
+              compatibility: ">=1.0.0",
+              previewUrls: [],
+              tags: [],
+            },
+            tokens: {
+              mode: theme.tokens?.layoutStyle === "LUXE" || theme.tokens?.mode === "dark" ? "dark" : "light",
+              colors: {
+                primary: theme.tokens?.primaryColor || "#4f46e5",
+                primaryForeground: "#ffffff",
+                background: theme.tokens?.mode === "dark" ? "#090d16" : "#F8FAFC",
+                card: theme.tokens?.cardBg || "#ffffff",
+                border: theme.tokens?.cardBorder || "#e2e8f0",
+                accent: theme.tokens?.accentColor || "#06b6d4",
+                success: "#10b981",
+                warning: "#f59e0b",
+                danger: "#ef4444",
+              },
+              typography: {
+                fontFamily: theme.tokens?.fontFamily || "Plus Jakarta Sans, sans-serif",
+                fontMono: "ui-monospace, monospace",
+                baseFontSize: "14px",
+                headingWeight: "bold",
+              },
+
+              effects: {
+                borderRadius: theme.tokens?.radius || "1rem",
+                cardBorderRadius: "1.25rem",
+                buttonBorderRadius: "0.75rem",
+                glassmorphism: false,
+                shadowScale: "md",
+              },
+            },
+            layouts: theme.tokens?.layouts || {
+              pos: {
+                cartDock: "right",
+                cartWidth: "380px",
+                productGridColumns: 4,
+                productCardStyle: "grid_card",
+                showCategoriesAs: "horizontal_pills",
+                slots: [],
+              },
+              dashboard: {
+                kpiColumns: 4,
+                gap: "1.5rem",
+                slots: [],
+              },
+            },
+          });
+        }
+
+
+
+        const name = res.appliedTheme?.name || res.themeName || theme.name;
+        setSuccessMsg(`Tema "${name}" berhasil diaktifkan secara instan ke seluruh sistem!`);
         setTimeout(() => setSuccessMsg(null), 4000);
       }
     } catch (err: any) {
@@ -40,6 +122,7 @@ export function ThemesClient({ themes, activeThemeId: initialActiveThemeId }: Th
       setLoadingId(null);
     }
   };
+
 
   return (
     <div className="space-y-6 text-left">
@@ -146,23 +229,50 @@ export function ThemesClient({ themes, activeThemeId: initialActiveThemeId }: Th
                   </div>
 
                   {/* Visual Miniature UI Mock */}
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="w-12 h-2.5 rounded" style={{ backgroundColor: pColor }} />
-                      <div className="w-4 h-2.5 rounded bg-slate-200" />
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5 pt-1">
-                      <div className="h-6 rounded bg-slate-50 border border-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-400">
-                        Katalog
+                  <div
+                    className="p-3.5 rounded-2xl border space-y-2.5 transition-all shadow-sm"
+                    style={{
+                      background: tokens.bgStyle || (layoutStyle === "LUXE" ? "#0A0E17" : "#F8FAFC"),
+                      borderColor: tokens.cardBorder || "#e2e8f0",
+                    }}
+                  >
+                    <div
+                      className="p-3 rounded-xl border space-y-2 shadow-sm"
+                      style={{
+                        backgroundColor: tokens.cardBg || "#ffffff",
+                        borderColor: tokens.cardBorder || "#e2e8f0",
+                        borderRadius: tokens.radius || "0.75rem",
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-16 h-2.5 rounded-full" style={{ backgroundColor: pColor }} />
+                        <div className="w-4 h-2.5 rounded-full bg-slate-400/30" />
                       </div>
-                      <div className="h-6 rounded bg-slate-50 border border-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-400">
-                        Produk
-                      </div>
-                      <div
-                        className="h-6 rounded text-white flex items-center justify-center text-[9px] font-bold"
-                        style={{ backgroundColor: pColor }}
-                      >
-                        Bayar
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
+                        <div
+                          className="h-6 rounded flex items-center justify-center text-[9px] font-bold"
+                          style={{
+                            backgroundColor: tokens.innerBoxBg || "#f8fafc",
+                            color: tokens.textSecondary || "#64748b",
+                          }}
+                        >
+                          Katalog
+                        </div>
+                        <div
+                          className="h-6 rounded flex items-center justify-center text-[9px] font-bold"
+                          style={{
+                            backgroundColor: tokens.innerBoxBg || "#f8fafc",
+                            color: tokens.textSecondary || "#64748b",
+                          }}
+                        >
+                          Produk
+                        </div>
+                        <div
+                          className="h-6 rounded text-white flex items-center justify-center text-[9px] font-bold shadow-sm"
+                          style={{ backgroundColor: pColor }}
+                        >
+                          Bayar
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -178,10 +288,11 @@ export function ThemesClient({ themes, activeThemeId: initialActiveThemeId }: Th
                   </div>
                 ) : (
                   <button
-                    onClick={() => handleApplyTheme(theme.id)}
+                    onClick={() => handleApplyTheme(theme)}
                     disabled={loadingId === theme.id}
                     className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-1.5"
                   >
+
                     {loadingId === theme.id ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -203,3 +314,5 @@ export function ThemesClient({ themes, activeThemeId: initialActiveThemeId }: Th
     </div>
   );
 }
+
+export const TenantThemesClient = ThemesClient;

@@ -13,10 +13,22 @@ async function requireOwner() {
   return session.user as any;
 }
 
+import {
+  ReceiptConfig,
+  defaultReceiptConfig,
+  barbershopReceiptPreset,
+  cafeReceiptPreset,
+  retailReceiptPreset,
+  laundryReceiptPreset,
+  BusinessVertical,
+} from "@/types/receipt";
+
+export type { ReceiptConfig, BusinessVertical };
+
 export async function getTenantSettingsData() {
   const user = await requireOwner();
 
-  const [tenant, activeSub] = await Promise.all([
+  const [tenant, activeSub, allThemes] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: user.tenantId },
       include: {
@@ -25,7 +37,20 @@ export async function getTenantSettingsData() {
     }),
     prisma.tenantSubscription.findFirst({
       where: { tenantId: user.tenantId, isActive: true },
-      include: { licenseTier: true },
+      include: {
+        licenseTier: true,
+        plugins: {
+          where: { isActive: true },
+          include: { plugin: true },
+        },
+        theme: {
+          include: { theme: true },
+        },
+      },
+    }),
+    prisma.theme.findMany({
+      where: { isActive: true },
+      orderBy: { priceMonthly: "asc" },
     }),
   ]);
 
@@ -33,52 +58,192 @@ export async function getTenantSettingsData() {
 
   const isTrial = tenant.status === "TRIAL";
   const isPaidActive = tenant.status === "ACTIVE";
+  const savedConfig = (tenant.receiptConfig as any) || {};
 
-  return {
-    tenant: {
-      id: tenant.id,
-      businessName: tenant.businessName,
-      status: tenant.status,
-    },
-    primaryOutlet: tenant.outlets[0] || null,
-    isTrial,
-    isPaidActive,
-    tierName: activeSub?.licenseTier?.name || "Trial 30 Hari",
+  // Deteksi vertikal dari plugin aktif atau nama bisnis
+  const activePluginCode = activeSub?.plugins?.[0]?.plugin?.code?.toLowerCase() || "";
+  const nameLower = tenant.businessName.toLowerCase();
+
+  let detectedVertical: BusinessVertical = "CAFE";
+  let defaultPreset = cafeReceiptPreset;
+
+  if (savedConfig.vertical) {
+    detectedVertical = savedConfig.vertical;
+  } else if (activePluginCode.includes("barber") || nameLower.includes("barber") || nameLower.includes("potong")) {
+    detectedVertical = "BARBERSHOP";
+    defaultPreset = barbershopReceiptPreset;
+  } else if (activePluginCode.includes("cafe") || nameLower.includes("kopi") || nameLower.includes("cafe") || nameLower.includes("coffee")) {
+    detectedVertical = "CAFE";
+    defaultPreset = cafeReceiptPreset;
+  } else if (activePluginCode.includes("retail") || nameLower.includes("mart") || nameLower.includes("retail") || nameLower.includes("toko")) {
+    detectedVertical = "RETAIL";
+    defaultPreset = retailReceiptPreset;
+  } else if (activePluginCode.includes("laundry") || nameLower.includes("laundry") || nameLower.includes("cuci")) {
+    detectedVertical = "LAUNDRY";
+    defaultPreset = laundryReceiptPreset;
+  }
+
+  const mergedConfig: ReceiptConfig = {
+    ...defaultPreset,
+    ...savedConfig,
+    vertical: detectedVertical,
+    logoUrl: tenant.logoUrl || savedConfig.logoUrl || null,
   };
+
+  const purchasedLayoutIds: string[] = savedConfig.purchasedLayoutIds || [];
+  const purchasedThemeIds: string[] = savedConfig.purchasedThemeIds || [];
+  const activeUiThemeId = activeSub?.theme?.themeId || null;
+
+  // Saring hanya tema yang sudah dibeli / gratis / sedang aktif
+  const ownedUiThemes = allThemes
+    .filter(
+      (t) =>
+        (t.tokens as any)?.packageType !== "POS_LAYOUT" &&
+        (t.tokens as any)?.packageType !== "RECEIPT_PRESET" &&
+        !t.code?.startsWith("pos-") &&
+        !t.code?.startsWith("receipt-") &&
+        (Number(t.priceMonthly) === 0 || t.id === activeUiThemeId || isTrial)
+    )
+    .map((t) => ({
+      id: t.id,
+      code: t.code,
+      name: t.name,
+      priceMonthly: Number(t.priceMonthly),
+    }));
+
+  const ownedPosLayouts = allThemes
+    .filter(
+      (t) =>
+        (t.tokens as any)?.packageType === "POS_LAYOUT" ||
+        t.code?.startsWith("pos-") ||
+        Boolean((t.tokens as any)?.layouts?.pos?.cartDock)
+    )
+    .filter(
+      (t) =>
+        Number(t.priceMonthly) === 0 ||
+        purchasedLayoutIds.includes(t.code) ||
+        purchasedLayoutIds.includes(t.id) ||
+        isTrial
+    )
+    .map((t) => ({
+      id: t.code,
+      name: t.name,
+      vertical: (t.tokens as any)?.vertical || "Umum",
+    }));
+
+  const ownedReceiptThemes = allThemes
+    .filter(
+      (t) =>
+        (t.tokens as any)?.packageType === "RECEIPT_PRESET" ||
+        t.code?.startsWith("receipt-") ||
+        Boolean((t.tokens as any)?.receipt?.paperWidth)
+    )
+    .filter(
+      (t) =>
+        Number(t.priceMonthly) === 0 ||
+        purchasedThemeIds.includes(t.code) ||
+        purchasedThemeIds.includes(t.id) ||
+        isTrial
+    )
+    .map((t) => ({
+      id: t.code,
+      name: t.name,
+      vertical: (t.tokens as any)?.vertical || "Umum",
+    }));
+
+  const activePosLayout = savedConfig.posThemeCode || (savedConfig.posLayout !== "STANDARD" && savedConfig.posLayout !== "CAFE_QUICK_ORDER" && savedConfig.posLayout !== "BARBERSHOP_STATION" && savedConfig.posLayout !== "RETAIL_FAST_BARCODE" && savedConfig.posLayout !== "LAUNDRY_WEIGHING" ? savedConfig.posLayout : null) || "DEFAULT";
+
+  const hasReceiptProPlugin =
+    isTrial ||
+    Boolean(
+      activeSub?.plugins?.some(
+        (p) =>
+          p.plugin.code.toLowerCase().includes("receipt") ||
+          p.plugin.code.toLowerCase().includes("custom")
+      )
+    ) ||
+    savedConfig.hasReceiptProPlugin === true;
+
+  return JSON.parse(
+    JSON.stringify({
+      tenantId: tenant.id,
+      businessName: tenant.businessName,
+      logoUrl: tenant.logoUrl,
+      receiptConfig: mergedConfig,
+      detectedVertical,
+      isTrial,
+      isPaidActive,
+      tierName: activeSub?.licenseTier?.name || (isTrial ? "Trial 30 Hari" : "Lisensi Aktif"),
+      canCustomBrand: true,
+      hasReceiptProPlugin,
+      primaryOutlet: tenant.outlets[0] || null,
+      ownedUiThemes,
+      ownedPosLayouts,
+      ownedReceiptThemes,
+      activeUiThemeId,
+      activePosLayout,
+      activeReceiptTemplate: mergedConfig.templateStyle || "DEFAULT",
+    })
+  );
 }
+
 
 export async function updateTenantBrandingAction(data: {
   businessName: string;
-  receiptFooter?: string;
+  logoUrl?: string | null;
+  receiptConfig?: Partial<ReceiptConfig>;
   phone?: string;
   address?: string;
+  activeUiThemeId?: string;
+  activePosLayout?: string;
+  activeReceiptTemplate?: string;
 }) {
   const user = await requireOwner();
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-  });
+  const [tenant, activeSub] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+    }),
+    prisma.tenantSubscription.findFirst({
+      where: { tenantId: user.tenantId, isActive: true },
+    }),
+  ]);
 
   if (!tenant) throw new Error("Tenant tidak ditemukan.");
 
-  // Validasi: Fitur Custom Branding terkunci di mode TRIAL
-  if (tenant.status === "TRIAL") {
-    throw new Error(
-      "Fitur Ganti Logo & Custom Branding hanya dapat digunakan setelah membeli paket lisensi aktif (Basic/Pro/Enterprise)."
-    );
-  }
-
-  const { businessName, receiptFooter, phone, address } = data;
+  const {
+    businessName,
+    logoUrl,
+    receiptConfig,
+    phone,
+    address,
+    activeUiThemeId,
+    activePosLayout,
+    activeReceiptTemplate,
+  } = data;
 
   if (!businessName.trim()) {
     throw new Error("Nama brand / bisnis wajib diisi.");
   }
 
-  // Update nama bisnis tenant
+  const existingConfig = (tenant.receiptConfig as any) || defaultReceiptConfig;
+  const updatedConfig: any = {
+    ...existingConfig,
+    ...receiptConfig,
+    logoUrl: logoUrl !== undefined ? logoUrl : existingConfig.logoUrl,
+    phone: phone !== undefined ? phone : existingConfig.phone,
+    templateStyle: activeReceiptTemplate || receiptConfig?.templateStyle || existingConfig.templateStyle,
+    posThemeCode: activePosLayout === "DEFAULT" ? null : (activePosLayout || existingConfig.posThemeCode),
+    posLayout: activePosLayout === "DEFAULT" ? "STANDARD" : (activePosLayout || existingConfig.posLayout),
+  };
+
+  // Update tenant record
   await prisma.tenant.update({
     where: { id: user.tenantId },
     data: {
       businessName: businessName.trim(),
+      logoUrl: logoUrl !== undefined ? logoUrl : tenant.logoUrl,
+      receiptConfig: updatedConfig,
     },
   });
 
@@ -92,13 +257,38 @@ export async function updateTenantBrandingAction(data: {
     await prisma.outlet.update({
       where: { id: firstOutlet.id },
       data: {
-        address: address?.trim() || firstOutlet.address,
+        address: address?.trim() !== undefined ? address.trim() : firstOutlet.address,
       },
     });
   }
 
+
+  // Jika activeUiThemeId diubah, perbarui subscription theme
+  if (activeUiThemeId && activeSub) {
+    const targetTheme = await prisma.theme.findUnique({
+      where: { id: activeUiThemeId },
+    });
+    if (targetTheme) {
+      await prisma.tenantTheme.upsert({
+        where: { subscriptionId: activeSub.id },
+        create: {
+          subscriptionId: activeSub.id,
+          themeId: targetTheme.id,
+          customConfig: targetTheme.tokens as any,
+        },
+        update: {
+          themeId: targetTheme.id,
+          customConfig: targetTheme.tokens as any,
+          activatedAt: new Date(),
+        },
+      });
+    }
+  }
+
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/store");
   revalidatePath("/pos");
   return { success: true };
 }
+

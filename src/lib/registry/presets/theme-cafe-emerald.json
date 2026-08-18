@@ -1,0 +1,71 @@
+{
+  "manifest": {
+    "id": "qassa-theme-cafe-emerald",
+    "name": "Artisan Cafe Emerald",
+    "type": "THEME",
+    "version": "1.0.0",
+    "author": "Qassa F&B Lab",
+    "vertical": "CAFE",
+    "description": "Tema estetik hangat bernuansa Forest Green & Sand Gold untuk coffee shop, resto, dan bakery dengan slot pemilih meja cepat.",
+    "compatibility": ">=1.0.0",
+    "priceMonthly": 39000,
+    "priceAnnual": 390000,
+    "tags": ["cafe", "resto", "fnb", "emerald", "warm-dark"]
+  },
+  "tokens": {
+    "mode": "dark",
+    "colors": {
+      "primary": "#059669",
+      "primaryForeground": "#ffffff",
+      "background": "#061a14",
+      "backgroundMuted": "#0b2920",
+      "card": "#0c3328",
+      "border": "#134e3f",
+      "sidebar": "#04140f",
+      "accent": "#f59e0b",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "danger": "#ef4444"
+    },
+    "typography": {
+      "fontFamily": "Plus Jakarta Sans, sans-serif",
+      "baseFontSize": "14px",
+      "headingWeight": "bold"
+    },
+    "effects": {
+      "borderRadius": "16px",
+      "cardBorderRadius": "18px",
+      "buttonBorderRadius": "12px",
+      "glassmorphism": false,
+      "shadowScale": "md"
+    }
+  },
+  "layouts": {
+    "pos": {
+      "cartDock": "right",
+      "cartWidth": "400px",
+      "productGridColumns": 3,
+      "productCardStyle": "large_photo",
+      "showCategoriesAs": "horizontal_pills",
+      "slots": [
+        { "widget": "pos.table_selector", "order": 1, "colSpan": 12 },
+        { "widget": "pos.search_bar", "order": 2, "colSpan": 12 },
+        { "widget": "pos.category_pills", "order": 3, "colSpan": 12 },
+        { "widget": "pos.product_grid", "order": 4, "colSpan": 12 },
+        { "widget": "pos.cart_sidebar", "order": 5, "colSpan": 12 }
+      ]
+    },
+    "dashboard": {
+      "kpiColumns": 4,
+      "gap": "1.5rem",
+      "slots": [
+        { "widget": "dashboard.kpi_revenue", "order": 1, "colSpan": 3 },
+        { "widget": "dashboard.kpi_transactions", "order": 2, "colSpan": 3 },
+        { "widget": "dashboard.kpi_average_order", "order": 3, "colSpan": 3 },
+        { "widget": "dashboard.kpi_active_shift", "order": 4, "colSpan": 3 },
+        { "widget": "dashboard.sales_chart", "order": 5, "colSpan": 7 },
+        { "widget": "dashboard.top_products", "order": 6, "colSpan": 5 }
+      ]
+    }
+  }
+}

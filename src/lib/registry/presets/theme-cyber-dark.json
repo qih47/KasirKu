@@ -1,0 +1,73 @@
+{
+  "manifest": {
+    "id": "qassa-theme-cyber-dark",
+    "name": "Cyberpunk Neon Pro",
+    "type": "THEME",
+    "version": "1.0.0",
+    "author": "Qassa Design Studio",
+    "vertical": "GENERAL",
+    "description": "Tema gelap futuristik berenergi tinggi dengan aksen neon indigo, panel glassmorphism halus, dan layout kasir ultra-responsive.",
+    "compatibility": ">=1.0.0",
+    "priceMonthly": 29000,
+    "priceAnnual": 290000,
+    "tags": ["dark-mode", "neon", "futuristic", "glassmorphism"]
+  },
+  "tokens": {
+    "mode": "dark",
+    "colors": {
+      "primary": "#6366f1",
+      "primaryForeground": "#ffffff",
+      "background": "#090d16",
+      "backgroundMuted": "#0f172a",
+      "card": "#111a2e",
+      "border": "#1e293b",
+      "sidebar": "#0b1120",
+      "accent": "#818cf8",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "danger": "#ef4444"
+    },
+    "typography": {
+      "fontFamily": "Plus Jakarta Sans, sans-serif",
+      "baseFontSize": "14px",
+      "headingWeight": "bold"
+    },
+    "effects": {
+      "borderRadius": "14px",
+      "cardBorderRadius": "16px",
+      "buttonBorderRadius": "10px",
+      "glassmorphism": true,
+      "shadowScale": "glow",
+      "glowColor": "rgba(99, 102, 241, 0.25)"
+    }
+  },
+  "layouts": {
+    "pos": {
+      "cartDock": "right",
+      "cartWidth": "380px",
+      "productGridColumns": 4,
+      "productCardStyle": "grid_card",
+      "showCategoriesAs": "horizontal_pills",
+      "slots": [
+        { "widget": "pos.search_bar", "order": 1, "colSpan": 12 },
+        { "widget": "pos.category_pills", "order": 2, "colSpan": 12 },
+        { "widget": "pos.quick_actions", "order": 3, "colSpan": 12 },
+        { "widget": "pos.product_grid", "order": 4, "colSpan": 12 },
+        { "widget": "pos.cart_sidebar", "order": 5, "colSpan": 12 }
+      ]
+    },
+    "dashboard": {
+      "kpiColumns": 4,
+      "gap": "1.5rem",
+      "slots": [
+        { "widget": "dashboard.kpi_revenue", "order": 1, "colSpan": 3 },
+        { "widget": "dashboard.kpi_transactions", "order": 2, "colSpan": 3 },
+        { "widget": "dashboard.kpi_average_order", "order": 3, "colSpan": 3 },
+        { "widget": "dashboard.kpi_active_shift", "order": 4, "colSpan": 3 },
+        { "widget": "dashboard.sales_chart", "order": 5, "colSpan": 8 },
+        { "widget": "dashboard.recent_transactions", "order": 6, "colSpan": 4 },
+        { "widget": "dashboard.top_products", "order": 7, "colSpan": 12 }
+      ]
+    }
+  }
+}

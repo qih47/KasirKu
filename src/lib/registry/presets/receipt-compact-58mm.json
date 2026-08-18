@@ -1,0 +1,32 @@
+{
+  "manifest": {
+    "id": "qassa-receipt-compact-58mm",
+    "name": "Eco Compact Mini (58mm)",
+    "type": "RECEIPT_PRESET",
+    "version": "1.0.0",
+    "author": "Qassa Print Lab",
+    "vertical": "RETAIL",
+    "description": "Layout struk thermal 58mm hemat kertas khusus printer Bluetooth mini, minimarket, dan gerai retail cepat.",
+    "compatibility": ">=1.0.0",
+    "priceMonthly": 19000,
+    "priceAnnual": 190000,
+    "tags": ["thermal", "58mm", "compact", "eco", "retail"]
+  },
+  "receipt": {
+    "paperWidth": "58mm",
+    "fontFamily": "monospace",
+    "fontSizeScale": "compact",
+    "dividerStyle": "dotted",
+    "blocks": [
+      { "type": "STORE_META", "align": "center" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "TRANSACTION_META", "align": "left" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "ITEMS_TABLE", "align": "left" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "TOTAL_SUMMARY", "align": "right" },
+      { "type": "PAYMENT_DETAILS", "align": "left" },
+      { "type": "FOOTER_NOTES", "align": "center" }
+    ]
+  }
+}

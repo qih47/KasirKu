@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -78,6 +79,13 @@ async function main() {
       priceMonthly: 100000,
       priceAnnual: 996000, // 100.000 * 12 * 0.83
     },
+    {
+      code: "receipt_designer",
+      name: "Premium Receipt Studio",
+      description: "Koleksi template struk eksklusif, visual layout builder, divider custom, split print struk dapur, dan generator voucher promo otomatis.",
+      priceMonthly: 29000,
+      priceAnnual: 290000,
+    },
   ];
 
   for (const plugin of plugins) {
@@ -121,6 +129,21 @@ async function main() {
       create: theme,
     });
   }
+
+  console.log("Seeding Super Admin Platform...");
+  const defaultPasswordHash = await bcrypt.hash("admin123456", 10);
+  await prisma.superAdmin.upsert({
+    where: { email: "admin@qassa.id" },
+    update: {
+      name: "Super Admin Qassa",
+      passwordHash: defaultPasswordHash,
+    },
+    create: {
+      name: "Super Admin Qassa",
+      email: "admin@qassa.id",
+      passwordHash: defaultPasswordHash,
+    },
+  });
 
   console.log("Seed data created successfully!");
 }

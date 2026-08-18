@@ -31,12 +31,10 @@ export default withAuth(
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
-    // 4. Jika Super Admin mencoba mengakses /dashboard tenant
-    if (isSuperAdmin && pathname.startsWith("/dashboard")) {
-      return NextResponse.redirect(new URL("/admin", req.url));
-    }
-
+    // 4. Jika Super Admin mengakses /dashboard, izinkan untuk preview/testing
+    // (tidak dialihkan paksa ke /admin)
     return NextResponse.next();
+
   },
   {
     callbacks: {

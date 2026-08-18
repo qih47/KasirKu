@@ -1,8 +1,5 @@
-import { getThemesCatalog } from "@/modules/superadmin/theme-actions";
-import { AdminThemesClient } from "./themes-client";
+import { redirect } from "next/navigation";
 
-export default async function AdminThemesPage() {
-  const themes = await getThemesCatalog();
-
-  return <AdminThemesClient initialThemes={themes} />;
+export default function AdminThemesPage() {
+  redirect("/admin/catalog?tab=THEMES");
 }

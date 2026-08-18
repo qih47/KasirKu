@@ -1,0 +1,37 @@
+{
+  "manifest": {
+    "id": "qassa-receipt-modern-80mm",
+    "name": "Thermal Modern Pro (80mm)",
+    "type": "RECEIPT_PRESET",
+    "version": "1.0.0",
+    "author": "Qassa Print Lab",
+    "vertical": "GENERAL",
+    "description": "Layout struk thermal 80mm modern dengan logo terpusat, nomor antrean jumbo, breakdown pajak rapi, dan QRIS pembayaran cepat.",
+    "compatibility": ">=1.0.0",
+    "priceMonthly": 19000,
+    "priceAnnual": 190000,
+    "tags": ["thermal", "80mm", "modern", "qris", "queue"]
+  },
+  "receipt": {
+    "paperWidth": "80mm",
+    "fontFamily": "monospace",
+    "fontSizeScale": "normal",
+    "dividerStyle": "dashed",
+    "blocks": [
+      { "type": "HEADER_LOGO", "align": "center" },
+      { "type": "STORE_META", "align": "center" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "QUEUE_NUMBER", "align": "center" },
+      { "type": "TRANSACTION_META", "align": "left" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "ITEMS_TABLE", "align": "left" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "TOTAL_SUMMARY", "align": "right" },
+      { "type": "PAYMENT_DETAILS", "align": "left" },
+      { "type": "DIVIDER", "align": "center" },
+      { "type": "QRIS_CODE", "align": "center" },
+      { "type": "FOOTER_NOTES", "align": "center" },
+      { "type": "POWERED_BY", "align": "center" }
+    ]
+  }
+}

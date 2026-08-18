@@ -27,25 +27,10 @@ export const authOptions: NextAuthOptions = {
 
         const normalizedEmail = credentials.email.toLowerCase().trim();
 
-        // 1. Cek apakah ini Super Admin di tabel super_admins
-        let superAdmin = await prisma.superAdmin.findUnique({
+        // 1. Cek apakah ini Super Admin di tabel database super_admins
+        const superAdmin = await prisma.superAdmin.findUnique({
           where: { email: normalizedEmail },
         });
-
-        // Auto-seed default Super Admin jika belum ada sama sekali di database
-        if (!superAdmin && normalizedEmail === "admin@posuniversal.com") {
-          const totalSuperAdmin = await prisma.superAdmin.count();
-          if (totalSuperAdmin === 0) {
-            const defaultPasswordHash = await bcrypt.hash("admin123456", 10);
-            superAdmin = await prisma.superAdmin.create({
-              data: {
-                name: "Super Admin Platform",
-                email: "admin@posuniversal.com",
-                passwordHash: defaultPasswordHash,
-              },
-            });
-          }
-        }
 
         if (superAdmin) {
           const isSuperAdminPasswordValid = await bcrypt.compare(

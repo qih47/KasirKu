@@ -51,13 +51,14 @@ export async function createProductAction(data: {
   name: string;
   type: ProductType;
   price: number;
+  imageUrl?: string;
   barcode?: string;
   category?: string;
   stockQty?: number | null;
   attributes?: Record<string, any>;
 }) {
   const user = await requireTenantUser();
-  const { name, type, price, barcode, category, stockQty, attributes } = data;
+  const { name, type, price, imageUrl, barcode, category, stockQty, attributes } = data;
 
   if (!name || price === undefined || price < 0) {
     throw new Error("Nama dan harga produk wajib diisi dengan benar.");
@@ -73,6 +74,7 @@ export async function createProductAction(data: {
       name: name.trim(),
       type,
       price,
+      imageUrl: imageUrl?.trim() || null,
       barcode: barcode?.trim() || null,
       category: category?.trim() || "Umum",
       stockQty: finalStock,
@@ -92,6 +94,7 @@ export async function updateProductAction(
     name: string;
     type: ProductType;
     price: number;
+    imageUrl?: string;
     barcode?: string;
     category?: string;
     stockQty?: number | null;
@@ -99,7 +102,7 @@ export async function updateProductAction(
   }
 ) {
   const user = await requireTenantUser();
-  const { name, type, price, barcode, category, stockQty, attributes } = data;
+  const { name, type, price, imageUrl, barcode, category, stockQty, attributes } = data;
 
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing || existing.tenantId !== user.tenantId) {
@@ -114,6 +117,7 @@ export async function updateProductAction(
       name: name.trim(),
       type,
       price,
+      imageUrl: imageUrl !== undefined ? (imageUrl.trim() || null) : existing.imageUrl,
       barcode: barcode?.trim() || null,
       category: category?.trim() || "Umum",
       stockQty: finalStock,

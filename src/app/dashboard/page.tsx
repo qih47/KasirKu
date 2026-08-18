@@ -2,212 +2,226 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  Sparkles,
-  ShoppingBag,
-  Scissors,
-  Coffee,
-  Shirt,
-  DollarSign,
-  Receipt,
-  Users,
-  Layers,
-  ArrowRight,
-  ShieldAlert,
-  TrendingUp,
-  Store,
-  CheckCircle2,
-} from "lucide-react";
-import Link from "next/link";
+  DynamicDashboardRenderer,
+  DashboardMetricsData,
+} from "@/components/dashboard/dynamic-dashboard-renderer";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const user = session?.user as any;
 
-  // Fetch tenant info and active plugins
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    include: {
-      subscriptions: {
-        where: { isActive: true },
-        include: {
-          licenseTier: true,
-          plugins: {
-            include: {
-              plugin: true,
+  let targetTenantId = user?.tenantId;
+  if (!targetTenantId && user?.role === "SUPER_ADMIN") {
+    const firstTenant = await prisma.tenant.findFirst({
+      orderBy: { createdAt: "desc" },
+    });
+    targetTenantId = firstTenant?.id;
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [
+    tenant,
+    todayTransactions,
+    last7DaysTransactions,
+    recentTransactionsList,
+    activeShift,
+    productsList,
+    topItemsGrouped,
+  ] = await Promise.all([
+    targetTenantId
+      ? prisma.tenant.findUnique({
+          where: { id: targetTenantId },
+          include: {
+            subscriptions: {
+              where: { isActive: true },
+              include: {
+                licenseTier: true,
+                plugins: {
+                  include: {
+                    plugin: true,
+                  },
+                },
+              },
+            },
+            outlets: true,
+            users: true,
+          },
+        })
+      : null,
+    targetTenantId
+      ? prisma.transaction.findMany({
+          where: {
+            outlet: { tenantId: targetTenantId },
+            createdAt: { gte: startOfToday },
+          },
+        })
+      : [],
+    targetTenantId
+      ? prisma.transaction.findMany({
+          where: {
+            outlet: { tenantId: targetTenantId },
+            createdAt: { gte: sevenDaysAgo },
+          },
+          select: {
+            createdAt: true,
+            totalAmount: true,
+          },
+        })
+      : [],
+    targetTenantId
+      ? prisma.transaction.findMany({
+          where: {
+            outlet: { tenantId: targetTenantId },
+          },
+          include: {
+            payments: { take: 1 },
+            items: { take: 1, include: { product: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+        })
+      : [],
+    targetTenantId
+      ? prisma.shift.findFirst({
+          where: { outlet: { tenantId: targetTenantId }, closedAt: null },
+          include: { kasir: true },
+          orderBy: { openedAt: "desc" },
+        })
+      : null,
+    targetTenantId
+      ? prisma.product.findMany({
+          where: { tenantId: targetTenantId, isActive: true },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+        })
+      : [],
+    targetTenantId
+      ? prisma.transactionItem.groupBy({
+          by: ["productId"],
+          where: {
+            transaction: {
+              outlet: { tenantId: targetTenantId },
             },
           },
-        },
-      },
-      outlets: true,
-      users: true,
-    },
-  });
+          _sum: {
+            qty: true,
+            subtotal: true,
+          },
+          orderBy: {
+            _sum: {
+              qty: "desc",
+            },
+          },
+          take: 5,
+        })
+      : [],
+  ]);
 
   const activeSubscription = tenant?.subscriptions[0];
-  const activePlugins = activeSubscription?.plugins || [];
+  const activePlugins = (activeSubscription?.plugins || []).map((p) => ({
+    id: p.plugin.id,
+    name: p.plugin.name,
+    code: p.plugin.code,
+  }));
 
-  const getPluginIcon = (code: string) => {
-    switch (code) {
-      case "barbershop":
-        return <Scissors className="w-5 h-5 text-amber-500" />;
-      case "cafe":
-        return <Coffee className="w-5 h-5 text-emerald-500" />;
-      case "retail":
-        return <ShoppingBag className="w-5 h-5 text-blue-500" />;
-      case "laundry":
-        return <Shirt className="w-5 h-5 text-purple-500" />;
-      default:
-        return <Layers className="w-5 h-5 text-indigo-500" />;
-    }
+  const todayRevenue = todayTransactions.reduce(
+    (acc, curr) => acc + Number(curr.totalAmount || 0),
+    0
+  );
+  const todayTransactionsCount = todayTransactions.length;
+  const averageOrderValue =
+    todayTransactionsCount > 0
+      ? Math.round(todayRevenue / todayTransactionsCount)
+      : 0;
+
+  // Real 7-day weekly sales aggregation
+  const daysMap = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+  const weeklySalesTrend = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dayLabel = daysMap[d.getDay()];
+    const dateStr = d.toISOString().slice(0, 10);
+    const dayTotal = last7DaysTransactions
+      .filter((t) => t.createdAt.toISOString().slice(0, 10) === dateStr)
+      .reduce((sum, t) => sum + Number(t.totalAmount || 0), 0);
+    return {
+      day: dayLabel,
+      amount: dayTotal,
+    };
+  });
+
+  // Resolve top products from group by or fallback to tenant product catalog
+  let topProductsData = [];
+  if (topItemsGrouped.length > 0) {
+    const productIds = topItemsGrouped.map((g) => g.productId);
+    const matchedProducts = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+    const productMap = new Map(matchedProducts.map((p) => [p.id, p]));
+
+    topProductsData = topItemsGrouped.map((g) => {
+      const p = productMap.get(g.productId);
+      return {
+        id: g.productId,
+        name: p?.name || "Produk",
+        category: p?.category || "Umum",
+        soldQty: g._sum.qty || 0,
+        revenue: Number(g._sum.subtotal || 0),
+      };
+    });
+  } else {
+    topProductsData = productsList.map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category || "Umum",
+      soldQty: 0,
+      revenue: 0,
+    }));
+  }
+
+  const metricsData: DashboardMetricsData = {
+    tenantName: tenant?.businessName || user?.name || "Qassa Outlet",
+    userName: user?.name || "Admin",
+    isTrial: tenant?.status === "TRIAL",
+    tierName: activeSubscription?.licenseTier?.name || "Lisensi Pro",
+    outletsCount: tenant?.outlets.length || 1,
+    maxOutlets: activeSubscription?.licenseTier?.outletLimit || null,
+    usersCount: tenant?.users.length || 1,
+    activePlugins,
+    todayRevenue,
+    todayTransactionsCount,
+    averageOrderValue,
+    weeklySalesTrend,
+    activeShiftStatus: {
+      isOpen: Boolean(activeShift),
+      cashierName: activeShift?.kasir?.name || (Boolean(activeShift) ? "Kasir Aktif" : "Belum Ada Shift"),
+      openedAt: activeShift
+        ? new Date(activeShift.openedAt).toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "-",
+      openingCash: activeShift ? Number(activeShift.openingCash) : 0,
+    },
+    recentTransactions: recentTransactionsList.map((t: any) => ({
+      id: t.id,
+      receiptNumber: t.transactionNumber || `#INV-${t.id.slice(0, 6)}`,
+      totalAmount: Number(t.totalAmount || 0),
+      paymentMethod: t.payments?.[0]?.method || "CASH",
+      createdAt: new Date(t.createdAt).toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    })),
+    topProducts: topProductsData,
   };
 
-  return (
-    <div className="space-y-8">
-      {/* Welcome Banner - Clean Material Elevated Hero */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-bold uppercase tracking-wider text-white">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            Sistem POS Aktif &bull; {tenant?.businessName}
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Selamat Datang, {user.name}! 👋
-          </h1>
-          <p className="text-indigo-100 text-xs sm:text-sm max-w-xl leading-relaxed">
-            Aplikasi kasir siap digunakan dengan modul vertikal terpilih. Kelola transaksi, shift kasir, produk, dan laporan harian dengan mudah.
-          </p>
-        </div>
-
-        <div className="relative z-10 flex items-center gap-3">
-          <Link
-            href="/pos"
-            className="px-6 py-3.5 rounded-2xl bg-white text-indigo-600 font-extrabold text-xs shadow-lg hover:bg-indigo-50 transition flex items-center gap-2"
-          >
-            <span>Buka Kasir (POS)</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-
-      {/* Subscription & Active Plugins Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left">
-        {/* Active License Card */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Lisensi Kapasitas
-            </span>
-            <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              {activeSubscription?.licenseTier?.name || "Lisensi Basic"}
-            </span>
-          </div>
-
-          <div>
-            <p className="text-2xl font-black text-slate-950">
-              {tenant?.outlets.length || 1} /{" "}
-              {activeSubscription?.licenseTier?.outletLimit
-                ? `${activeSubscription.licenseTier.outletLimit} Outlet`
-                : "Unlimited Outlet"}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Maksimal{" "}
-              {activeSubscription?.licenseTier?.kasirLimitPerOutlet || 5} kasir
-              per outlet.
-            </p>
-          </div>
-
-          <div className="pt-2">
-            <Link
-              href="/dashboard/subscription"
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-            >
-              <span>Kelola Paket & Lisensi</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Active Vertical Plugins */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Modul Vertikal Aktif (Plugin)
-            </span>
-            <span className="text-xs text-slate-500 font-semibold">
-              {activePlugins.length} Modul Terpasang
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {activePlugins.length > 0 ? (
-              activePlugins.map((item: any) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3.5"
-                >
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                    {getPluginIcon(item.plugin.code)}
-                  </div>
-                  <div>
-                    <h2 className="text-xs font-bold text-slate-950">
-                      {item.plugin.name}
-                    </h2>
-                    <p className="text-[10px] text-slate-500 font-mono">
-                      {item.plugin.code}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-2 p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
-                Belum ada modul vertikal aktif. Silakan aktifkan di menu Langganan.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Metrics Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shadow-sm">
-            <DollarSign className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-400 uppercase">
-              Penjualan Hari Ini
-            </span>
-            <p className="text-2xl font-black text-slate-950">Rp 0</p>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shadow-sm">
-            <Receipt className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-400 uppercase">
-              Transaksi Selesai
-            </span>
-            <p className="text-2xl font-black text-slate-950">0 Struk</p>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shadow-sm">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-400 uppercase">
-              Total Pengguna & Kasir
-            </span>
-            <p className="text-2xl font-black text-slate-950">
-              {tenant?.users.length || 1} Akun
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <DynamicDashboardRenderer data={metricsData} />;
 }
+
+

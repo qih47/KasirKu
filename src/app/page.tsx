@@ -4,12 +4,12 @@ import { LandingClient } from "./landing-client";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "POS Universal - Sistem Kasir Cloud Multi-Tenant Indonesia",
-  description: "Aplikasi kasir pintar untuk Barbershop, Cafe & Resto, Retail, dan Laundry. Dilengkapi simulator harga live dan demo bebas akun.",
+  title: "Qassa POS - Satu Sistem Kasir Cerdas untuk Segala Bidang Bisnis",
+  description:
+    "Aplikasi kasir pintar multi-vertikal untuk Cafe & Resto, Barbershop, Retail, dan Laundry. Dilengkapi manajemen multi-cabang, kalkulator komisi staff, dan printer struk thermal profesional.",
 };
 
 export default async function HomePage() {
-  // Ambil data resmi yang ada di database sistem secara live
   const [rawTiers, rawPlugins, rawThemes] = await Promise.all([
     prisma.licenseTier.findMany({
       where: { isActive: true },

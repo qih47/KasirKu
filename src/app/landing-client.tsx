@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Store,
   Scissors,
@@ -11,30 +12,18 @@ import {
   Sparkles,
   ArrowRight,
   CheckCircle2,
-  Zap,
-  ShieldCheck,
   Check,
-  Laptop,
-  Layers,
-  BarChart3,
-  TrendingUp,
-  Receipt,
-  QrCode,
-  Smartphone,
-  Shield,
-  HelpCircle,
   Clock,
-  Building,
-  CreditCard,
+  Building2,
   Printer,
-  Plus,
-  Minus,
-  RotateCcw,
-  Users,
+  TrendingUp,
   Palette,
-  Eye,
+  Monitor,
   ChevronDown,
   ChevronUp,
+  Sun,
+  Moon,
+  Play,
 } from "lucide-react";
 
 export function LandingClient({
@@ -46,828 +35,878 @@ export function LandingClient({
   plugins: any[];
   themes: any[];
 }) {
+  const [isDark, setIsDark] = useState(false);
   const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
-  const [activePluginTab, setActivePluginTab] = useState<string>("barbershop");
+  const [activeVerticalTab, setActiveVerticalTab] = useState<"cafe" | "barbershop" | "retail" | "laundry">("cafe");
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
-  // Map real plugin data from database
-  const pluginInfoMap: Record<string, { icon: any; route: string; highlight: string; features: string[] }> = {
-    barbershop: {
-      icon: Scissors,
-      route: "/dashboard/barbershop/queue",
-      highlight: "Live Chair Board & Komisi Kapster",
-      features: [
-        "Live Chair Board 3 kolom status (Menunggu, Sedang Dilayani, Selesai)",
-        "Perhitungan otomatis komisi kapster & cetak slip bagi hasil per transaksi",
-        "Penetapan kapster langsung saat input transaksi kasir",
-      ],
-    },
+  // ── Theme Tokens ──────────────────────────────────
+  const t = {
+    bg: isDark ? "#070A12" : "#F8FAFC",
+    bgCard: isDark ? "#111726" : "#FFFFFF",
+    bgCard2: isDark ? "#0D1421" : "#F1F5F9",
+    border: isDark ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.2)",
+    borderSoft: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)",
+    text: isDark ? "#F8FAFC" : "#0F172A",
+    textSub: isDark ? "#94A3B8" : "#475569",
+    textMuted: isDark ? "#64748B" : "#94A3B8",
+    navBg: isDark ? "rgba(7,10,18,0.85)" : "rgba(248,250,252,0.9)",
+    gridColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
+    glow1: isDark ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.07)",
+    glow2: isDark ? "rgba(14,165,233,0.08)" : "rgba(14,165,233,0.04)",
+    glow3: isDark ? "rgba(139,92,246,0.08)" : "rgba(139,92,246,0.03)",
+    pillBg: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)",
+    pillBorder: isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.25)",
+    pillText: isDark ? "#A5B4FC" : "#4F46E5",
+    toggleBg: isDark ? "#1E293B" : "#E2E8F0",
+    inputBg: isDark ? "#0B1022" : "#FFFFFF",
+    highlight: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)",
+    highlightBorder: isDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.3)",
+    miniPosBg: isDark ? "#070C18" : "#F8FAFC",
+    miniPosItem: isDark ? "#111726" : "#EEF2FF",
+    faqBg: isDark ? "#111726" : "#FFFFFF",
+    receiptBg: isDark ? "#1A2234" : "#FFFFF8",
+  };
+
+  // ── Vertical Solutions Data ───────────────────────
+  const verticalSolutions = {
     cafe: {
+      id: "cafe",
+      name: "Cafe, F&B & Restoran",
       icon: Coffee,
-      route: "/dashboard/cafe/tables",
-      highlight: "Visual Floor Map Meja, KOT Dapur & QR Menu",
+      badge: "Solusi F&B",
+      tagline: "Percepat pemesanan meja, varian rasa, dan cetak tiket ke dapur tanpa jeda.",
       features: [
-        "Manajemen okupansi denah meja visual (Available, Occupied, Reserved, Billing)",
-        "Kitchen Order Ticket (KOT) untuk kirim pesanan ke juru masak",
-        "Digital Menu & Self-Order QR Pelanggan di URL /menu/[tenantId]",
+        "Denah Meja Visual (Available, Terisi, Reserved, Billing)",
+        "Kustomisasi Varian Minuman Kilat (Hot/Iced, Gula, Es, Susu Oat)",
+        "Kirim Tiket Pesanan Otomatis ke Dapur & Bar (KOT)",
+        "Menu Digital & Self-Order QR untuk Pelanggan",
       ],
+      sampleProducts: [
+        { name: "Kopi Susu Gula Aren", price: "Rp 22.000", note: "Less Sugar, Normal Ice" },
+        { name: "Iced Caramel Macchiato", price: "Rp 28.000", note: "Oat Milk (+5k)" },
+        { name: "Butter Croissant", price: "Rp 24.000", note: "Warm Up" },
+      ],
+      receiptSample: { title: "FORE COFFEE", meta: "[ TABLE 08 • DINE IN ]", total: "Rp 79.000" },
+    },
+    barbershop: {
+      id: "barbershop",
+      name: "Barbershop & Salon",
+      icon: Scissors,
+      badge: "Spesialis Grooming",
+      tagline: "Atur antrean kursi pangkas, hitung komisi kapster, dan cetak slip gaji otomatis.",
+      features: [
+        "Live Chair Board & Selector Kursi Potong (Chair 1, Chair 2, Chair 3)",
+        "Penugasan Capster/Stylist per Item Transaksi",
+        "Perhitungan Komisi & Tip Barber Otomatis Tanpa Rekap Manual",
+        "Katalog Treatment Cepat (Haircut, Shaving, Creambath, Pomade)",
+      ],
+      sampleProducts: [
+        { name: "Gentleman Haircut & Wash", price: "Rp 50.000", note: "Stylist: Hendra (Kursi 1)" },
+        { name: "Beard Shaving & Hot Towel", price: "Rp 35.000", note: "Stylist: Hendra" },
+        { name: "Pomade Matte Clay", price: "Rp 85.000", note: "Take Home" },
+      ],
+      receiptSample: { title: "BARBER LOUNGE", meta: "[ CHAIR #01 • HENDRA ]", total: "Rp 170.000" },
     },
     retail: {
+      id: "retail",
+      name: "Supermarket & Retail",
       icon: ShoppingBag,
-      route: "/dashboard/products",
-      highlight: "Barcode Scanner, Multi-Satuan & Harga Grosir",
+      badge: "High-Speed Scan",
+      tagline: "Scan barcode SKU kilat, kelola harga grosir bertingkat, dan gunakan Numpad kasir instan.",
       features: [
-        "Scan barcode cepat & pencarian SKU barang instan di kasir",
-        "Multi-satuan unit produk (Beli Dus, Jual Satuan Pcs/Lusin)",
-        "Harga grosir bertingkat otomatis berdasarkan kuantiti belanja",
+        "Auto-Focus Barcode Scanner Tanpa Perlu Klik Input",
+        "Touch Numpad Kasir Jumbo untuk Edit Kuantitas Cepat",
+        "Multi-Satuan Barang (Beli Dus/Karton, Jual Satuan Pcs/Lusin)",
+        "Peringatan Stok Minimum Otomatis agar Tidak Kehabisan Barang",
       ],
+      sampleProducts: [
+        { name: "Minyak Goreng Sania 2L", price: "Rp 34.000", note: "SKU: 899234511001" },
+        { name: "Beras Pandan Wangi 5Kg", price: "Rp 78.000", note: "SKU: 899234511002" },
+        { name: "Air Mineral 600ml (x3)", price: "Rp 10.500", note: "SKU: 899234511003" },
+      ],
+      receiptSample: { title: "SMART MART", meta: "[ KASIR 01 • 5 ITEMS ]", total: "Rp 122.500" },
     },
     laundry: {
+      id: "laundry",
+      name: "Laundry Service",
       icon: Shirt,
-      route: "/dashboard/laundry/orders",
-      highlight: "Timbangan Kg, Pilihan Parfum & 5 Tahap Tracking",
+      badge: "Timbangan & Tracking",
+      tagline: "Input timbangan berat Kg desimal, pilih aroma parfum cucian, dan tandai nomor rak penyimpanan.",
       features: [
-        "Input berat cucian desimal (misal 3.45 Kg) akurat hingga gram",
-        "Pilihan aroma parfum laundry & tipe layanan (Express / Reguler)",
-        "Live tracking status order 5 tahap cucian & cetak nota laundry",
+        "Input Timbangan Berat Kilat (Akurat hingga Desimal Kg)",
+        "Pemilih Aroma Parfum Laundry & Paket (Cuci Lipat / Setrika Express)",
+        "Penomoran Slot Rak Penyimpanan Pakaian Siap Ambil",
+        "Cetak Nota Klaim Pelanggan & WhatsApp Notifikasi Selesai",
       ],
+      sampleProducts: [
+        { name: "Cuci Kering Lipat (3.5 Kg)", price: "Rp 24.500", note: "Aroma: Lavender • Rak B-04" },
+        { name: "Cuci Setrika Express (2 Kg)", price: "Rp 24.000", note: "Selesai: Hari Ini 18:00" },
+        { name: "Bed Cover Besar Satuan", price: "Rp 30.000", note: "Plastik Tebal" },
+      ],
+      receiptSample: { title: "BERSIH LAUNDRY", meta: "[ RAK B-04 • 3.5 KG ]", total: "Rp 78.500" },
     },
   };
 
-  const currentPluginMeta = pluginInfoMap[activePluginTab] || pluginInfoMap["barbershop"];
-  const currentPluginDb = plugins.find((p) => p.code === activePluginTab) || {
-    name: "Barbershop & Salon",
-    description: "Modul antrian kursi dan komisi kapster.",
-    priceMonthly: 50000,
-  };
+  const currentVert = verticalSolutions[activeVerticalTab];
 
-  // Real System Core Features (100% ada di aplikasi kita)
-  const systemCorePillars = [
+  const corePillars = [
     {
-      icon: Store,
+      icon: Building2,
       title: "Manajemen Multi-Cabang Outlet",
-      desc: "Kelola banyak cabang outlet dalam 1 akun pemilik, lengkap dengan pembagian kuota outlet dan hak akses khusus Admin Cabang.",
-      tag: "/dashboard/outlets",
+      desc: "Pantau omzet, stok, dan laporan seluruh cabang dalam 1 dashboard pusat tanpa repot.",
     },
     {
       icon: Clock,
-      title: "Buka / Tutup Shift Kasir Nyata",
-      desc: "Pencatatan modal kas awal (opening cash), rekonsiliasi kas akhir saat tutup shift, dan mutasi kas masuk/keluar (cash movement).",
-      tag: "/pos & /pos/history",
+      title: "Rekonsiliasi Buka & Tutup Shift",
+      desc: "Kontrol modal kas awal, catat pengeluaran operasional, dan cocokkan selisih laci kasir setiap shift.",
     },
     {
       icon: TrendingUp,
-      title: "Laporan Konsolidasi & Heatmap Jam Ramai",
-      desc: "Grafik tren omset harian, deteksi jam paling ramai (peak hours heatmap), rekap laba, serta export laporan ke CSV dan PDF.",
-      tag: "/dashboard/reports",
+      title: "Analitik Penjualan & Laba Real-Time",
+      desc: "Laporan harian, mingguan, bulanan yang otomatis kalkulasi HPP, laba kotor, dan produk terlaris.",
     },
     {
-      icon: Palette,
-      title: "Dynamic UI Theme & Marketplace",
-      desc: "Ganti layout antarmuka kasir secara live (Modern, Compact, Luxe, Warm) dengan token warna dan tema yang diterbitkan Super Admin.",
-      tag: "/dashboard/themes",
-    },
-    {
-      icon: Receipt,
-      title: "Custom Branding & Struk Thermal",
-      desc: "Ubah nama bisnis, alamat toko, logo, dan teks footer struk belanja dengan live preview thermal 58mm/80mm di paket berbayar.",
-      tag: "/dashboard/settings",
-    },
-    {
-      icon: Laptop,
-      title: "Simulator & Guest Demo Bebas Akun",
-      desc: "Uji coba seluruh fitur kasir, antrian, denah meja, dan racik paket secara nyata di browser tanpa registrasi akun & tanpa database.",
-      tag: "/demo & /demo/app",
+      icon: Printer,
+      title: "Cetak Struk Thermal Fleksibel",
+      desc: "Mendukung printer 58mm & 80mm via Bluetooth/USB/WiFi, lengkap QRIS dinamis dan logo toko.",
     },
   ];
 
-  const realFaqs = [
+  const faqs = [
     {
-      q: "Bagaimana cara mencoba sistem tanpa mendaftar akun?",
-      a: "Anda dapat membuka halaman Simulator & Guest Demo (/demo). Anda bebas meracik paket lisensi, modul vertikal, dan tema layout, lalu langsung masuk ke dashboard demo nyata tanpa registrasi akun dan tanpa mengotori database server.",
+      q: "Apakah saya bisa mencoba Qassa secara gratis terlebih dahulu?",
+      a: "Ya! Anda dapat langsung mendaftar untuk menikmati masa Uji Coba Gratis (Free Trial) selama 30 Hari dengan akses penuh ke seluruh fitur tanpa perlu memasukkan kartu kredit.",
     },
     {
-      q: "Bagaimana cara kerja modul bisnis vertikal (Barbershop, Cafe, Laundry, Retail)?",
-      a: "Sistem kami dibangun secara modular. Saat modul diaktifkan, menu dan alur kasir otomatis menyesuaikan. Contoh: Cafe memunculkan denah meja & KOT, Barbershop memunculkan live antrian kursi & komisi, Laundry memunculkan timbangan kg & nota 5 tahap.",
+      q: "Apakah Qassa cocok untuk bisnis yang memiliki lebih dari satu cabang?",
+      a: "Sangat cocok. Qassa dirancang dengan arsitektur multi-outlet di mana Anda dapat memantau penjualan semua cabang, mengelola stok per gudang, dan memberikan hak akses khusus kasir per cabang dari 1 akun pemilik.",
     },
     {
-      q: "Apakah pemilik bisa memantau semua cabang sekaligus?",
-      a: "Bisa. Di paket Pro dan Enterprise, Anda mendapatkan fitur Multi-Outlet dan Laporan Konsolidasi untuk melihat total omset seluruh cabang dalam 1 layar, serta mendelegasikan Admin Cabang khusus per outlet.",
+      q: "Perangkat hardware apa saja yang didukung oleh Qassa?",
+      a: "Qassa berbasis cloud modern dan dapat diakses melalui laptop, PC komputer, tablet Android/iPad, maupun smartphone. Kompatibel dengan semua jenis printer thermal (Bluetooth/USB/LAN) dan barcode scanner standar.",
     },
     {
-      q: "Apakah saya bisa mengubah nama toko dan footer struk?",
-      a: "Bisa. Pada menu Pengaturan Toko (/dashboard/settings), tenant yang telah aktif berlangganan dapat mengganti nama brand, alamat, dan catatan footer struk yang otomatis tampil pada hasil cetak printer thermal.",
+      q: "Bagaimana cara kerja perhitungan komisi kapster di Barbershop?",
+      a: "Saat kasir menginput transaksi, cukup pilih nama kapster yang melayani. Qassa akan otomatis mengalokasikan komisi dan membuat rekap bagi hasil tanpa perlu dihitung manual.",
     },
     {
-      q: "Bagaimana sistem lisensi dan pembayaran langganan bekerja?",
-      a: "Setiap tenant baru otomatis mendapatkan masa Trial 30 Hari penuh. Setelah itu, Anda dapat memilih lisensi (Basic, Pro, Enterprise) dan menambah add-on modul sesuai kebutuhan dengan kalkulasi transparan per bulan atau per tahun.",
+      q: "Apakah tema antarmuka kasir bisa disesuaikan dengan jenis bisnis saya?",
+      a: "Tentu! Qassa Store menyediakan layout layar kasir khusus per vertikal: F&B, Barbershop, Retail, dan Laundry. Tema cetak struk dan warna dashboard juga bisa diubah.",
+    },
+    {
+      q: "Apakah data transaksi dan keuangan bisnis saya aman?",
+      a: "Keamanan adalah prioritas utama kami. Seluruh data disimpan pada server cloud terenkripsi dengan backup otomatis harian dan pemisahan data per tenant yang ketat.",
     },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-[#FAFAFC] text-slate-900 font-sans selection:bg-indigo-600 selection:text-white relative overflow-hidden">
-      {/* ── FULL-PAGE LINEAR GRID VECTOR ACCENT (REAL CONTINUOUS BACKGROUND) ── */}
+    <div
+      className="min-h-screen font-sans transition-colors duration-300 relative overflow-hidden"
+      style={{ backgroundColor: t.bg, color: t.text }}
+    >
+      {/* Background Vector Grid & Ambient Glows */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0"
           style={{
             backgroundImage: `
-              linear-gradient(to right, rgba(99, 102, 241, 0.07) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(99, 102, 241, 0.07) 1px, transparent 1px)
+              linear-gradient(to right, ${t.gridColor} 1px, transparent 1px),
+              linear-gradient(to bottom, ${t.gridColor} 1px, transparent 1px)
             `,
             backgroundSize: "48px 48px",
           }}
         />
-
-        {/* Ambient Guide Lines */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-30"
-          xmlns="http://www.w3.org/2000/svg"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.18" />
-              <stop offset="50%" stopColor="#818CF8" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#C7D2FE" stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
-          <line x1="0" y1="120" x2="100%" y2="1200" stroke="url(#lineGrad)" strokeWidth="1" strokeDasharray="8 8" />
-          <line x1="15%" y1="0" x2="100%" y2="2600" stroke="url(#lineGrad)" strokeWidth="1" />
-          <line x1="0" y1="1400" x2="100%" y2="4200" stroke="url(#lineGrad)" strokeWidth="1" strokeDasharray="12 12" />
-        </svg>
-
-        {/* Ambient Glows */}
-        <div className="absolute -top-48 right-0 w-[650px] h-[650px] rounded-full bg-gradient-to-br from-indigo-100/60 via-purple-50/40 to-transparent blur-3xl" />
-        <div className="absolute top-[35%] -left-32 w-[550px] h-[550px] rounded-full bg-gradient-to-tr from-blue-100/50 via-indigo-50/40 to-transparent blur-3xl" />
-        <div className="absolute bottom-10 left-10 w-[600px] h-[600px] rounded-full bg-gradient-to-t from-emerald-50/50 via-indigo-50/30 to-transparent blur-3xl" />
+        <div
+          className="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full blur-[140px]"
+          style={{ background: `radial-gradient(circle, ${t.glow1}, transparent 70%)` }}
+        />
+        <div
+          className="absolute top-[45%] -right-40 w-[600px] h-[600px] rounded-full blur-[150px]"
+          style={{ backgroundColor: t.glow2 }}
+        />
+        <div
+          className="absolute top-[75%] -left-40 w-[600px] h-[600px] rounded-full blur-[150px]"
+          style={{ backgroundColor: t.glow3 }}
+        />
       </div>
 
-      {/* ── HEADER ── */}
-      <header className="relative z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-md sticky top-0 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/25">
-              <Store className="w-5 h-5" />
+      {/* ── STICKY NAVBAR ── */}
+      <header
+        className="border-b sticky top-0 z-50 backdrop-blur-xl transition-colors duration-300"
+        style={{ backgroundColor: t.navBg, borderColor: t.borderSoft }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-1 group">
+            <div className="relative w-20 h-20 group-hover:scale-105 transition">
+              <Image
+                src="/smLogo.png"
+                alt="Qassa Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <div>
-              <span className="font-extrabold text-lg tracking-tight text-slate-950">
-                POS Universal
-              </span>
-              <span className="text-[10px] ml-2 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200/60">
-                Sistem Multi-Tenant
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-2xl tracking-tight" style={{ color: t.text }}>
+                  Qassa
+                </span>
+                <span
+                  className="text-[10px] px-2.5 py-0.5 rounded-full font-extrabold border uppercase tracking-wider"
+                  style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+                >
+                  Cloud POS
+                </span>
+              </div>
+              <p className="text-[10px] font-medium" style={{ color: t.textMuted }}>
+                Smart Multi-Vertical Platform
+              </p>
             </div>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Center Nav */}
+          <nav className="hidden md:flex items-center gap-8 text-xs font-bold" style={{ color: t.textSub }}>
+            <a href="#solutions" className="hover:text-indigo-500 transition">Solusi Vertikal</a>
+            <a href="#features" className="hover:text-indigo-500 transition">Fitur Unggulan</a>
+            <a href="#store" className="hover:text-indigo-500 transition">Store & Add-on</a>
+            <a href="#pricing" className="hover:text-indigo-500 transition">Pilihan Paket</a>
+            <a href="#faq" className="hover:text-indigo-500 transition">FAQ</a>
+          </nav>
+
+          {/* Right CTA + Dark/Light Toggle */}
+          <div className="flex items-center gap-2">
+            {/* Dark / Light Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsDark(!isDark)}
+              title={isDark ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
+              className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all hover:scale-105"
+              style={{ backgroundColor: t.toggleBg, borderColor: t.borderSoft, color: t.textSub }}
+            >
+              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+            </button>
+
             <Link
               href="/login"
-              className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-indigo-600 transition"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold transition"
+              style={{ color: t.textSub }}
             >
               Masuk
             </Link>
             <Link
               href="/register"
-              className="px-5 py-2.5 text-xs font-bold rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 transition flex items-center gap-1.5 active:scale-95"
             >
-              <span>Daftar Sekarang</span>
+              <span>Coba Gratis 30 Hari</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 relative z-10 space-y-24 sm:space-y-32">
-        {/* ── 1. HERO SECTION ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 text-center flex flex-col items-center justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white text-indigo-700 border border-indigo-100 shadow-[0_2px_12px_rgba(79,70,229,0.06)] text-xs font-bold mb-6">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            Platform Kasir Cloud Multi-Tenant & Multi-Outlet
-          </div>
+      {/* ── HERO ── */}
+      <section className="relative z-10 pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8">
+        <div
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-extrabold"
+          style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+        >
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>Platform POS Multi-Vertikal Generasi Terbaru di Indonesia</span>
+        </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl leading-[1.1] text-slate-950">
-            Satu Sistem Kasir untuk{" "}
-            <span className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 bg-clip-text text-transparent">
-              Semua Jenis Bisnis
+        <div className="space-y-4 max-w-4xl mx-auto">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]" style={{ color: t.text }}>
+            Satu Sistem Kasir Cerdas untuk{" "}
+            <span className="bg-gradient-to-r from-indigo-500 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              Segala Bidang Bisnis Anda.
             </span>
           </h1>
-
-          <p className="mt-6 text-base sm:text-lg text-slate-600 max-w-2xl leading-relaxed">
-            Aplikasi kasir online pintar yang otomatis beradaptasi dengan alur usaha Anda. Dilengkapi modul antrian barbershop, denah meja cafe, laundry timbangan, dan barcode retail.
+          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed font-medium" style={{ color: t.textSub }}>
+            Qassa menghadirkan alur kerja kasir yang dirancang khusus untuk{" "}
+            <strong style={{ color: t.text }}>F&B Cafe, Barbershop, Retail, dan Laundry</strong>. Lengkap dengan kontrol multi-cabang dan analitik laba real-time.
           </p>
+        </div>
 
-          {/* Hero CTA Buttons */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
-            <Link
-              href="/demo"
-              className="px-7 py-3.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-lg shadow-indigo-600/25 transition flex items-center gap-2"
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
+          <Link
+            href="/register"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-2xl shadow-indigo-600/35 transition flex items-center justify-center gap-2 active:scale-95"
+          >
+            <span>Mulai Uji Coba Gratis 30 Hari</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            href="/pos"
+            className="w-full sm:w-auto px-7 py-4 rounded-2xl font-bold text-sm border transition flex items-center justify-center gap-2"
+            style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft, color: t.text }}
+          >
+            <Play className="w-4 h-4 text-indigo-500 fill-indigo-500" />
+            <span>Coba Demo Kasir POS Langsung</span>
+          </Link>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold pt-3" style={{ color: t.textMuted }}>
+          {["Tanpa Kartu Kredit", "Aktif Seketika dalam 1 Menit", "Dukungan Printer & Multi-Hardware"].map((g) => (
+            <span key={g} className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              {g}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* ── LIVE VERTICAL EXPLORER ── */}
+      <section id="solutions" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+        <div className="text-center space-y-2.5 max-w-2xl mx-auto">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">
+            Alur Kasir Adaptif Sesuai Usaha Anda
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
+            Pilih Bidang Bisnis & Rasakan Alurnya
+          </h2>
+          <p className="text-xs sm:text-sm leading-relaxed" style={{ color: t.textSub }}>
+            Qassa mengadaptasi layar kasir, tombol, dan komponen struk sesuai ritme operasional usaha Anda.
+          </p>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center justify-center gap-2 overflow-x-auto pb-2">
+          {[
+            { id: "cafe", label: "☕ Cafe & Resto" },
+            { id: "barbershop", label: "💈 Barbershop & Salon" },
+            { id: "retail", label: "🛒 Retail & Mart" },
+            { id: "laundry", label: "🧺 Laundry Service" },
+          ].map((tab) => {
+            const active = activeVerticalTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveVerticalTab(tab.id as any)}
+                className="px-5 py-3 rounded-2xl text-xs font-extrabold transition-all whitespace-nowrap border"
+                style={{
+                  backgroundColor: active ? "#4F46E5" : t.bgCard,
+                  color: active ? "#FFFFFF" : t.textSub,
+                  borderColor: active ? "#4F46E5" : t.borderSoft,
+                  boxShadow: active ? "0 4px 20px rgba(79,70,229,0.35)" : "none",
+                  transform: active ? "scale(1.05)" : "scale(1)",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Simulation Card */}
+        <div
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6 rounded-[2.5rem] p-6 sm:p-9 shadow-2xl items-start border"
+          style={{ backgroundColor: t.bgCard, borderColor: t.border }}
+        >
+          {/* Left */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="space-y-2">
+              <span
+                className="px-3 py-1 rounded-full font-extrabold text-[10px] border uppercase tracking-wider"
+                style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+              >
+                {currentVert.badge}
+              </span>
+              <h3 className="text-2xl font-black" style={{ color: t.text }}>{currentVert.name}</h3>
+              <p className="text-xs sm:text-sm leading-relaxed font-medium" style={{ color: t.textSub }}>
+                {currentVert.tagline}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {currentVert.features.map((feat, fIdx) => (
+                <div
+                  key={fIdx}
+                  className="p-3.5 rounded-2xl flex items-start gap-2.5 text-xs border"
+                  style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft, color: t.textSub }}
+                >
+                  <span className="text-emerald-500 font-bold text-sm">✓</span>
+                  <span className="leading-snug">{feat}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Mini POS Preview */}
+            <div
+              className="p-4 rounded-2xl space-y-3 font-mono text-xs border"
+              style={{ backgroundColor: t.miniPosBg, borderColor: t.borderSoft }}
             >
-              <Zap className="w-4 h-4" />
-              <span>Coba Demo Kasir & Simulasi Harga (Bebas Akun)</span>
-            </Link>
+              <div
+                className="flex items-center justify-between pb-2 border-b text-[11px] font-sans"
+                style={{ borderColor: t.borderSoft, color: t.textMuted }}
+              >
+                <span className="font-bold flex items-center gap-1.5" style={{ color: t.text }}>
+                  <Monitor className="w-3.5 h-3.5 text-indigo-500" />
+                  Pratinjau Antarmuka Kasir
+                </span>
+                <span className="text-emerald-500 font-bold">● Live Active</span>
+              </div>
+              {currentVert.sampleProducts.map((p, idx) => (
+                <div
+                  key={idx}
+                  className="p-2.5 rounded-xl flex items-center justify-between gap-2 border"
+                  style={{ backgroundColor: t.miniPosItem, borderColor: t.borderSoft }}
+                >
+                  <div>
+                    <span className="font-bold text-xs" style={{ color: t.text }}>{p.name}</span>
+                    <span className="block text-[10px] italic text-indigo-500">{p.note}</span>
+                  </div>
+                  <span className="font-bold text-xs text-emerald-500">{p.price}</span>
+                </div>
+              ))}
+            </div>
+
             <Link
-              href="/register"
-              className="px-7 py-3.5 rounded-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs border border-slate-200/90 transition flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.04)]"
+              href={`/register?vertical=${currentVert.id}`}
+              className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition inline-flex items-center gap-2 shadow-lg shadow-indigo-600/25"
             >
-              <span>Daftar Akun Baru (Trial 30 Hari)</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>Daftar Coba Vertikal {currentVert.name}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-semibold">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Trial 30 Hari Penuh
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Buka/Tutup Shift Kasir
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Multi-Cabang & Multi-Role
-            </span>
-          </div>
+          {/* Right — Thermal Receipt */}
+          <div
+            className="lg:col-span-5 flex flex-col items-center justify-center p-4 rounded-3xl border"
+            style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
+          >
+            <div className="text-center mb-3">
+              <span
+                className="text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1"
+                style={{ color: t.textMuted }}
+              >
+                <Printer className="w-3 h-3 text-indigo-500" /> Hasil Cetak Struk Thermal
+              </span>
+            </div>
 
-          {/* Real System Live Preview Showcase */}
-          <div className="mt-14 w-full max-w-4xl relative">
-            <div className="relative rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.04)] text-left">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-3 h-3 rounded-full bg-rose-400" />
-                  <div className="w-3 h-3 rounded-full bg-amber-400" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                  <span className="text-xs font-bold text-slate-400 ml-2 font-mono">
-                    POS Universal &bull; Live System Architecture
-                  </span>
-                </div>
-                <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  ● PostgreSQL & Next.js Engine
-                </span>
+            <div
+              className="w-full max-w-[280px] rounded-2xl p-5 font-mono shadow-2xl space-y-2 text-xs select-none border"
+              style={{
+                backgroundColor: isDark ? "#FFFDF9" : "#FFFDF9",
+                color: "#1C1917",
+                borderColor: "#D6D3D1",
+              }}
+            >
+              <div className="text-center space-y-0.5">
+                <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
+                  {currentVert.receiptSample.title}
+                </h4>
+                <p className="text-[9px] font-bold text-stone-600">Cabang Pusat • Jakarta</p>
+                <p className="text-[9px] text-stone-500">Telp: 0812-8899-7700</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-slate-200/60 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Modul Vertikal Aktif</span>
-                  <p className="text-xl font-black text-slate-900">{plugins.length} Plugin Resmi</p>
-                  <p className="text-[11px] text-slate-500">Barbershop &bull; Cafe &bull; Retail &bull; Laundry</p>
-                </div>
+              <div className="border-b border-stone-400 border-dashed my-2" />
 
-                <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-slate-200/60 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Preset Tema UI</span>
-                  <p className="text-xl font-black text-slate-900">{themes.length} Tema Desain</p>
-                  <p className="text-[11px] text-slate-500">Modern, Compact, Luxe, Warm</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#F8F9FD] border border-slate-200/60 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Struktur Lisensi</span>
-                  <p className="text-xl font-black text-indigo-600">{tiers.length} Pilihan Paket</p>
-                  <p className="text-[11px] text-slate-500">Trial, Basic, Pro, Enterprise</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 2. REAL VERTICAL MODULES SECTION (SESUAI SISTEM KITA) ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white text-slate-800 text-xs font-bold border border-slate-200 shadow-sm">
-              <Layers className="w-3.5 h-3.5 text-indigo-600" /> Modul Vertikal Terpasang
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
-              Fitur Nyata Sesuai Bidang Usaha Anda
-            </h2>
-            <p className="text-sm text-slate-600">
-              Setiap modul menambahkan menu khusus di dashboard dan menyesuaikan alur mesin kasir:
-            </p>
-
-            {/* Plugin Switcher Tabs */}
-            <div className="pt-4 flex flex-wrap justify-center gap-2">
-              {plugins.map((p) => {
-                const isSel = activePluginTab === p.code;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setActivePluginTab(p.code)}
-                    className={`px-5 py-2.5 rounded-full text-xs font-bold transition flex items-center gap-2 ${
-                      isSel
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20 scale-105"
-                        : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200 shadow-sm"
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Plugin Details Display */}
-          <div className="p-6 sm:p-10 rounded-3xl bg-white border border-slate-200 shadow-[0_12px_40px_rgba(0,0,0,0.03)] grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-5">
-              <div className="space-y-1">
-                <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                  Modul / Plugin ID: {activePluginTab}
-                </span>
-                <h3 className="text-2xl sm:text-3xl font-black text-slate-950">
-                  {currentPluginDb.name}
-                </h3>
-                <p className="text-sm font-semibold text-slate-700">
-                  {currentPluginMeta.highlight}
-                </p>
-                <p className="text-xs text-slate-500 leading-relaxed pt-1">
-                  {currentPluginDb.description}
-                </p>
+              <div className="flex justify-between text-[10px] font-bold text-stone-700">
+                <span>{currentVert.receiptSample.meta}</span>
+                <span>#INV-5078</span>
               </div>
 
-              {/* Real Feature Bullets in our Codebase */}
-              <div className="space-y-2.5 pt-2 text-xs text-slate-700">
-                {currentPluginMeta.features.map((feat, i) => (
-                  <div key={i} className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Check className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-medium leading-relaxed">{feat}</span>
+              <div className="border-b border-stone-400 border-dashed my-2" />
+
+              <div className="space-y-1.5 text-[10px]">
+                {currentVert.sampleProducts.map((item, idx) => (
+                  <div key={idx} className="flex justify-between font-semibold">
+                    <span className="truncate pr-2">1x {item.name}</span>
+                    <span>{item.price}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="pt-3 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/demo"
-                  className="px-5 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition flex items-center gap-1.5"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Uji Coba Modul Ini di Sandbox Demo</span>
-                </Link>
-                {activePluginTab === "cafe" && (
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    Self-order: /menu/[tenantId]
-                  </span>
-                )}
-              </div>
-            </div>
+              <div className="border-b border-stone-400 border-dashed my-2" />
 
-            {/* Right 5 Cols: Real Database Price & Specs Card */}
-            <div className="lg:col-span-5 p-6 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4 text-left">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <span className="text-xs font-bold uppercase text-slate-500">Biaya Add-on Resmi</span>
-                <span className="text-[11px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
-                  Database Catalog
-                </span>
-              </div>
-
-              <div>
-                <p className="text-3xl font-black text-slate-950">
-                  Rp {Number(currentPluginDb.priceMonthly).toLocaleString("id-ID")}
-                  <span className="text-xs text-slate-500 font-normal"> / bulan</span>
-                </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Dapat diaktifkan atau dinonaktifkan kapan saja dari portal Langganan.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-1.5">
-                <div className="flex justify-between font-semibold text-slate-700">
-                  <span>Rute Akses Tenant:</span>
-                  <span className="font-mono text-indigo-600 text-[11px]">{currentPluginMeta.route}</span>
+              <div className="space-y-0.5 text-[10px]">
+                <div className="flex justify-between text-stone-600">
+                  <span>Subtotal:</span>
+                  <span>{currentVert.receiptSample.total}</span>
                 </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Status Plugin:</span>
-                  <span className="text-emerald-600 font-bold">✓ Tersedia & Siap Pakai</span>
+                <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
+                  <span>TOTAL:</span>
+                  <span>{currentVert.receiptSample.total}</span>
                 </div>
+              </div>
+
+              <div className="border-b border-stone-400 border-dashed my-2" />
+
+              <div className="text-center text-[9px] text-stone-500 pt-1">
+                <p>Terima kasih atas kunjungan Anda!</p>
+                <p className="text-[8px] opacity-70">Powered by Qassa POS</p>
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* ── 3. REAL SYSTEM CORE PILLARS (APA YANG ADA DI KODINGAN KITA) ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200/90 shadow-[0_12px_40px_rgba(0,0,0,0.03)] space-y-10">
-            <div className="text-center max-w-2xl mx-auto space-y-2">
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200/60">
-                <ShieldCheck className="w-3.5 h-3.5" /> Arsitektur & Fitur Inti
+      {/* ── CORE SYSTEM PILLARS ── */}
+      <section id="features" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
+        <div className="text-center space-y-2.5 max-w-2xl mx-auto">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">
+            Fondasi Bisnis Tangguh
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
+            Fitur Kelas Enterprise untuk Semua Skala Usaha
+          </h2>
+          <p className="text-xs sm:text-sm leading-relaxed" style={{ color: t.textSub }}>
+            Kelola operasional harian secara presisi tanpa perlu rekap manual di atas kertas.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {corePillars.map((pillar, idx) => {
+            const IconC = pillar.icon;
+            return (
+              <div
+                key={idx}
+                className="p-6 rounded-3xl shadow-xl space-y-4 border transition"
+                style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
+              >
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center border"
+                  style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder }}
+                >
+                  <IconC className="w-6 h-6 text-indigo-500" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base" style={{ color: t.text }}>{pillar.title}</h3>
+                  <p className="text-xs mt-1.5 leading-relaxed" style={{ color: t.textSub }}>{pillar.desc}</p>
+                </div>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                Pilar Fitur yang Terpasang di Sistem Kita
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Setiap fitur di bawah ini telah selesai dibangun 100% dan terhubung langsung ke database:
-              </p>
-            </div>
+            );
+          })}
+        </div>
+      </section>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-              {systemCorePillars.map((pillar, idx) => {
-                const Icon = pillar.icon;
+      {/* ── STORE & ADD-ON ── */}
+      <section id="store" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div
+          className="p-8 sm:p-12 rounded-[3rem] border shadow-2xl relative overflow-hidden"
+          style={{ backgroundColor: t.bgCard, borderColor: t.highlightBorder }}
+        >
+          <div className="max-w-3xl space-y-6">
+            <span
+              className="px-3.5 py-1 rounded-full font-extrabold text-xs border uppercase tracking-wider inline-flex items-center gap-1.5"
+              style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+            >
+              <Store className="w-3.5 h-3.5 text-amber-500" />
+              Qassa Store & Add-on Marketplace
+            </span>
+
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight" style={{ color: t.text }}>
+              Kembangkan Fitur Toko Kapan Saja Sesuai Kebutuhan
+            </h2>
+
+            <p className="text-sm leading-relaxed" style={{ color: t.textSub }}>
+              Tidak perlu membayar fitur yang tidak Anda pakai. Aktifkan tema layout layar POS, template cetak struk, dan plugin bisnis tambahan secara modular dari Qassa Store.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              {[
+                { icon: Monitor, color: "text-indigo-500", title: "Tema Layout Layar POS", desc: "Layout kasir khusus F&B, Barber, Retail, dan Laundry." },
+                { icon: Printer, color: "text-purple-500", title: "Tema Cetak Struk Thermal", desc: "Template struk modern, vintage, compact, hingga nota klaim." },
+                { icon: Palette, color: "text-cyan-500", title: "Tema UI Dashboard", desc: "Palet warna Luxe Dark, Modern Slate, Warm Sand, dan Compact." },
+              ].map((item, idx) => {
+                const IconC = item.icon;
                 return (
                   <div
                     key={idx}
-                    className="p-5 rounded-2xl bg-slate-50/70 border border-slate-100 hover:border-indigo-200 transition space-y-3"
+                    className="p-4 rounded-2xl border space-y-1.5"
+                    style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-indigo-600 flex items-center justify-center shadow-sm">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-[10px] font-mono font-bold text-slate-400">
-                        {pillar.tag}
-                      </span>
-                    </div>
-                    <h3 className="font-extrabold text-slate-950 text-sm">
-                      {pillar.title}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {pillar.desc}
-                    </p>
+                    <IconC className={`w-5 h-5 ${item.color}`} />
+                    <h4 className="font-bold text-xs" style={{ color: t.text }}>{item.title}</h4>
+                    <p className="text-[11px]" style={{ color: t.textMuted }}>{item.desc}</p>
                   </div>
                 );
               })}
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* ── 4. PRICING SECTION (DATABASE CATALOG TERHUBUNG LISENSI) ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-10 space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white text-slate-800 text-xs font-bold border border-slate-200 shadow-sm">
-              <Zap className="w-3.5 h-3.5 text-indigo-600" /> Katalog Lisensi Resmi
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
-              Pilihan Paket Langganan & Kapasitas
-            </h2>
-            <p className="text-sm text-slate-600">
-              Harga live langsung dari database katalog. Diurutkan dari Trial &rarr; Basic &rarr; Pro &rarr; Enterprise.
-            </p>
+      {/* ── PRICING ── */}
+      <section id="pricing" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-10">
+        <div className="text-center space-y-3 max-w-2xl mx-auto">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">Transparan & Fleksibel</span>
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
+            Investasi Terjangkau untuk Pertumbuhan Bisnis
+          </h2>
+          <p className="text-xs sm:text-sm leading-relaxed" style={{ color: t.textSub }}>
+            Mulai dengan Trial Gratis 30 Hari. Pilih paket yang sesuai saat Anda sudah siap berlangganan.
+          </p>
 
-            {/* Interactive Billing Cycle Toggle */}
-            <div className="pt-2 flex justify-center">
-              <div className="p-1 rounded-full bg-white border border-slate-200 shadow-sm flex items-center gap-1 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setBillingCycle("MONTHLY")}
-                  className={`px-5 py-2 rounded-full transition ${
-                    billingCycle === "MONTHLY"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Bayar Bulanan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBillingCycle("ANNUAL")}
-                  className={`px-5 py-2 rounded-full transition flex items-center gap-1.5 ${
-                    billingCycle === "ANNUAL"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <span>Bayar Tahunan</span>
-                  <span className="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-extrabold">
-                    Hemat 17%
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
-            {/* Card 1: Trial 30 Hari */}
-            <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md transition flex flex-col justify-between space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Trial 30 Hari
-                  </span>
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Gratis Coba
-                  </span>
-                </div>
-
-                <div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xs font-bold text-slate-500">Rp</span>
-                    <span className="text-3xl font-black text-slate-950">
-                      0
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">30 Hari Pertama</p>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Uji coba seluruh modul vertikal dan fitur kasir secara lengkap tanpa biaya kartu kredit.
-                </p>
-
-                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs">
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span className="text-xs font-medium">1 Outlet & 5 Akun Kasir</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span className="text-xs font-medium">Akses Semua Modul Vertikal</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span className="text-xs font-medium">Buka-Tutup Shift Kasir</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span className="text-xs font-medium">Laporan Penjualan Harian</span>
-                  </div>
-                </div>
-              </div>
-
-              <Link
-                href="/register"
-                className="w-full py-3 rounded-full text-xs font-bold text-center bg-slate-100 hover:bg-slate-200 text-slate-900 transition flex items-center justify-center gap-1.5"
+          <div
+            className="inline-flex items-center gap-2 p-1.5 rounded-2xl border mt-4"
+            style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
+          >
+            {[
+              { key: "MONTHLY", label: "Tagihan Bulanan" },
+              { key: "ANNUAL", label: "Tagihan Tahunan", badge: "Hemat 17%" },
+            ].map(({ key, label, badge }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setBillingCycle(key as any)}
+                className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                style={{
+                  backgroundColor: billingCycle === key ? "#4F46E5" : "transparent",
+                  color: billingCycle === key ? "#FFFFFF" : t.textSub,
+                }}
               >
-                <span>Daftar Trial Gratis</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            {/* Cards 2-4: Diambil Langsung dari Database LicenseTier */}
-            {tiers.map((tier) => {
-              const isPro = tier.code === "pro";
-              const isEnterprise = tier.code === "enterprise";
-              const monthlyPriceNum = Number(tier.priceMonthly);
-
-              // Perhitungan Tagihan Tahunan Real & Penghematan
-              const normalAnnualPrice = monthlyPriceNum * 12;
-              const discountedAnnualPrice =
-                Number(tier.priceAnnual) || Math.round(monthlyPriceNum * 12 * 0.83);
-              const totalYearSavings = normalAnnualPrice - discountedAnnualPrice;
-              const effectiveMonthlyNum = Math.round(discountedAnnualPrice / 12);
-
-              const isAnnual = billingCycle === "ANNUAL";
-
-              return (
-                <div
-                  key={tier.id}
-                  className={`p-6 rounded-3xl border transition flex flex-col justify-between space-y-6 ${
-                    isPro
-                      ? "bg-white border-indigo-600 shadow-[0_12px_40px_rgba(79,70,229,0.1)] ring-2 ring-indigo-600/20"
-                      : "bg-white border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md"
-                  }`}
-                >
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        {tier.name}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                          isPro
-                            ? "bg-indigo-600 text-white shadow-sm"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {isPro
-                          ? "Paling Populer ⭐"
-                          : isEnterprise
-                          ? "Enterprise"
-                          : "Basic"}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      {isEnterprise && monthlyPriceNum === 0 ? (
-                        <div>
-                          <span className="text-3xl font-black text-slate-950">Custom</span>
-                          <p className="text-[11px] text-slate-500 mt-0.5">sesuai skala usaha</p>
-                        </div>
-                      ) : isAnnual ? (
-                        <div>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-xs font-bold text-slate-500">Rp</span>
-                            <span className="text-3xl font-black text-slate-950">
-                              {discountedAnnualPrice.toLocaleString("id-ID")}
-                            </span>
-                            <span className="text-xs text-slate-500 font-semibold">/ tahun</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <span className="text-[11px] text-slate-400 line-through">
-                              Rp {normalAnnualPrice.toLocaleString("id-ID")}
-                            </span>
-                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Hemat Rp {totalYearSavings.toLocaleString("id-ID")}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-1">
-                            Setara <strong>Rp {effectiveMonthlyNum.toLocaleString("id-ID")}</strong> / bulan
-                          </p>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-xs font-bold text-slate-500">Rp</span>
-                            <span className="text-3xl font-black text-slate-950">
-                              {monthlyPriceNum.toLocaleString("id-ID")}
-                            </span>
-                            <span className="text-xs text-slate-500 font-semibold">/ bulan</span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">ditagih bulanan</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {isEnterprise
-                        ? "Dukungan skala besar untuk franchise & jaringan ritel multi-cabang."
-                        : isPro
-                        ? "Solusi lengkap bisnis multi-outlet dengan laporan konsolidasi."
-                        : "Ideal untuk pemilik toko tunggal dengan custom branding & struk."}
-                    </p>
-
-                    <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs">
-                      <div className="flex items-center gap-2 text-slate-700">
-                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        <span className="text-xs font-medium">
-                          {tier.outletLimit ? `Hingga ${tier.outletLimit} Outlet Cabang` : "Unlimited Outlet Cabang"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-700">
-                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        <span className="text-xs font-medium">
-                          {tier.kasirLimitPerOutlet ? `${tier.kasirLimitPerOutlet} Kasir per Outlet` : "Unlimited Kasir"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-700">
-                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        <span className="text-xs font-medium">
-                          Custom Branding Struk & Logo
-                        </span>
-                      </div>
-                      {tier.hasAdminCabang && (
-                        <div className="flex items-center gap-2 text-slate-700">
-                          <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          <span className="text-xs font-medium">
-                            Role Admin Cabang Scoped
-                          </span>
-                        </div>
-                      )}
-                      {tier.hasConsolidatedReport && (
-                        <div className="flex items-center gap-2 text-slate-700">
-                          <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          <span className="text-xs font-medium">
-                            Laporan Konsolidasi Cabang
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/register?plan=${tier.code}&billing=${billingCycle}`}
-                    className={`w-full py-3 rounded-full text-xs font-bold text-center transition flex items-center justify-center gap-1.5 ${
-                      isPro
-                        ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-900"
-                    }`}
-                  >
-                    <span>Pilih {tier.name}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 5. FAQ SECTION (REAL SYSTEM FACTS) ── */}
-        <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white text-slate-800 text-xs font-bold border border-slate-200 shadow-sm">
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-600" /> FAQ
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-              Pertanyaan yang Sering Diajukan
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Informasi faktual mengenai cara kerja dan fitur POS Universal.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {realFaqs.map((faq, idx) => {
-              const isOpen = openFaqIndex === idx;
-              return (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-slate-200 bg-white transition overflow-hidden shadow-sm"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaqIndex((prev) => (prev === idx ? null : idx))}
-                    className="w-full p-5 text-left font-bold text-sm text-slate-900 flex items-center justify-between gap-4 hover:text-indigo-600 transition"
-                  >
-                    <span>{faq.q}</span>
-                    {isOpen ? (
-                      <ChevronUp className="w-4 h-4 text-indigo-600 flex-shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    )}
-                  </button>
-                  {isOpen && (
-                    <div className="px-5 pb-5 pt-1 text-xs text-slate-600 leading-relaxed border-t border-slate-100">
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 6. FINAL CTA BANNER ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-          <div className="p-8 sm:p-14 rounded-3xl bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 text-center space-y-6 relative overflow-hidden">
-            <div className="relative z-10 max-w-2xl mx-auto space-y-3">
-              <span className="px-3.5 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-bold tracking-wide uppercase">
-                Uji Coba Langsung
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                Coba Sistem Kasir POS Universal Sekarang
-              </h2>
-              <p className="text-indigo-100 text-sm sm:text-base leading-relaxed">
-                Gunakan Simulator & Guest Demo untuk mencoba seluruh fitur kasir secara bebas tanpa akun, atau daftar akun baru untuk masa Trial 30 Hari penuh.
-              </p>
-            </div>
-
-            <div className="relative z-10 flex flex-wrap items-center justify-center gap-3.5 pt-2">
-              <Link
-                href="/demo"
-                className="px-8 py-3.5 rounded-full bg-white text-indigo-600 font-extrabold text-xs shadow-lg hover:bg-indigo-50 transition flex items-center gap-2"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Mulai Uji Coba Demo (Bebas Akun)</span>
-              </Link>
-              <Link
-                href="/register"
-                className="px-8 py-3.5 rounded-full bg-indigo-700/80 hover:bg-indigo-700 text-white font-bold text-xs border border-indigo-400/40 transition flex items-center gap-2"
-              >
-                <span>Daftar Akun Baru (Trial 30 Hari)</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* ── FOOTER ── */}
-      <footer className="border-t border-slate-200 bg-white py-12 text-slate-600 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-10 text-xs">
-          <div className="space-y-3 md:col-span-1">
-            <div className="flex items-center gap-2.5 font-black text-slate-950 text-base">
-              <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
-                <Store className="w-4 h-4" />
-              </div>
-              <span>POS Universal</span>
-            </div>
-            <p className="text-slate-500 leading-relaxed">
-              Platform software kasir cloud multi-tenant dan multi-outlet terintegrasi untuk Barbershop, Cafe & Resto, Retail, dan Laundry.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-slate-950 uppercase tracking-wider text-[11px]">
-              Modul Vertikal Nyata
-            </h4>
-            <ul className="space-y-1.5 text-slate-500">
-              <li><Link href="/demo" className="hover:text-indigo-600">Barbershop & Salon (/queue)</Link></li>
-              <li><Link href="/demo" className="hover:text-indigo-600">Cafe & Resto (/tables & /menu)</Link></li>
-              <li><Link href="/demo" className="hover:text-indigo-600">Retail & Minimarket (/products)</Link></li>
-              <li><Link href="/demo" className="hover:text-indigo-600">Laundry Kiloan (/orders)</Link></li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-slate-950 uppercase tracking-wider text-[11px]">
-              Solusi & Sandbox
-            </h4>
-            <ul className="space-y-1.5 text-slate-500">
-              <li><Link href="/demo" className="hover:text-indigo-600">Simulator Harga Live</Link></li>
-              <li><Link href="/demo/app" className="hover:text-indigo-600">Guest Sandbox Demo</Link></li>
-              <li><Link href="/demo/app/pos" className="hover:text-indigo-600">Layar Kasir POS</Link></li>
-              <li><Link href="/register" className="hover:text-indigo-600">Trial 30 Hari</Link></li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-slate-950 uppercase tracking-wider text-[11px]">
-              Akses Portal
-            </h4>
-            <ul className="space-y-1.5 text-slate-500">
-              <li><Link href="/login" className="hover:text-indigo-600">Masuk Akun Kasir / Owner</Link></li>
-              <li><Link href="/admin" className="hover:text-indigo-600">Portal Super Admin</Link></li>
-              <li><Link href="/register" className="hover:text-indigo-600">Registrasi Usaha Baru</Link></li>
-            </ul>
+                <span>{label}</span>
+                {badge && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-black">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-400">
-          <p>&copy; 2026 POS Universal SaaS Platform. Seluruh hak cipta dilindungi.</p>
-          <p>Sistem Multi-Tenant PostgreSQL & Next.js.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+          {/* Starter */}
+          <div
+            className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
+            style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
+          >
+            <div className="space-y-4">
+              <span
+                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+                style={{ backgroundColor: t.bgCard2, color: t.textSub }}
+              >
+                Paket Starter
+              </span>
+              <div>
+                <h3 className="text-2xl font-black" style={{ color: t.text }}>Starter</h3>
+                <p className="text-xs mt-1" style={{ color: t.textSub }}>Ideal untuk outlet tunggal atau usaha rintisan yang baru memulai.</p>
+              </div>
+              <div className="pt-2">
+                <span className="text-3xl font-black" style={{ color: t.text }}>
+                  Rp {billingCycle === "ANNUAL" ? "124.500" : "150.000"}
+                </span>
+                <span className="text-xs font-medium" style={{ color: t.textMuted }}>/bulan</span>
+              </div>
+              <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
+                {["1 Cabang Outlet Utama", "Hingga 5 Akun Kasir", "1 Modul Vertikal Aktif", "Laporan Keuangan Standar"].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link
+              href="/register"
+              className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border"
+              style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
+            >
+              Coba Starter Gratis
+            </Link>
+          </div>
+
+          {/* Pro (Popular) */}
+          <div
+            className="p-7 sm:p-8 rounded-[2.2rem] shadow-2xl flex flex-col justify-between space-y-6 relative border-2"
+            style={{ backgroundColor: t.bgCard, borderColor: "#4F46E5" }}
+          >
+            <div
+              className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-white text-[10px] font-black uppercase tracking-wider shadow-md"
+              style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
+            >
+              Paling Diminati Bisnis Berkembang
+            </div>
+            <div className="space-y-4 pt-2">
+              <span
+                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
+                style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+              >
+                Paket Pro Multi-Cabang
+              </span>
+              <div>
+                <h3 className="text-2xl font-black" style={{ color: t.text }}>Professional</h3>
+                <p className="text-xs mt-1" style={{ color: t.textSub }}>Untuk bisnis yang berkembang dan memiliki banyak cabang.</p>
+              </div>
+              <div className="pt-2">
+                <span className="text-4xl font-black" style={{ color: t.text }}>
+                  Rp {billingCycle === "ANNUAL" ? "415.000" : "500.000"}
+                </span>
+                <span className="text-xs font-medium" style={{ color: t.textMuted }}>/bulan</span>
+              </div>
+              <ul className="space-y-2.5 text-xs pt-2">
+                {["Hingga 10 Cabang Outlet", "Unlimited Akun Kasir", "Hak Akses Khusus Admin Cabang", "Laporan Konsolidasi Seluruh Cabang", "Akses Penuh Qassa Store Marketplace"].map((f) => (
+                  <li key={f} className="flex items-center gap-2 font-bold" style={{ color: t.text }}>
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link
+              href="/register"
+              className="w-full py-4 rounded-xl text-white font-black text-xs shadow-xl transition text-center block"
+              style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
+            >
+              Mulai Trial Paket Pro Gratis
+            </Link>
+          </div>
+
+          {/* Enterprise */}
+          <div
+            className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
+            style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
+          >
+            <div className="space-y-4">
+              <span
+                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+                style={{ backgroundColor: t.bgCard2, color: t.textSub }}
+              >
+                Paket Enterprise
+              </span>
+              <div>
+                <h3 className="text-2xl font-black" style={{ color: t.text }}>Enterprise</h3>
+                <p className="text-xs mt-1" style={{ color: t.textSub }}>Solusi custom untuk jaringan waralaba besar & korporasi.</p>
+              </div>
+              <div className="pt-2">
+                <span className="text-3xl font-black" style={{ color: t.text }}>Hubungi Tim</span>
+                <span className="text-xs font-medium" style={{ color: t.textMuted }}> / Custom Quote</span>
+              </div>
+              <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
+                {["Unlimited Cabang & Kasir", "Dedicated Account Manager", "Kustomisasi Integrasi API & ERP", "SLA Garansi Uptime 99.9%"].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link
+              href="/register"
+              className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border"
+              style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
+            >
+              Konsultasi Enterprise
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section id="faq" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-8">
+        <div className="text-center space-y-2">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">Pertanyaan Umum</span>
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
+            Pertanyaan yang Sering Diajukan
+          </h2>
+        </div>
+
+        <div className="space-y-3 pt-4">
+          {faqs.map((faq, idx) => {
+            const isOpen = openFaqIndex === idx;
+            return (
+              <div
+                key={idx}
+                className="rounded-2xl overflow-hidden border transition"
+                style={{ backgroundColor: t.faqBg, borderColor: t.borderSoft }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                  className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm transition"
+                  style={{ color: t.text }}
+                >
+                  <span>{faq.q}</span>
+                  {isOpen
+                    ? <ChevronUp className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                    : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: t.textMuted }} />
+                  }
+                </button>
+                {isOpen && (
+                  <div
+                    className="px-5 pb-5 text-xs sm:text-sm leading-relaxed border-t pt-3"
+                    style={{ color: t.textSub, borderColor: t.borderSoft }}
+                  >
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── BOTTOM CTA BANNER ── */}
+      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="p-8 sm:p-14 rounded-[3rem] text-center text-white space-y-6 shadow-2xl shadow-indigo-600/25 relative overflow-hidden"
+          style={{ background: "linear-gradient(135deg, #4F46E5, #6D28D9, #0EA5E9)" }}
+        >
+          <div className="max-w-2xl mx-auto space-y-3">
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+              Siap Membawa Operasional Bisnis Anda ke Level Selanjutnya?
+            </h2>
+            <p className="text-sm sm:text-base text-indigo-100 font-medium">
+              Bergabunglah dengan ratusan pengusaha modern di seluruh Indonesia yang menggunakan Qassa POS.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
+            <Link
+              href="/register"
+              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white text-indigo-950 font-black text-sm shadow-xl hover:bg-slate-100 transition flex items-center justify-center gap-2"
+            >
+              <span>Daftar Coba Gratis 30 Hari</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/login"
+              className="w-full sm:w-auto px-7 py-4 rounded-2xl text-white font-bold text-sm border border-white/30 hover:bg-white/10 transition"
+            >
+              Masuk Akun Saya
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer
+        className="border-t py-12 px-4 sm:px-6 lg:px-8 relative z-10 transition-colors duration-300"
+        style={{ borderColor: t.borderSoft, backgroundColor: t.bg }}
+      >
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs" style={{ color: t.textMuted }}>
+          <div className="flex items-center ">
+            <div className="relative w-9 h-9">
+              <Image src="/smLogo.png" alt="Qassa" fill className="object-contain" />
+            </div>
+
+            <span className="font-bold" style={{ color: t.textSub }}>Qassa Cloud POS</span>
+            <span>&copy; {new Date().getFullYear()} Qassa Inc. All rights reserved.</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            {["#solutions", "#pricing"].map((href) => (
+              <a key={href} href={href} className="hover:text-indigo-500 transition">
+                {href === "#solutions" ? "Solusi Vertikal" : "Harga"}
+              </a>
+            ))}
+            <Link href="/login" className="hover:text-indigo-500 transition">Masuk</Link>
+            <Link href="/register" className="font-bold text-indigo-500 hover:text-indigo-400 transition">Daftar Akun</Link>
+            {/* Theme Toggle in Footer too */}
+            <button
+              type="button"
+              onClick={() => setIsDark(!isDark)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center border transition"
+              style={{ backgroundColor: t.toggleBg, borderColor: t.borderSoft }}
+              title={isDark ? "Mode Terang" : "Mode Gelap"}
+            >
+              {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
+            </button>
+          </div>
         </div>
       </footer>
     </div>

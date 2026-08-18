@@ -16,14 +16,28 @@ import {
   Shirt,
   Settings,
   Palette,
+  Printer,
+  Sparkles,
+  ShoppingBag,
 } from "lucide-react";
+
+interface DashboardNavLinksProps {
+  activePlugins?: { code: string; name: string }[];
+  themeTokens?: {
+    primaryColor?: string;
+    accentColor?: string;
+    layoutStyle?: string;
+    isLuxeDark?: boolean;
+  };
+}
 
 export function DashboardNavLinks({
   activePlugins = [],
-}: {
-  activePlugins?: { code: string; name: string }[];
-}) {
+  themeTokens = {},
+}: DashboardNavLinksProps) {
   const pathname = usePathname();
+  const primaryColor = themeTokens.primaryColor || "#4f46e5";
+  const isLuxeDark = themeTokens.isLuxeDark || false;
 
   const isBarbershopActive = activePlugins.some(
     (p) => p.code === "barbershop"
@@ -39,7 +53,7 @@ export function DashboardNavLinks({
       exact: true,
     },
     {
-      name: "Cabang Outlet",
+      name: "Outlet",
       href: "/dashboard/outlets",
       icon: Store,
     },
@@ -56,37 +70,37 @@ export function DashboardNavLinks({
     // Modul Dinamis Barbershop
     ...(isBarbershopActive
       ? [
-          {
-            name: "Antrian Kursi",
-            href: "/dashboard/barbershop/queue",
-            icon: Scissors,
-          },
-          {
-            name: "Komisi Barber",
-            href: "/dashboard/barbershop/commissions",
-            icon: Percent,
-          },
-        ]
+        {
+          name: "Antrian",
+          href: "/dashboard/barbershop/queue",
+          icon: Scissors,
+        },
+        {
+          name: "Komisi Barber",
+          href: "/dashboard/barbershop/commissions",
+          icon: Percent,
+        },
+      ]
       : []),
     // Modul Dinamis Cafe
     ...(isCafeActive
       ? [
-          {
-            name: "Meja Cafe",
-            href: "/dashboard/cafe/tables",
-            icon: Coffee,
-          },
-        ]
+        {
+          name: "Meja Cafe",
+          href: "/dashboard/cafe/tables",
+          icon: Coffee,
+        },
+      ]
       : []),
     // Modul Dinamis Laundry
     ...(isLaundryActive
       ? [
-          {
-            name: "Order Laundry",
-            href: "/dashboard/laundry/orders",
-            icon: Shirt,
-          },
-        ]
+        {
+          name: "Order Laundry",
+          href: "/dashboard/laundry/orders",
+          icon: Shirt,
+        },
+      ]
       : []),
     {
       name: "Laporan",
@@ -99,21 +113,27 @@ export function DashboardNavLinks({
       icon: CreditCard,
     },
     {
-      name: "Tema UI",
-      href: "/dashboard/themes",
-      icon: Palette,
+      name: "Store & Add-on",
+      href: "/dashboard/store",
+      icon: ShoppingBag,
     },
     {
-      name: "Pengaturan & Branding",
+      name: "Pengaturan",
       href: "/dashboard/settings",
       icon: Settings,
     },
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-      {/* Clean White Pill Navigation Bar */}
-      <div className="flex items-center gap-1 sm:gap-1.5 p-1.5 rounded-2xl bg-white border border-slate-200/90 shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full">
+    <div className="mb-6">
+      {/* Dynamic Theme Pill Navigation Bar */}
+      <div
+        className={`flex items-center gap-1 sm:gap-1.5 p-1.5 rounded-2xl border shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full transition-colors ${
+          isLuxeDark
+            ? "bg-[#111827] border-slate-800"
+            : "bg-white border-slate-200/90"
+        }`}
+      >
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = link.exact
@@ -124,10 +144,22 @@ export function DashboardNavLinks({
             <Link
               key={link.href}
               href={link.href}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition flex-shrink-0 ${
+              prefetch={true}
+              style={
                 isActive
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25"
-                  : "text-slate-600 hover:text-slate-950 hover:bg-slate-100/80"
+                  ? {
+                      backgroundColor: primaryColor,
+                      color: "#ffffff",
+                      boxShadow: `0 4px 14px ${primaryColor}40`,
+                    }
+                  : undefined
+              }
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95 flex-shrink-0 ${
+                isActive
+                  ? "text-white"
+                  : isLuxeDark
+                  ? "text-slate-300 hover:text-white hover:bg-slate-800/80 active:bg-slate-800"
+                  : "text-slate-600 hover:text-slate-950 hover:bg-slate-100/80 active:bg-slate-200"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -136,14 +168,6 @@ export function DashboardNavLinks({
           );
         })}
       </div>
-
-      <Link
-        href="/pos"
-        className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/20 transition flex items-center gap-2 flex-shrink-0"
-      >
-        <ShoppingCart className="w-4 h-4" />
-        <span>Buka Kasir POS</span>
-      </Link>
     </div>
   );
 }

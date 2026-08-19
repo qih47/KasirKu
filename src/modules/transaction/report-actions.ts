@@ -75,6 +75,7 @@ export async function getSalesReportData(params: {
     commissions,
     outletStocks,
     stockMovements,
+    payrollCostTrend,
   ] = await Promise.all([
     prisma.transaction.findMany({
       where: whereClause,
@@ -155,6 +156,35 @@ export async function getSalesReportData(params: {
       },
       orderBy: { createdAt: "desc" },
     }),
+    // Payroll cost: ambil 6 bulan terakhir dari PayrollRecord
+    (async () => {
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      const months: string[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push(format(d, "yyyy-MM"));
+      }
+      const rows = await (prisma as any).payrollRecord.findMany({
+        where: {
+          tenantId: user.tenantId,
+          periodMonth: { in: months },
+        },
+        select: { periodMonth: true, takeHomePay: true },
+      });
+      // Aggregate per month
+      const map: Record<string, number> = {};
+      months.forEach((m) => { map[m] = 0; });
+      rows.forEach((r: any) => {
+        if (map[r.periodMonth] !== undefined) {
+          map[r.periodMonth] += Number(r.takeHomePay || 0);
+        }
+      });
+      return months.map((m) => ({
+        month: m,
+        monthLabel: new Date(m + "-01").toLocaleDateString("id-ID", { month: "short", year: "numeric" }),
+        totalPayrollCost: map[m],
+      }));
+    })(),
   ]);
 
   // 2. Hitung Metrik Utama (Core KPIs)
@@ -566,6 +596,18 @@ export async function getSalesReportData(params: {
       laundryAnalytics,
       retailAnalytics,
       stockLedger: stockLedgerSummary,
+      // ── Payroll Cost Trend (6 bulan terakhir) ──────────────────────────
+      payrollCostTrend,
+      // Kalkulasi rasio gaji vs omzet bulan ini
+      payrollCostThisMonth: (() => {
+        const thisMonthKey = format(now, "yyyy-MM");
+        const entry = (payrollCostTrend as any[]).find((p: any) => p.month === thisMonthKey);
+        const cost = entry ? entry.totalPayrollCost : 0;
+        return {
+          totalPayrollCost: cost,
+          ratioToRevenue: totalRevenue > 0 ? Math.round((cost / totalRevenue) * 100 * 10) / 10 : 0,
+        };
+      })(),
       transactionsList: transactions.map((t: any) => ({
         id: t.id,
         transactionNumber: t.transactionNumber,

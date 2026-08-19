@@ -390,6 +390,19 @@ export function ReportsClient({
               <span>🛒 Analisis SKU &amp; Retail</span>
             </button>
           )}
+
+          {/* Tab Biaya SDM & Gaji — selalu tampil */}
+          <button
+            onClick={() => setActiveReportTab("PAYROLL_COST")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+              activeReportTab === "PAYROLL_COST"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-emerald-500" />
+            <span>💼 Biaya SDM &amp; Gaji</span>
+          </button>
         </div>
 
         {/* Conditional Tab Rendering with Real Multi-Vertical Data */}
@@ -397,6 +410,124 @@ export function ReportsClient({
         {activeReportTab === "BARBERSHOP" && <BarberReportView data={data.barberAnalytics} />}
         {activeReportTab === "LAUNDRY" && <LaundryReportView data={data.laundryAnalytics} />}
         {activeReportTab === "RETAIL" && <RetailReportView data={data.retailAnalytics} />}
+
+        {/* Tab: Biaya SDM & Gaji */}
+        {activeReportTab === "PAYROLL_COST" && (() => {
+          const trend: any[] = data.payrollCostTrend || [];
+          const thisMonth = data.payrollCostThisMonth || { totalPayrollCost: 0, ratioToRevenue: 0 };
+          const totalRevenue = data.metrics?.totalRevenue || 0;
+          const maxCost = Math.max(...trend.map((t: any) => t.totalPayrollCost), 1);
+
+          const getRatioColor = (ratio: number) => {
+            if (ratio <= 20) return "text-emerald-600";
+            if (ratio <= 35) return "text-amber-500";
+            return "text-rose-600";
+          };
+          const getRatioLabel = (ratio: number) => {
+            if (ratio <= 20) return "Efisien ✅";
+            if (ratio <= 35) return "Normal ⚠️";
+            return "Tinggi 🔴";
+          };
+
+          return (
+            <div className="space-y-6 animate-fadeIn">
+              {/* 3 KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Beban Gaji Bulan Ini */}
+                <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Beban Gaji (Snapshot)</span>
+                  <p className="text-2xl font-black text-emerald-600">
+                    Rp {thisMonth.totalPayrollCost.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Total take-home pay yang tersimpan bulan ini</p>
+                </div>
+
+                {/* Omzet Periode Ini */}
+                <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Omzet (Periode Filter)</span>
+                  <p className="text-2xl font-black text-indigo-600">
+                    Rp {totalRevenue.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Berdasarkan periode yang dipilih di filter atas</p>
+                </div>
+
+                {/* Rasio Gaji vs Omzet */}
+                <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Rasio Gaji / Omzet</span>
+                  <p className={`text-2xl font-black ${getRatioColor(thisMonth.ratioToRevenue)}`}>
+                    {thisMonth.ratioToRevenue}%
+                  </p>
+                  <p className={`text-[11px] font-bold ${getRatioColor(thisMonth.ratioToRevenue)}`}>
+                    {getRatioLabel(thisMonth.ratioToRevenue)}
+                    <span className="text-slate-400 font-normal ml-1">— Target ideal ≤ 25–30%</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Trend Beban Gaji 6 Bulan — Bar Chart SVG */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white">📊 Tren Beban Gaji — 6 Bulan Terakhir</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Berdasarkan data snapshot payroll yang sudah disimpan</p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800">
+                    Payroll Snapshot
+                  </span>
+                </div>
+
+                {trend.every((t: any) => t.totalPayrollCost === 0) ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <p className="text-sm font-semibold">Belum ada data snapshot gaji tersimpan</p>
+                    <p className="text-xs mt-1">Simpan dan kunci data penggajian dari halaman Payroll terlebih dahulu</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {trend.map((t: any) => {
+                      const barWidth = maxCost > 0 ? (t.totalPayrollCost / maxCost) * 100 : 0;
+                      const isCurrentMonth = t.month === new Date().toISOString().slice(0, 7);
+                      return (
+                        <div key={t.month} className="flex items-center gap-3">
+                          <span className={`text-xs font-bold w-20 flex-shrink-0 ${isCurrentMonth ? "text-emerald-600" : "text-slate-500"}`}>
+                            {t.monthLabel}
+                          </span>
+                          <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-6 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 ${isCurrentMonth ? "bg-emerald-500" : "bg-indigo-400 dark:bg-indigo-600"}`}
+                              style={{ width: `${Math.max(barWidth, t.totalPayrollCost > 0 ? 4 : 0)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-black text-slate-700 dark:text-slate-300 w-36 text-right flex-shrink-0">
+                            {t.totalPayrollCost > 0 ? `Rp ${t.totalPayrollCost.toLocaleString("id-ID")}` : <span className="text-slate-300 font-normal">—</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Panduan Rasio */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                <p className="text-xs font-black text-slate-700 dark:text-slate-300 mb-2">📌 Panduan Rasio Biaya Gaji / Omzet</p>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 border border-emerald-200 dark:border-emerald-800 font-bold">
+                    ✅ ≤ 20% — Sangat Efisien
+                  </span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 border border-amber-200 dark:border-amber-800 font-bold">
+                    ⚠️ 21–35% — Normal / Wajar
+                  </span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-800 font-bold">
+                    🔴 &gt; 35% — Perlu Evaluasi
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">
+                  Rasio ideal untuk bisnis F&amp;B/Retail UMKM umumnya 20–30%. Di atas 35% bisa menandakan over-staffing atau gaji tidak sebanding dengan produktivitas omzet.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Tab 5: Stock Ledger Audit Trail */}
         {activeReportTab === "STOCK_LEDGER" && (

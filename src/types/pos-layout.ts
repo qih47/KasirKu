@@ -32,10 +32,10 @@ export const POS_LAYOUTS_CATALOG: PosLayoutItem[] = [
     description:
       "Alur kasir kafe & resto dengan pemilih nomor meja cepat, kartu menu visual besar, pop-up kustomisasi varian minuman (sugar, ice, topping), dan tombol cetak tiket dapur otomatis.",
     features: [
-      "Peta & Selector Nomor Meja Cepat (Table 01 - 24)",
-      "Pop-up Kustomisasi Modifiers Minuman & Makanan Kilat",
+      "Peta & Selector Nomor Meja (Table 01 - 24)",
+      "Pop-up Kustomisasi Modifiers Minuman & Makanan",
       "Tombol Satu-Klik 'Kirim Pesanan ke Dapur/Bar (KOT)'",
-      "Kategori Menu Visual Grid dengan Foto Tajam",
+      "Kategori Menu Visual dengan Foto Jelas",
     ],
     workflowDescription: "Kasir pilih meja ➔ Tap menu ➔ Pilih varian (misal: Less Ice) ➔ Kirim pesanan ke Dapur & Bayar.",
   },
@@ -51,7 +51,7 @@ export const POS_LAYOUTS_CATALOG: PosLayoutItem[] = [
       "Alur kasir barbershop berbasis Station Kursi & Capster/Stylist aktif. Kasir dapat memilih siapa capster yang melayani, memilih paket treatment potong rambut, dan mencatat komisi atau tip.",
     features: [
       "Selector Station Kursi (Chair 1, Chair 2, Chair 3)",
-      "Pilih Capster / Stylist yang Melayani per Item",
+      "Penugasan Capster / Stylist per Item Transaksi",
       "Daftar Treatment Cepat (Haircut, Creambath, Shaving, Pomade)",
       "Input Tip & Bagi Hasil Komisi Barber Otomatis",
     ],
@@ -66,10 +66,10 @@ export const POS_LAYOUTS_CATALOG: PosLayoutItem[] = [
     priceMonthly: 39000,
     priceAnnual: 390000,
     description:
-      "Alur kasir ritel berkecepatan tinggi dengan auto-focus scanner barcode terus menerus, Numpad angka jumbo untuk ubah Qty kilat, dan tabel keranjang belanja ringkas tanpa scroll berlebih.",
+      "Alur kasir ritel dengan auto-focus scanner barcode, Numpad angka untuk ubah Qty cepat, dan tabel keranjang belanja ringkas.",
     features: [
       "Auto-Focus Barcode Scanner Tanpa Perlu Klik Input",
-      "Numpad Angka Jumbo untuk Ubah Qty / Diskon Cepat",
+      "Numpad Angka untuk Ubah Qty / Diskon Cepat",
       "Tabel Ringkasan Keranjang Lebar dengan Total Item Count",
       "Shortcut Tombol Cepat Keyboard Kasir (F1 - F12)",
     ],
@@ -84,9 +84,9 @@ export const POS_LAYOUTS_CATALOG: PosLayoutItem[] = [
     priceMonthly: 39000,
     priceAnnual: 390000,
     description:
-      "Alur kasir laundry kiloan dan satuan dengan input timbangan Kg kilat, pemilihan varian aroma parfum, penomoran slot rak cucian, dan cetak nota klaim pakaian.",
+      "Alur kasir laundry kiloan dan satuan dengan input timbangan desimal Kg, pemilihan aroma parfum, penomoran slot rak, dan cetak nota klaim pakaian.",
     features: [
-      "Input Kilogram / Timbangan Kilat dengan Desimal (misal: 3.5 Kg)",
+      "Input Timbangan Desimal Kilogram (misal: 3.5 Kg)",
       "Pemilih Slot Rak Penyimpanan (Rak A-01, Rak B-04)",
       "Pilihan Aroma Parfum & Paket Cuci (Express / Reguler)",
       "Pilihan Pembayaran DP (Uang Muka) atau Bayar Lunas di Awal",

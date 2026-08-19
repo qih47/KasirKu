@@ -94,7 +94,7 @@ export function LandingClient({
       tagline: "Percepat pemesanan meja, varian rasa, dan cetak tiket ke dapur tanpa jeda.",
       features: [
         "Denah Meja Visual (Available, Terisi, Reserved, Billing)",
-        "Kustomisasi Varian Minuman Kilat (Hot/Iced, Gula, Es, Susu Oat)",
+        "Kustomisasi Varian Minuman & Makanan (Hot/Iced, Gula, Es, Susu Oat)",
         "Kirim Tiket Pesanan Otomatis ke Dapur & Bar (KOT)",
         "Menu Digital & Self-Order QR untuk Pelanggan",
       ],
@@ -129,7 +129,7 @@ export function LandingClient({
       name: "Supermarket & Retail",
       icon: ShoppingBag,
       badge: "High-Speed Scan",
-      tagline: "Scan barcode SKU kilat, kelola harga grosir bertingkat, dan gunakan Numpad kasir instan.",
+      tagline: "Scan barcode SKU cepat, kelola harga grosir bertingkat, dan gunakan Numpad kasir instan.",
       features: [
         "Auto-Focus Barcode Scanner Tanpa Perlu Klik Input",
         "Touch Numpad Kasir Jumbo untuk Edit Kuantitas Cepat",
@@ -947,7 +947,7 @@ export function LandingClient({
             </span>
 
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight" style={{ color: t.text }}>
-              Kembangkan Fitur Toko Kapan Saja Sesuai Kebutuhan
+              Kembangkan Fitur Bisnis Anda Kapan Saja Sesuai Kebutuhan
             </h2>
 
             <p className="text-sm leading-relaxed" style={{ color: t.textSub }}>

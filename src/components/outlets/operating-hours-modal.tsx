@@ -139,14 +139,14 @@ export function OperatingHoursModal({
             className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200/60 transition flex items-center gap-1.5"
           >
             <Copy className="w-3 h-3" />
-            <span>Terapkan Jam Senin ke Semua Hari</span>
+            <span>Salin Jam Senin ke Semua Hari</span>
           </button>
         </div>
 
         {copiedMsg && (
           <div className="my-2 p-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 animate-fadeIn">
             <CheckCircle2 className="w-4 h-4" />
-            Jam operasional hari Senin berhasil disalin ke seluruh hari!
+            Jadwal hari Senin berhasil disalin ke semua hari.
           </div>
         )}
 
@@ -206,7 +206,7 @@ export function OperatingHoursModal({
                           className="rounded text-indigo-600 focus:ring-0 w-3.5 h-3.5"
                         />
                         <span className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                          24 Jam Nonstop
+                          24 Jam
                         </span>
                       </label>
 

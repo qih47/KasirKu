@@ -500,14 +500,14 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                   className="block text-xs font-extrabold uppercase tracking-wider"
                   style={{ color: t.sectionLabel }}
                 >
-                  2. Informasi Toko &amp; Akun Pemilik
+                  2. Informasi Bisnis &amp; Akun Pemilik
                 </label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Nama Bisnis */}
                   <div>
                     <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
-                      Nama Bisnis / Toko <span className="text-rose-500">*</span>
+                      Nama Bisnis <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
                       <Store className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
@@ -583,7 +583,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                   {/* Alamat Lengkap — full width */}
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-bold mb-1.5" style={{ color: t.textSub }}>
-                      Alamat Toko / Outlet <span className="text-rose-500">*</span>
+                      Alamat Outlet Utama <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
                       <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: t.textMuted }} />
@@ -849,7 +849,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Memverifikasi &amp; Menyiapkan Toko...</span>
+                      <span>Menyiapkan Akun Bisnis Anda...</span>
                     </>
                   ) : (
                     <>

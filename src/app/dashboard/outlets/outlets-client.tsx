@@ -98,7 +98,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
             Manajemen Multi-Outlet & Cabang
           </div>
           <h1 className="text-2xl font-black text-slate-950">
-            Daftar Cabang Toko
+            Daftar Outlet &amp; Cabang
           </h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             Kuota Cabang:{" "}
@@ -259,7 +259,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1.5">
-                  Nama Cabang / Toko <span className="text-rose-500">*</span>
+                  Nama Outlet / Cabang <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"

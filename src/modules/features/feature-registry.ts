@@ -53,7 +53,7 @@ export const DEFAULT_FEATURE_ENTITLEMENTS: FeatureEntitlement[] = [
     key: "POS_CORE_CHECKOUT",
     name: "Kasir POS Cepat Multi-Metode Bayar",
     category: "CORE_POS",
-    description: "Antarmuka kasir kilat dengan pembayaran QRIS, Tunai, Kartu Debit, dan Transfer.",
+    description: "Antarmuka kasir cepat dengan pembayaran QRIS, Tunai, Kartu Debit, dan Transfer.",
     allowedTiers: ["basic", "starter", "pro", "enterprise"],
     requiredPlugin: null,
     isPublicPreview: true,
@@ -167,7 +167,7 @@ export const DEFAULT_FEATURE_ENTITLEMENTS: FeatureEntitlement[] = [
   // ── 6. KATEGORI VERTIKAL: LAUNDRY SERVICE ──
   {
     key: "LAUNDRY_DECIMAL_WEIGHT",
-    name: "Kalkulator Timbangan Desimal Kg Kilat",
+    name: "Kalkulator Timbangan Desimal Kilogram",
     category: "LAUNDRY",
     description: "Perhitungan biaya akurat berdasarkan berat timbangan desimal (misal 3.45 Kg) dan harga per Kg.",
     allowedTiers: ["basic", "starter", "pro", "enterprise"],

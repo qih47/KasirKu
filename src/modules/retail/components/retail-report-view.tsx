@@ -85,7 +85,7 @@ export function RetailReportView() {
 
         <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            Valuasi Nilai Stok Toko
+            Valuasi Nilai Stok
           </span>
           <div className="text-xl sm:text-2xl font-black text-indigo-600">
             {kpi.totalStockValuation}

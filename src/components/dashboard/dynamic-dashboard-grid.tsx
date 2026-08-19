@@ -88,10 +88,10 @@ export function DynamicDashboardGrid({
     setSaving(true);
     try {
       await saveTenantDashboardWidgetsAction(widgets);
-      toastSuccess("Tata letak widget dashboard berhasil disimpan!");
+      toastSuccess("Susunan widget berhasil disimpan!");
       setIsCustomizing(false);
     } catch (err: any) {
-      toastError(err.message || "Gagal menyimpan tata letak widget.");
+      toastError(err.message || "Gagal menyimpan susunan widget.");
     } finally {
       setSaving(false);
     }
@@ -99,8 +99,8 @@ export function DynamicDashboardGrid({
 
   const handleResetDefault = async () => {
     const ok = await swalConfirm(
-      "Reset Tata Letak?",
-      "Kembalikan ke susunan widget standar bawaan?",
+      "Reset Susunan Widget?",
+      "Kembalikan ke susunan awal?",
       { confirmText: "Ya, Reset", isDanger: false }
     );
     if (ok) setWidgets(DEFAULT_DASHBOARD_LAYOUT);
@@ -592,7 +592,7 @@ export function DynamicDashboardGrid({
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-2">
             <Sparkles className="w-3.5 h-3.5" />
-            Dashboard Ringkasan Toko Dinamis
+            Ringkasan Operasional
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
             Selamat Datang, {metricsData.tenantName}
@@ -609,7 +609,7 @@ export function DynamicDashboardGrid({
               className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-xs transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 shadow-sm"
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Kustomisasi Widget Grid ⚙️</span>
+              <span>Atur Widget</span>
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -624,7 +624,7 @@ export function DynamicDashboardGrid({
               <button
                 onClick={handleResetDefault}
                 className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-semibold"
-                title="Reset ke Bawaan"
+                title="Reset ke Default"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -639,7 +639,7 @@ export function DynamicDashboardGrid({
                 ) : (
                   <Save className="w-3.5 h-3.5" />
                 )}
-                <span>Simpan Grid</span>
+                <span>Simpan Susunan</span>
               </button>
 
               <button

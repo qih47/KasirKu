@@ -195,7 +195,7 @@ export function TenantTableClient({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800">
               <tr>
-                <th className="py-3 px-4">Nama Toko & Owner</th>
+                <th className="py-3 px-4">Nama Bisnis &amp; Pemilik</th>
                 <th className="py-3 px-4">Lisensi & Outlet</th>
                 <th className="py-3 px-4">Modul Plugin</th>
                 <th className="py-3 px-4">Status & Masa Aktif</th>

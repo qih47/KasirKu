@@ -381,7 +381,7 @@ export function ReportsClient({
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <span className="p-1 rounded-lg bg-amber-500/10 text-amber-500 font-bold">⚡</span>
-              Analisis Jam Ramai (Peak Hours / Jam Sibuk Transaksi)
+              Analisis Jam Ramai Transaksi
             </h3>
             <span className="text-xs text-slate-500">
               {data.peakHoursRange?.label || "00:00 - 23:00 WIB"}

@@ -1150,19 +1150,19 @@ export function CatalogClient({
             <div>
               <div className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-wider mb-1">
                 <Layout className="w-4 h-4" />
-                <span>Qassa POS Dynamic Screen Layout Engine</span>
+                <span>Qassa POS Layout Engine</span>
               </div>
               <h2 className="text-lg font-black text-white tracking-tight">
-                Katalog Tata Letak Layar Kasir Dinamis
+                Katalog Layout Layar Kasir
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl mt-1 leading-relaxed">
-                Tata letak layar kasir dinamis dari database platform hasil impor paket JSON.
+                Pilihan tata letak layar kasir terdaftar untuk berbagai vertikal bisnis.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="px-3 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-extrabold flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5" />
-                {posLayoutsList.length} Layout Live di Database
+                {posLayoutsList.length} Layout Terpasang
               </span>
               <button
                 onClick={() => openImporter("POS_LAYOUT")}
@@ -1345,11 +1345,11 @@ export function CatalogClient({
                 <span className="p-1.5 rounded-xl bg-indigo-500/20 text-indigo-400">
                   <Percent className="w-4 h-4" />
                 </span>
-                <p className="font-bold text-white text-sm">Pengaturan Diskon Durasi Berlangganan (Dinamis)</p>
+                <p className="font-bold text-white text-sm">Pengaturan Diskon Durasi Langganan</p>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
                 Tentukan persentase potongan harga untuk langganan <strong>1 Bulan, 3 Bulan, 6 Bulan, 1 Tahun, 2 Tahun, dan 3 Tahun</strong>.
-                Perubahan ini langsung otomatis ter-update di <strong>Landing Page</strong> dan <strong>Dashboard Langganan Toko</strong>.
+                Perubahan ini langsung berlaku di <strong>Landing Page</strong> dan <strong>Portal Langganan Tenant</strong>.
               </p>
             </div>
             <button
@@ -1360,7 +1360,7 @@ export function CatalogClient({
               {durationLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Menyimpan ke DB...</span>
+                  <span>Menyimpan...</span>
                 </>
               ) : (
                 <>

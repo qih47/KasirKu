@@ -227,13 +227,13 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
             }}
           >
             <Store className="w-3.5 h-3.5" />
-            <span>Pengaturan Toko &amp; Identitas Kasir</span>
+            <span>Profil Bisnis &amp; Identitas Kasir</span>
           </div>
           <h1 className="text-2xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
             Pengaturan Sistem
           </h1>
           <p className="text-xs font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Kelola profil brand toko, logo, tema terpasang, dan format cetak struk kasir termal.
+            Kelola profil bisnis, logo, tema aktif, dan format cetak struk kasir.
           </p>
         </div>
 
@@ -320,17 +320,17 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
             <div className="border-b pb-3 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
               <h2 className="text-base font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                 <Store className="w-4 h-4" style={{ color: "var(--theme-primary, #4f46e5)" }} />
-                Identitas Bisnis &amp; Kontak Toko
+                Identitas Bisnis &amp; Kontak
               </h2>
               <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                Informasi ini otomatis tampil pada navbar dashboard, layar kasir POS, dan kop cetak struk belanjaan.
+                Informasi ini otomatis tampil pada navbar dashboard, layar kasir POS, dan kop cetak struk.
               </p>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                  Nama Brand / Toko <span className="text-rose-500">*</span>
+                  Nama Bisnis <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -352,7 +352,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                     <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Logo Toko</span>
+                    <span>Logo Bisnis</span>
                   </label>
 
                   {/* Mode Switcher */}
@@ -472,7 +472,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                     <Phone className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>No. WhatsApp / Telepon Toko</span>
+                    <span>No. WhatsApp / Telepon</span>
                   </label>
                   <input
                     type="text"
@@ -561,7 +561,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
             <div className="space-y-1">
               <h3 className="font-black text-base" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                {businessName || "Nama Toko Anda"}
+                {businessName || "Nama Bisnis Anda"}
               </h3>
               <p className="text-xs font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
                 {address || "Alamat Outlet"}
@@ -812,7 +812,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               <div className="space-y-2.5 text-xs">
                 <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                   <div>
-                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Logo Toko</p>
+                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Logo</p>
                     <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Cetak logo brand di bagian atas struk</p>
                   </div>
                   <input
@@ -825,8 +825,8 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
                 <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                   <div>
-                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Alamat Toko</p>
-                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak lokasi outlet toko</p>
+                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Alamat Outlet</p>
+                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak lokasi outlet / cabang</p>
                   </div>
                   <input
                     type="checkbox"

@@ -83,9 +83,9 @@ export default async function DashboardPage() {
       : [],
     targetTenantId
       ? prisma.product.findMany({
-          where: { tenantId: targetTenantId, isActive: true, stockQty: { lte: 10 } },
+          where: { tenantId: targetTenantId, isActive: true, type: "BARANG" },
           orderBy: { stockQty: "asc" },
-          take: 5,
+          take: 30,
         })
       : [],
     targetTenantId
@@ -105,6 +105,11 @@ export default async function DashboardPage() {
     0
   );
   const todayTransactionsCount = todayTransactions.length;
+
+  // Filter actual low-stock products based on each product's minStockAlert
+  const realLowStockProducts = lowStockProducts
+    .filter((p: any) => (p.stockQty ?? 0) <= (p.minStockAlert ?? 5))
+    .slice(0, 8);
 
   // Real 7-day weekly sales aggregation
   const daysMap = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -154,11 +159,11 @@ export default async function DashboardPage() {
           paymentMethod: t.payments?.[0]?.method || "TUNAI",
           itemsSummary: t.items?.[0]?.product?.name || "Item Belanja",
         })),
-        lowStockProducts: lowStockProducts.map((p: any) => ({
+        lowStockProducts: realLowStockProducts.map((p: any) => ({
           id: p.id,
           name: p.name,
           stock: p.stockQty || 0,
-          minStockAlert: (p.attributes as any)?.minStockAlert || 5,
+          minStockAlert: p.minStockAlert ?? 5,
         })),
         cafeStats: {
           totalTables: cafeTables.length,

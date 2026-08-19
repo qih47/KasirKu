@@ -60,6 +60,9 @@ export async function getProductsData(explicitOutletId?: string) {
       : Number(p.price);
 
     const isAvailableInOutlet = specificStock ? specificStock.isAvailable : p.isActive;
+    const minAlert = p.minStockAlert ?? 5;
+    const isOutOfStock = p.type === "BARANG" && (effectiveStockQty ?? 0) <= 0;
+    const isLowStock = p.type === "BARANG" && !isOutOfStock && (effectiveStockQty ?? 0) <= minAlert;
 
     return {
       ...p,
@@ -68,6 +71,9 @@ export async function getProductsData(explicitOutletId?: string) {
       effectiveStockQty,
       isAvailableInOutlet,
       stockQty: effectiveStockQty,
+      minStockAlert: minAlert,
+      isOutOfStock,
+      isLowStock,
     };
   });
 
@@ -75,7 +81,7 @@ export async function getProductsData(explicitOutletId?: string) {
   const totalBarang = formattedProducts.filter((p) => p.type === "BARANG").length;
   const totalJasa = formattedProducts.filter((p) => p.type === "JASA").length;
   const lowStockCount = formattedProducts.filter(
-    (p) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= 5
+    (p) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= (p.minStockAlert ?? 5)
   ).length;
 
   const categories = Array.from(
@@ -96,6 +102,21 @@ export async function getProductsData(explicitOutletId?: string) {
   };
 }
 
+export async function getLowStockAlertProductsAction(explicitOutletId?: string) {
+  const user = await requireTenantUser();
+  const targetOutletId = explicitOutletId || user.outletId;
+
+  const data = await getProductsData(targetOutletId);
+  const lowStockProducts = data.products.filter(
+    (p: any) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= (p.minStockAlert ?? 5)
+  );
+
+  return {
+    count: lowStockProducts.length,
+    products: lowStockProducts,
+  };
+}
+
 export async function createProductAction(data: {
   name: string;
   type: ProductType;
@@ -104,11 +125,12 @@ export async function createProductAction(data: {
   barcode?: string;
   category?: string;
   stockQty?: number | null;
+  minStockAlert?: number;
   outletId?: string | null;
   attributes?: Record<string, any>;
 }) {
   const user = await requireTenantUser();
-  const { name, type, price, imageUrl, barcode, category, stockQty, outletId, attributes } = data;
+  const { name, type, price, imageUrl, barcode, category, stockQty, minStockAlert, outletId, attributes } = data;
 
   if (!name || price === undefined || price < 0) {
     throw new Error("Nama dan harga produk wajib diisi dengan benar.");
@@ -128,6 +150,7 @@ export async function createProductAction(data: {
       barcode: barcode?.trim() || null,
       category: category?.trim() || "Umum",
       stockQty: finalStock,
+      minStockAlert: minStockAlert !== undefined && minStockAlert >= 0 ? minStockAlert : 5,
       attributes: attributes || {},
       isActive: true,
     },
@@ -163,6 +186,7 @@ export async function createProductAction(data: {
   }
 
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard");
   revalidatePath("/pos");
   return { success: true, product };
 }
@@ -177,11 +201,12 @@ export async function updateProductAction(
     barcode?: string;
     category?: string;
     stockQty?: number | null;
+    minStockAlert?: number;
     attributes?: Record<string, any>;
   }
 ) {
   const user = await requireTenantUser();
-  const { name, type, price, imageUrl, barcode, category, stockQty, attributes } = data;
+  const { name, type, price, imageUrl, barcode, category, stockQty, minStockAlert, attributes } = data;
 
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing || existing.tenantId !== user.tenantId) {
@@ -200,11 +225,13 @@ export async function updateProductAction(
       barcode: barcode?.trim() || null,
       category: category?.trim() || "Umum",
       stockQty: finalStock,
+      minStockAlert: minStockAlert !== undefined && minStockAlert >= 0 ? minStockAlert : existing.minStockAlert,
       attributes: attributes || existing.attributes || {},
     },
   });
 
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard");
   revalidatePath("/pos");
   return { success: true, product: updated };
 }

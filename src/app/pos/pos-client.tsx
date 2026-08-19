@@ -7,10 +7,14 @@ import {
   openShiftAction,
   closeShiftAction,
   addCashMovementAction,
+  getLiveShiftSummaryAction,
 } from "@/modules/transaction/shift-actions";
 import {
   createTransactionAction,
+  verifyVoucherAction,
   CartItemInput,
+  DiscountType,
+  VoucherValidationResult,
 } from "@/modules/transaction/actions";
 import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import { useTranslation } from "@/lib/i18n/language-context";
@@ -48,6 +52,9 @@ import {
   Monitor,
   Check,
   Sliders,
+  Tag,
+  Ticket,
+  Percent,
 } from "lucide-react";
 import { PosLayoutType } from "@/types/pos-layout";
 import { useDynamicTheme, BUILTIN_THEME_PRESETS } from "@/components/theme/dynamic-theme-provider";
@@ -135,6 +142,9 @@ export function PosClient({
   // Modal States
   const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
   const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
+  const [showShiftSummaryModal, setShowShiftSummaryModal] = useState(false);
+  const [liveShiftSummary, setLiveShiftSummary] = useState<any | null>(null);
+  const [loadingShiftSummary, setLoadingShiftSummary] = useState(false);
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
@@ -157,6 +167,16 @@ export function PosClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Discount & Voucher Promo States
+  const [showDiscountDrawer, setShowDiscountDrawer] = useState(false);
+  const [discountType, setDiscountType] = useState<DiscountType>("PERCENT");
+  const [discountPercent, setDiscountPercent] = useState<number | string>("");
+  const [discountFixed, setDiscountFixed] = useState<number | string>("");
+  const [voucherCodeInput, setVoucherCodeInput] = useState<string>("");
+  const [appliedVoucher, setAppliedVoucher] = useState<VoucherValidationResult | null>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   // POS Screen Layout Detection
   const posLayout: PosLayoutType =
@@ -205,16 +225,61 @@ export function PosClient({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Hitung total belanja
-  const totalAmount = cart.reduce(
+  // Hitung subtotal belanja produk (sebelum diskon & tip)
+  const cartSubtotal = cart.reduce(
     (sum, item) => sum + item.price * item.qty,
     0
   );
 
+  // Hitung nominal potongan diskon yang aktif
+  let discountAmount = 0;
+  if (discountType === "PERCENT" && Number(discountPercent) > 0) {
+    discountAmount = Math.round((cartSubtotal * Number(discountPercent)) / 100);
+  } else if (discountType === "FIXED" && Number(discountFixed) > 0) {
+    discountAmount = Number(discountFixed);
+  } else if (discountType === "VOUCHER" && appliedVoucher) {
+    discountAmount = appliedVoucher.discountAmount;
+  }
+  discountAmount = Math.min(cartSubtotal, Math.max(0, discountAmount));
+
+  // Grand Total Belanja
+  const totalAmount = Math.max(0, cartSubtotal - discountAmount);
+  const grandTotalWithTip = totalAmount + barberTip;
+
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
   const parsedPaid = Number(amountPaid) || 0;
-  const change = Math.max(0, parsedPaid - totalAmount);
+  const change = Math.max(0, parsedPaid - grandTotalWithTip);
+
+  // Handle Verifikasi & Terapkan Voucher
+  const handleApplyVoucher = async () => {
+    if (!voucherCodeInput.trim()) return;
+    if (cartSubtotal <= 0) {
+      setVoucherError("Tambahkan item ke keranjang terlebih dahulu.");
+      return;
+    }
+    setVoucherLoading(true);
+    setVoucherError(null);
+    try {
+      const result = await verifyVoucherAction(voucherCodeInput, cartSubtotal);
+      setAppliedVoucher(result);
+      setDiscountType("VOUCHER");
+      setSuccessMsg(`Voucher "${result.code}" berhasil diterapkan: Potongan Rp ${result.discountAmount.toLocaleString("id-ID")}`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setVoucherError(err.message || "Kode voucher tidak valid.");
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleResetDiscount = () => {
+    setDiscountPercent("");
+    setDiscountFixed("");
+    setVoucherCodeInput("");
+    setAppliedVoucher(null);
+    setVoucherError(null);
+  };
 
   // Tambah item ke keranjang
   const addToCart = async (product: any) => {
@@ -399,7 +464,7 @@ export function PosClient({
       await swalWarning("Keranjang Kosong", "Keranjang belanja masih kosong.");
       return;
     }
-    if (parsedPaid < totalAmount) {
+    if (parsedPaid < grandTotalWithTip) {
       await swalWarning("Pembayaran Kurang", "Uang pembayaran kurang dari total tagihan.");
       return;
     }
@@ -416,6 +481,15 @@ export function PosClient({
         items: cart,
         paymentMethod: "CASH",
         amountPaid: parsedPaid,
+        discountType: discountAmount > 0 ? discountType : null,
+        discountValue:
+          discountType === "PERCENT"
+            ? Number(discountPercent)
+            : discountType === "FIXED"
+            ? Number(discountFixed)
+            : appliedVoucher?.discountValue || 0,
+        discountAmount,
+        voucherCode: discountType === "VOUCHER" && appliedVoucher ? appliedVoucher.code : null,
         tableId: isDineIn && selectedTblObj ? selectedTblObj.id : null,
         orderType: isDineIn ? "DINE_IN" : "TAKEAWAY",
         laundryDetails:
@@ -513,6 +587,35 @@ export function PosClient({
     }
   };
 
+  // Handle Buka Modal Rekap Kas Shift Live
+  const openLiveShiftSummary = async () => {
+    if (!activeShift) return;
+    setLoadingShiftSummary(true);
+    setShowShiftSummaryModal(true);
+    try {
+      const summary = await getLiveShiftSummaryAction(activeShift.id);
+      setLiveShiftSummary(summary);
+    } catch (err: any) {
+      toastError(err.message || "Gagal memuat rekap kas shift.");
+    } finally {
+      setLoadingShiftSummary(false);
+    }
+  };
+
+  const openCloseShiftModal = async () => {
+    if (!activeShift) return;
+    setLoadingShiftSummary(true);
+    setShowCloseShiftModal(true);
+    try {
+      const summary = await getLiveShiftSummaryAction(activeShift.id);
+      setLiveShiftSummary(summary);
+    } catch (err: any) {
+      // ignore
+    } finally {
+      setLoadingShiftSummary(false);
+    }
+  };
+
   // Handle Tutup Shift
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -543,6 +646,7 @@ export function PosClient({
     }));
     setShowCloseShiftModal(false);
     setCloseShiftSummary(null);
+    setLiveShiftSummary(null);
     setClosingCash("");
   };
 
@@ -648,6 +752,20 @@ export function PosClient({
           {activeShift ? (
             <>
               <button
+                onClick={openLiveShiftSummary}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-xs"
+                style={{
+                  backgroundColor: innerBoxBg,
+                  borderColor: cardBorder,
+                  color: textPrimary,
+                }}
+                title="Lihat Laporan Rekapitulasi Kas & Omzet Shift Berjalan"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="hidden sm:inline">Rekap Kas Shift</span>
+              </button>
+
+              <button
                 onClick={() => setShowCashMovementModal(true)}
                 className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border"
                 style={{
@@ -661,8 +779,8 @@ export function PosClient({
               </button>
 
               <button
-                onClick={() => setShowCloseShiftModal(true)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5"
+                onClick={openCloseShiftModal}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5" />
                 <span>Tutup Shift</span>
@@ -1103,15 +1221,19 @@ export function PosClient({
                       </span>
 
                       {p.type === "BARANG" ? (
-                        <span
-                          className={`text-[10px] font-bold ${
-                            (p.stockQty ?? 0) <= 5
-                              ? "text-amber-500"
-                              : "text-slate-400"
-                          }`}
-                        >
-                          Stok {p.stockQty ?? 0}
-                        </span>
+                        (p.stockQty ?? 0) <= 0 ? (
+                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">
+                            Habis (0)
+                          </span>
+                        ) : (p.stockQty ?? 0) <= (p.minStockAlert ?? 5) ? (
+                          <span className="text-[10px] font-bold text-amber-500 bg-amber-500/15 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            ⚠️ Stok {p.stockQty}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400">
+                            Stok {p.stockQty ?? 0}
+                          </span>
+                        )
                       ) : (
                         <span className="text-[10px] font-bold text-emerald-500">
                           Jasa
@@ -1348,11 +1470,251 @@ export function PosClient({
                 </div>
               )}
 
+              {/* DISKON & VOUCHER PROMO SECTION */}
+              <div
+                className="p-3 rounded-2xl border transition-all space-y-2.5"
+                style={{
+                  backgroundColor: innerBoxBg,
+                  borderColor: cardBorder,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscountDrawer((prev) => !prev)}
+                    className="flex items-center gap-1.5 text-xs font-bold transition hover:opacity-80"
+                    style={{ color: primaryColor }}
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>{discountAmount > 0 ? "Promo Diterapkan" : "+ Diskon / Voucher Promo"}</span>
+                  </button>
+
+                  {discountAmount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetDiscount}
+                      className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-0.5"
+                    >
+                      <X className="w-3 h-3" /> Hapus Diskon
+                    </button>
+                  )}
+                </div>
+
+                {/* Discount Applied Badge */}
+                {discountAmount > 0 && !showDiscountDrawer && (
+                  <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs font-bold text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <Ticket className="w-3.5 h-3.5" />
+                      {discountType === "PERCENT"
+                        ? `Diskon ${discountPercent}%`
+                        : discountType === "FIXED"
+                        ? `Potongan Manual`
+                        : `Voucher: ${appliedVoucher?.code}`}
+                    </span>
+                    <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
+                  </div>
+                )}
+
+                {/* Expanded Discount & Voucher Controls */}
+                {showDiscountDrawer && (
+                  <div className="space-y-3 pt-2 border-t" style={{ borderColor: cardBorder }}>
+                    {/* Mode Tabs */}
+                    <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 text-[11px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountType("PERCENT");
+                          setAppliedVoucher(null);
+                        }}
+                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                          discountType === "PERCENT"
+                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                            : "opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <Percent className="w-3 h-3" />
+                        <span>Persen</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountType("FIXED");
+                          setAppliedVoucher(null);
+                        }}
+                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                          discountType === "FIXED"
+                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                            : "opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <DollarSign className="w-3 h-3" />
+                        <span>Nominal</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountType("VOUCHER");
+                          setDiscountPercent("");
+                          setDiscountFixed("");
+                        }}
+                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                          discountType === "VOUCHER"
+                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                            : "opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <Ticket className="w-3 h-3" />
+                        <span>Voucher</span>
+                      </button>
+                    </div>
+
+                    {/* Tab 1: Persen Diskon */}
+                    {discountType === "PERCENT" && (
+                      <div className="space-y-2">
+                        <div className="flex gap-1">
+                          {[5, 10, 15, 20, 50].map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => {
+                                setDiscountPercent(p);
+                                setDiscountFixed("");
+                              }}
+                              className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
+                                Number(discountPercent) === p
+                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              }`}
+                              style={{ borderColor: cardBorder }}
+                            >
+                              {p}%
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={discountPercent}
+                          onChange={(e) => {
+                            setDiscountPercent(e.target.value);
+                            setDiscountFixed("");
+                          }}
+                          placeholder="Atau ketik persen diskon..."
+                          className="w-full px-3 py-1.5 rounded-xl border text-xs font-bold focus:outline-none"
+                          style={{
+                            backgroundColor: inputBg,
+                            borderColor: cardBorder,
+                            color: textPrimary,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 2: Nominal Diskon */}
+                    {discountType === "FIXED" && (
+                      <div className="space-y-2">
+                        <div className="flex gap-1">
+                          {[5000, 10000, 20000, 50000].map((f) => (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => {
+                                setDiscountFixed(f);
+                                setDiscountPercent("");
+                              }}
+                              className={`flex-1 py-1 rounded-lg text-[11px] font-bold border transition ${
+                                Number(discountFixed) === f
+                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              }`}
+                              style={{ borderColor: cardBorder }}
+                            >
+                              {f / 1000}k
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={discountFixed}
+                          onChange={(e) => {
+                            setDiscountFixed(e.target.value);
+                            setDiscountPercent("");
+                          }}
+                          placeholder="Nominal potongan (Rp)..."
+                          className="w-full px-3 py-1.5 rounded-xl border text-xs font-mono font-bold focus:outline-none"
+                          style={{
+                            backgroundColor: inputBg,
+                            borderColor: cardBorder,
+                            color: textPrimary,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 3: Kode Voucher */}
+                    {discountType === "VOUCHER" && (
+                      <div className="space-y-2">
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={voucherCodeInput}
+                            onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => e.key === "Enter" && handleApplyVoucher()}
+                            placeholder="KODE VOUCHER (HEMAT10, PROMO20)"
+                            className="flex-1 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold uppercase focus:outline-none"
+                            style={{
+                              backgroundColor: inputBg,
+                              borderColor: cardBorder,
+                              color: textPrimary,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleApplyVoucher}
+                            disabled={voucherLoading || !voucherCodeInput.trim()}
+                            className="px-3 py-1.5 rounded-xl text-white font-extrabold text-xs shadow transition disabled:opacity-50"
+                            style={{ backgroundColor: primaryColor }}
+                          >
+                            {voucherLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Gunakan"}
+                          </button>
+                        </div>
+                        {voucherError && (
+                          <p className="text-[11px] text-rose-500 font-bold">⚠️ {voucherError}</p>
+                        )}
+                        {appliedVoucher && (
+                          <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-600 flex items-center justify-between">
+                            <span>✓ {appliedVoucher.description}</span>
+                            <span>- Rp {appliedVoucher.discountAmount.toLocaleString("id-ID")}</span>
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400 flex flex-wrap gap-1">
+                          <span>Voucher aktif:</span>
+                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("HEMAT10")}>HEMAT10</span>,
+                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("PROMO20")}>PROMO20</span>,
+                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("DISKON10K")}>DISKON10K</span>,
+                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("KASIRKU")}>KASIRKU</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between font-medium" style={{ color: textSecondary }}>
                   <span>Subtotal</span>
-                  <span>Rp {totalAmount.toLocaleString("id-ID")}</span>
+                  <span>Rp {cartSubtotal.toLocaleString("id-ID")}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between font-bold text-emerald-600">
+                    <span className="flex items-center gap-1">
+                      <Tag className="w-3 h-3" /> Potongan Diskon
+                    </span>
+                    <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
+                  </div>
+                )}
                 {barberTip > 0 && (
                   <div className="flex items-center justify-between font-bold text-amber-600">
                     <span>Tip Stylist</span>
@@ -1368,17 +1730,17 @@ export function PosClient({
                 >
                   <span>Total Tagihan:</span>
                   <span className="text-lg font-black" style={{ color: primaryColor }}>
-                    Rp {(totalAmount + barberTip).toLocaleString("id-ID")}
+                    Rp {grandTotalWithTip.toLocaleString("id-ID")}
                   </span>
                 </div>
               </div>
 
               {/* Quick Cash Buttons */}
-              {totalAmount > 0 && (
+              {grandTotalWithTip > 0 && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
-                      onClick={() => setAmountPaid(totalAmount + barberTip)}
+                      onClick={() => setAmountPaid(grandTotalWithTip)}
                       className="py-1.5 rounded-xl border text-[11px] font-bold"
                       style={{
                         backgroundColor: `${primaryColor}20`,
@@ -1431,11 +1793,11 @@ export function PosClient({
                     />
                   </div>
 
-                  {parsedPaid >= (totalAmount + barberTip) && totalAmount > 0 && (
+                  {parsedPaid >= grandTotalWithTip && grandTotalWithTip > 0 && (
                     <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 text-xs flex items-center justify-between font-bold">
                       <span>Kembalian:</span>
                       <span className="text-sm font-black">
-                        Rp {Math.max(0, parsedPaid - (totalAmount + barberTip)).toLocaleString("id-ID")}
+                        Rp {Math.max(0, parsedPaid - grandTotalWithTip).toLocaleString("id-ID")}
                       </span>
                     </div>
                   )}
@@ -1820,11 +2182,11 @@ export function PosClient({
         </div>
       )}
 
-      {/* 3. Modal Tutup Shift & Rekonsiliasi */}
-      {showCloseShiftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      {/* 2.5 Modal Rekap Kas Shift (Live Summary) */}
+      {showShiftSummaryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
           <div
-            className="rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border transition-all"
+            className="rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-5 border transition-all my-8 max-h-[90vh] flex flex-col"
             style={{
               backgroundColor: cardBg,
               borderColor: cardBorder,
@@ -1832,15 +2194,268 @@ export function PosClient({
               borderRadius: radius,
             }}
           >
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: cardBorder }}>
+            <div className="flex items-center justify-between border-b pb-3.5 flex-shrink-0" style={{ borderColor: cardBorder }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-600 flex items-center justify-center font-bold">
+                  <DollarSign className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm" style={{ color: textPrimary }}>
+                    Laporan Rekapitulasi Kas &amp; Omzet Shift
+                  </h3>
+                  <p className="text-[11px]" style={{ color: textSecondary }}>
+                    Ringkasan performa penjualan dan mutasi uang kas pada shift yang sedang berjalan.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowShiftSummaryModal(false)}
+                className="text-slate-400 hover:opacity-80 p-1 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            {loadingShiftSummary ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                <p className="text-xs font-semibold">Mengambil data rekap kas shift...</p>
+              </div>
+            ) : liveShiftSummary ? (
+              <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+                {/* Header Info Banner */}
+                <div className="p-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-3 text-[11px]" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                  <div>
+                    <span className="opacity-60 block">Kasir Bertugas:</span>
+                    <strong className="text-xs font-black">{liveShiftSummary.cashierName}</strong>
+                  </div>
+                  <div>
+                    <span className="opacity-60 block">Cabang Outlet:</span>
+                    <strong className="text-xs font-black">{liveShiftSummary.outletName}</strong>
+                  </div>
+                  <div>
+                    <span className="opacity-60 block">Waktu Buka:</span>
+                    <strong className="text-xs font-mono">{new Date(liveShiftSummary.openedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</strong>
+                  </div>
+                  <div>
+                    <span className="opacity-60 block">Modal Awal:</span>
+                    <strong className="text-xs font-mono text-emerald-600">Rp {Number(liveShiftSummary.openingCash || 0).toLocaleString("id-ID")}</strong>
+                  </div>
+                </div>
+
+                {/* 4 Financial KPI Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-2xl border space-y-1" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Omzet Kotor</span>
+                    <p className="text-base font-black text-indigo-600 font-mono">
+                      Rp {Number(liveShiftSummary.grossSalesTotal || 0).toLocaleString("id-ID")}
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-semibold">{liveShiftSummary.totalTransactions} Transaksi</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl border space-y-1" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Penjualan Tunai (Cash)</span>
+                    <p className="text-base font-black text-emerald-600 font-mono">
+                      Rp {Number(liveShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-semibold">Masuk ke laci</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl border space-y-1" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Non-Tunai (QRIS/TRF)</span>
+                    <p className="text-base font-black text-cyan-600 font-mono">
+                      Rp {Number(liveShiftSummary.nonCashTotal || 0).toLocaleString("id-ID")}
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-semibold">QRIS/Transfer/Kartu</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl border space-y-1" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Uang Kas di Laci (Ekspektasi)</span>
+                    <p className="text-base font-black text-amber-500 font-mono">
+                      Rp {Number(liveShiftSummary.expectedCash || 0).toLocaleString("id-ID")}
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-semibold">Modal + Cash + In - Out</span>
+                  </div>
+                </div>
+
+                {/* Grid 2 Kolom: Rincian Pembayaran & Rincian Arus Kas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Kolom 1: Breakdown Metode Bayar */}
+                  <div className="p-4 rounded-2xl border space-y-2.5" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <h4 className="font-bold text-xs flex items-center justify-between" style={{ color: textPrimary }}>
+                      <span>💳 Rincian Metode Pembayaran</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{liveShiftSummary.totalTransactions} Transaksi</span>
+                    </h4>
+                    <div className="space-y-1.5 pt-1 border-t" style={{ borderColor: cardBorder }}>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-emerald-500" /> Tunai (Cash):</span>
+                        <span className="font-mono font-bold">Rp {Number(liveShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="flex items-center gap-1.5"><ScanBarcode className="w-3 h-3 text-cyan-500" /> QRIS:</span>
+                        <span className="font-mono font-bold">Rp {Number(liveShiftSummary.qrisSalesTotal || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="flex items-center gap-1.5"><ArrowUpRight className="w-3 h-3 text-indigo-500" /> Transfer Bank:</span>
+                        <span className="font-mono font-bold">Rp {Number(liveShiftSummary.transferSalesTotal || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="flex items-center gap-1.5"><Layers className="w-3 h-3 text-purple-500" /> Kartu Debit/Kredit:</span>
+                        <span className="font-mono font-bold">Rp {Number(liveShiftSummary.cardSalesTotal || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Kolom 2: Rekonsiliasi Kas Laci */}
+                  <div className="p-4 rounded-2xl border space-y-2.5" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <h4 className="font-bold text-xs flex items-center justify-between" style={{ color: textPrimary }}>
+                      <span>💵 Rekonsiliasi Kas Fisik Laci</span>
+                      <span className="text-[10px] text-amber-500 font-bold">Wajib dihitung</span>
+                    </h4>
+                    <div className="space-y-1.5 pt-1 border-t" style={{ borderColor: cardBorder }}>
+                      <div className="flex justify-between items-center py-1">
+                        <span>Modal Awal Kasir:</span>
+                        <span className="font-mono font-semibold">+ Rp {Number(liveShiftSummary.openingCash || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span>Penjualan Kas (Cash Sales):</span>
+                        <span className="font-mono font-semibold text-emerald-600">+ Rp {Number(liveShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span>Kas Masuk Tambahan:</span>
+                        <span className="font-mono font-semibold text-emerald-600">+ Rp {Number(liveShiftSummary.cashIn || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span>Kas Keluar Operasional:</span>
+                        <span className="font-mono font-semibold text-rose-500">- Rp {Number(liveShiftSummary.cashOut || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t font-black" style={{ borderColor: cardBorder }}>
+                        <span>Uang Fisik Seharusnya:</span>
+                        <span className="font-mono text-sm text-indigo-600">Rp {Number(liveShiftSummary.expectedCash || 0).toLocaleString("id-ID")}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Produk Terlaris Shift Ini */}
+                {liveShiftSummary.topProducts && liveShiftSummary.topProducts.length > 0 && (
+                  <div className="p-4 rounded-2xl border space-y-2" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <h4 className="font-bold text-xs" style={{ color: textPrimary }}>
+                      🔥 Produk Paling Laku pada Shift Ini
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {liveShiftSummary.topProducts.map((tp: any, idx: number) => (
+                        <div key={idx} className="p-2.5 rounded-xl border flex items-center justify-between" style={{ backgroundColor: cardBg, borderColor: cardBorder }}>
+                          <div className="overflow-hidden mr-2">
+                            <p className="font-bold truncate text-xs">{tp.name}</p>
+                            <p className="text-[10px] text-slate-400">Rp {Number(tp.subtotal).toLocaleString("id-ID")}</p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 font-mono font-bold text-xs">
+                            {tp.qty}x
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Daftar Transaksi Terakhir di Shift Ini */}
+                <div className="p-4 rounded-2xl border space-y-2" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-xs" style={{ color: textPrimary }}>
+                      📋 Riwayat Transaksi Shift Ini ({liveShiftSummary.recentTransactions?.length || 0})
+                    </h4>
+                  </div>
+                  {liveShiftSummary.recentTransactions && liveShiftSummary.recentTransactions.length > 0 ? (
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                      {liveShiftSummary.recentTransactions.map((trx: any) => (
+                        <div
+                          key={trx.id}
+                          className="p-2.5 rounded-xl border flex items-center justify-between text-[11px] gap-2"
+                          style={{ backgroundColor: cardBg, borderColor: cardBorder }}
+                        >
+                          <div className="space-y-0.5 overflow-hidden">
+                            <p className="font-bold font-mono text-slate-800 dark:text-slate-200">{trx.transactionNumber}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{trx.itemsSummary}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-bold font-mono text-emerald-600">Rp {trx.totalAmount.toLocaleString("id-ID")}</p>
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                              {trx.paymentMethod}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 py-3 text-center">Belum ada transaksi penjualan pada shift ini.</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Modal Footer Actions */}
+            <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-2 flex-shrink-0" style={{ borderColor: cardBorder }}>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl border font-bold text-xs transition flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  style={{ borderColor: cardBorder }}
+                  title="Cetak Ringkasan Shift ke Printer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Cetak Z-Report</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowShiftSummaryModal(false)}
+                  className="px-4 py-2 rounded-xl border font-bold text-xs transition"
+                  style={{ backgroundColor: innerBoxBg, borderColor: cardBorder, color: textPrimary }}
+                >
+                  Tutup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowShiftSummaryModal(false);
+                    openCloseShiftModal();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md transition flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Tutup Shift Sekarang</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal Tutup Shift & Rekonsiliasi */}
+      {showCloseShiftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+          <div
+            className="rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 border transition-all my-8 max-h-[90vh] flex flex-col"
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              color: textPrimary,
+              borderRadius: radius,
+            }}
+          >
+            <div className="flex items-center justify-between border-b pb-3 flex-shrink-0" style={{ borderColor: cardBorder }}>
               <h3 className="font-black text-sm flex items-center gap-2" style={{ color: textPrimary }}>
                 <Lock className="w-4 h-4 text-rose-500" />
-                Tutup Shift Kasir & Rekonsiliasi
+                Tutup Shift Kasir &amp; Rekonsiliasi Kas
               </h3>
               {!closeShiftSummary && (
                 <button
                   onClick={() => setShowCloseShiftModal(false)}
-                  className="text-slate-400 hover:opacity-80"
+                  className="text-slate-400 hover:opacity-80 p-1 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1848,82 +2463,139 @@ export function PosClient({
             </div>
 
             {closeShiftSummary ? (
-              <div className="space-y-4 text-xs">
-                <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 space-y-2">
-                  <p className="font-black text-emerald-600 text-sm">
-                    ✓ Shift Berhasil Ditutup!
-                  </p>
-                  <div className="space-y-1 pt-1 border-t border-emerald-500/30" style={{ color: textPrimary }}>
-                    <div className="flex justify-between">
-                      <span>Modal Awal:</span>
-                      <span className="font-bold">
-                        Rp {closeShiftSummary.openingCash?.toLocaleString("id-ID")}
+              <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+                <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-black text-emerald-600 text-sm flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Shift Berhasil Ditutup!
+                    </p>
+                    <span className="text-[10px] font-mono font-bold text-slate-400">
+                      {new Date(closeShiftSummary.closedAt).toLocaleTimeString("id-ID")} WIB
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 pt-2 border-t border-emerald-500/30" style={{ color: textPrimary }}>
+                    <div className="flex justify-between py-0.5">
+                      <span>Kasir / Outlet:</span>
+                      <span className="font-bold">{closeShiftSummary.cashierName} • {closeShiftSummary.outletName}</span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span>Total Omzet Kotor (Gross):</span>
+                      <span className="font-bold font-mono text-indigo-600">
+                        Rp {Number(closeShiftSummary.grossSalesTotal || 0).toLocaleString("id-ID")} ({closeShiftSummary.totalTransactions} Trx)
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Total Penjualan Tunai:</span>
-                      <span className="font-bold">
-                        Rp {closeShiftSummary.totalSalesCash?.toLocaleString("id-ID")}
+                    <div className="flex justify-between py-0.5">
+                      <span>Modal Awal Kas:</span>
+                      <span className="font-mono font-bold">
+                        Rp {Number(closeShiftSummary.openingCash || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Total Kas Masuk:</span>
-                      <span className="font-bold text-emerald-500">
-                        +Rp {closeShiftSummary.totalCashIn?.toLocaleString("id-ID")}
+                    <div className="flex justify-between py-0.5">
+                      <span>Total Penjualan Tunai (Cash):</span>
+                      <span className="font-mono font-bold text-emerald-600">
+                        + Rp {Number(closeShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Total Kas Keluar:</span>
-                      <span className="font-bold text-rose-500">
-                        -Rp {closeShiftSummary.totalCashOut?.toLocaleString("id-ID")}
+                    <div className="flex justify-between py-0.5">
+                      <span>Total Non-Tunai (QRIS/TRF/Card):</span>
+                      <span className="font-mono font-bold text-cyan-600">
+                        Rp {Number(closeShiftSummary.nonCashTotal || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between border-t border-emerald-500/30 pt-1 font-bold">
-                      <span>Ekspektasi Uang di Laci:</span>
-                      <span>
-                        Rp {closeShiftSummary.expectedCash?.toLocaleString("id-ID")}
+                    <div className="flex justify-between py-0.5">
+                      <span>Total Kas Masuk (In):</span>
+                      <span className="font-mono font-bold text-emerald-600">
+                        + Rp {Number(closeShiftSummary.cashIn || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between font-bold">
-                      <span>Uang Fisik Kasir:</span>
-                      <span>
-                        Rp {closeShiftSummary.actualCash?.toLocaleString("id-ID")}
+                    <div className="flex justify-between py-0.5">
+                      <span>Total Kas Keluar (Out):</span>
+                      <span className="font-mono font-bold text-rose-500">
+                        - Rp {Number(closeShiftSummary.cashOut || 0).toLocaleString("id-ID")}
                       </span>
                     </div>
-                    <div className="flex justify-between font-black border-t border-emerald-500/30 pt-1">
-                      <span>Selisih Kas:</span>
+                    <div className="flex justify-between border-t border-emerald-500/30 pt-1.5 font-bold text-xs">
+                      <span>Uang Fisik Seharusnya di Laci:</span>
+                      <span className="font-mono">
+                        Rp {Number(closeShiftSummary.expectedCash || 0).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-bold text-xs">
+                      <span>Uang Fisik Dihitung Kasir:</span>
+                      <span className="font-mono text-emerald-700 dark:text-emerald-400">
+                        Rp {Number(closeShiftSummary.closingCash || 0).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-black border-t border-emerald-500/30 pt-1.5 text-xs">
+                      <span>Selisih Kas (Discrepancy):</span>
                       <span
-                        className={
-                          closeShiftSummary.difference === 0
-                            ? "text-emerald-500"
-                            : "text-rose-500"
-                        }
+                        className={`font-mono font-black ${
+                          Number(closeShiftSummary.difference) === 0
+                            ? "text-emerald-600"
+                            : Number(closeShiftSummary.difference) > 0
+                            ? "text-blue-600"
+                            : "text-rose-600"
+                        }`}
                       >
-                        Rp {closeShiftSummary.difference?.toLocaleString("id-ID")}
+                        {Number(closeShiftSummary.difference) > 0 ? "+" : ""}
+                        Rp {Number(closeShiftSummary.difference || 0).toLocaleString("id-ID")}
+                        {Number(closeShiftSummary.difference) === 0 ? " (Uang Pas ✓)" : Number(closeShiftSummary.difference) > 0 ? " (Uang Lebih)" : " (Uang Kurang ⚠️)"}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <button
-                  onClick={finishCloseShift}
-                  className="w-full py-3 rounded-2xl text-white font-extrabold shadow-md transition"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  Selesai & Keluar Shift
-                </button>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="flex-1 py-3 rounded-2xl border font-bold text-xs transition flex items-center justify-center gap-1.5"
+                    style={{ borderColor: cardBorder }}
+                  >
+                    <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Cetak Struk Z-Report</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={finishCloseShift}
+                    className="flex-1 py-3 rounded-2xl text-white font-extrabold shadow-md transition"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    Selesai &amp; Keluar
+                  </button>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleCloseShift} className="space-y-4 text-xs">
+              <form onSubmit={handleCloseShift} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
                 {error && (
                   <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600">
                     {error}
                   </div>
                 )}
 
+                {/* Ringkasan Realtime Sebelum Tutup */}
+                {liveShiftSummary && (
+                  <div className="p-3.5 rounded-2xl border space-y-1.5" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Total Transaksi:</span>
+                      <strong className="font-mono">{liveShiftSummary.totalTransactions} Transaksi</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Total Penjualan Tunai:</span>
+                      <strong className="font-mono text-emerald-600">Rp {Number(liveShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400">Ekspektasi Uang di Laci:</span>
+                      <strong className="font-mono text-indigo-600 text-xs">Rp {Number(liveShiftSummary.expectedCash || 0).toLocaleString("id-ID")}</strong>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block font-bold mb-1" style={{ color: textSecondary }}>
-                    Hitung Total Uang Fisik di Laci Kasir (Rp)
+                    Hitung &amp; Masukkan Uang Fisik Aktual di Laci Kasir (Rp) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -1932,15 +2604,32 @@ export function PosClient({
                     value={closingCash}
                     onChange={(e) => setClosingCash(e.target.value)}
                     placeholder="Hitung seluruh uang fisik di laci..."
-                    className="w-full px-3 py-2.5 rounded-xl border text-xs font-mono font-bold focus:outline-none"
+                    className="w-full px-3 py-2.5 rounded-xl border text-sm font-mono font-black focus:outline-none focus:ring-2 focus:ring-rose-500/30"
                     style={{
                       backgroundColor: inputBg,
                       borderColor: cardBorder,
                       color: textPrimary,
                     }}
                   />
-                  <p className="text-[10px] mt-1" style={{ color: textSecondary }}>
-                    Sistem akan otomatis menghitung rekonsiliasi dan selisih kas.
+                  {closingCash !== "" && liveShiftSummary && (() => {
+                    const diff = Number(closingCash) - Number(liveShiftSummary.expectedCash || 0);
+                    return (
+                      <div className={`mt-2 p-2 rounded-xl border flex items-center justify-between text-[11px] font-bold ${
+                        diff === 0
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600"
+                          : diff > 0
+                          ? "bg-blue-500/10 border-blue-500/30 text-blue-600"
+                          : "bg-rose-500/10 border-rose-500/30 text-rose-600"
+                      }`}>
+                        <span>Pratinjau Selisih Kas:</span>
+                        <span className="font-mono font-black">
+                          {diff > 0 ? "+" : ""}Rp {diff.toLocaleString("id-ID")} {diff === 0 ? "(Uang Pas ✓)" : diff > 0 ? "(Uang Lebih)" : "(Uang Kurang ⚠️)"}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  <p className="text-[10px] mt-1.5" style={{ color: textSecondary }}>
+                    Sistem akan otomatis merekonsiliasi seluruh transaksi dan mencatat laporan selisih kas ke database.
                   </p>
                 </div>
 
@@ -1948,7 +2637,7 @@ export function PosClient({
                   <button
                     type="button"
                     onClick={() => setShowCloseShiftModal(false)}
-                    className="flex-1 py-2.5 rounded-xl font-bold border transition"
+                    className="flex-1 py-2.5 rounded-xl font-bold border transition cursor-pointer"
                     style={{
                       backgroundColor: innerBoxBg,
                       borderColor: cardBorder,
@@ -1959,10 +2648,10 @@ export function PosClient({
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-extrabold shadow-md hover:bg-rose-700 transition"
+                    disabled={loading || closingCash === ""}
+                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-extrabold shadow-md transition cursor-pointer"
                   >
-                    {loading ? "Memproses..." : "Tutup Shift Sekarang"}
+                    {loading ? "Memproses..." : "Tutup Shift & Rekonsiliasi"}
                   </button>
                 </div>
               </form>
@@ -1999,13 +2688,13 @@ export function PosClient({
             subtotal: Number(item.subtotal || item.quantity * item.price),
             notes: item.notes,
           })),
-          subtotal: Number(trx?.totalAmount || 0),
+          subtotal: Number(trx?.subtotalAmount || trx?.totalAmount || 0),
           discountAmount: Number(trx?.discountAmount || 0),
           taxPb1Amount: Number(trx?.taxAmount || 0),
           grandTotal: Number(trx?.totalAmount || 0),
           paymentMethod: trx?.paymentMethod || "CASH",
           amountPaid: Number(trx?.amountPaid || trx?.totalAmount || 0),
-          changeAmount: Number(trx?.change || 0),
+          changeAmount: Number(trx?.change || Math.max(0, (trx?.amountPaid || trx?.totalAmount || 0) - (trx?.totalAmount || 0))),
           footerNote: "Terima kasih atas kunjungan Anda!",
         };
 

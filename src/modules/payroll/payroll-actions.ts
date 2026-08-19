@@ -41,6 +41,15 @@ export interface PayrollStaffRecord {
   commissionCount: number;
   customBonus: number;
   deductions: number;
+  advanceDeduction: number;
+  activeAdvanceTotal: number;
+  activeAdvanceList: Array<{
+    id: string;
+    amount: number;
+    remainingAmount: number;
+    installmentMonthly: number | null;
+    note?: string | null;
+  }>;
   takeHomePay: number;
   isLocked: boolean;
   lockedAt?: string | null;
@@ -96,6 +105,7 @@ export async function savePayrollSnapshotAction(payload: {
     allowanceOther: number;
     customBonus: number;
     deductions: number;
+    advanceDeduction?: number;
     takeHomePay: number;
   }>;
 }) {
@@ -134,6 +144,7 @@ export async function savePayrollSnapshotAction(payload: {
           allowanceOther: r.allowanceOther,
           customBonus: r.customBonus,
           deductions: r.deductions,
+          advanceDeduction: r.advanceDeduction || 0,
           takeHomePay: r.takeHomePay,
         },
         create: {
@@ -158,6 +169,7 @@ export async function savePayrollSnapshotAction(payload: {
           allowanceOther: r.allowanceOther,
           customBonus: r.customBonus,
           deductions: r.deductions,
+          advanceDeduction: r.advanceDeduction || 0,
           takeHomePay: r.takeHomePay,
         },
       })
@@ -185,6 +197,41 @@ export async function toggleLockPayrollPeriodAction(payload: {
       lockedAt: isLocked ? new Date() : null,
     },
   });
+
+  // Jika gaji dikunci (final disetujui), kurangi sisa kasbon karyawan secara otomatis
+  if (isLocked) {
+    const lockedRecords = await (prisma as any).payrollRecord.findMany({
+      where: { tenantId: user.tenantId, periodMonth },
+    });
+
+    for (const rec of lockedRecords) {
+      const advanceCut = Number(rec.advanceDeduction || 0);
+      if (advanceCut > 0) {
+        const staffAdvances = await prisma.staffAdvance.findMany({
+          where: { tenantId: user.tenantId, staffId: rec.staffId, status: "ACTIVE" },
+          orderBy: { createdAt: "asc" },
+        });
+
+        let remainingCut = advanceCut;
+        for (const adv of staffAdvances) {
+          if (remainingCut <= 0) break;
+          const advRemaining = Number(adv.remainingAmount);
+          const pay = Math.min(advRemaining, remainingCut);
+          const nextRem = Math.max(0, advRemaining - pay);
+          remainingCut -= pay;
+
+          await prisma.staffAdvance.update({
+            where: { id: adv.id },
+            data: {
+              remainingAmount: nextRem,
+              status: nextRem <= 0 ? "PAID_OFF" : "ACTIVE",
+              paidOffAt: nextRem <= 0 ? new Date() : null,
+            },
+          });
+        }
+      }
+    }
+  }
 
   revalidatePath("/dashboard/payroll");
   return { success: true, isLocked };
@@ -234,7 +281,7 @@ export async function getPayrollData(params?: {
     whereStaff.outletId = params.outletId;
   }
 
-  const [staffList, commissions, savedSnapshots] = await Promise.all([
+  const [staffList, commissions, savedSnapshots, activeAdvances] = await Promise.all([
     prisma.user.findMany({
       where: whereStaff,
       orderBy: { name: "asc" },
@@ -263,6 +310,14 @@ export async function getPayrollData(params?: {
         tenantId: user.tenantId,
         periodMonth: currentMonthStr,
       },
+    }),
+    prisma.staffAdvance.findMany({
+      where: {
+        tenantId: user.tenantId,
+        status: "ACTIVE",
+        remainingAmount: { gt: 0 },
+      },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -316,6 +371,24 @@ export async function getPayrollData(params?: {
     const customBonus = saved ? Number(saved.customBonus) : 0;
     const deductions = saved ? Number(saved.deductions) : 0;
 
+    // Kasbon Karyawan & Potongan Cicilan
+    const staffAdvancesList = activeAdvances.filter((a: any) => a.staffId === staff.id);
+    const activeAdvanceTotal = staffAdvancesList.reduce(
+      (sum: number, a: any) => sum + Number(a.remainingAmount || 0),
+      0
+    );
+
+    let defaultAdvanceDeduction = 0;
+    for (const adv of staffAdvancesList) {
+      const rem = Number(adv.remainingAmount || 0);
+      const inst = adv.installmentMonthly ? Number(adv.installmentMonthly) : rem;
+      defaultAdvanceDeduction += Math.min(rem, inst);
+    }
+
+    const advanceDeduction = saved
+      ? Number(saved.advanceDeduction || 0)
+      : defaultAdvanceDeduction;
+
     // Kalkulasi Base Salary Earned
     let baseSalaryEarned = baseSalaryNum;
     if (staff.salaryType === "DAILY" || staff.salaryType === "PER_SHIFT") {
@@ -328,7 +401,13 @@ export async function getPayrollData(params?: {
 
     const takeHomePay = Math.max(
       0,
-      baseSalaryEarned + totalCommissions + totalFixedAllowances + overtimePay + customBonus - deductions
+      baseSalaryEarned +
+        totalCommissions +
+        totalFixedAllowances +
+        overtimePay +
+        customBonus -
+        deductions -
+        advanceDeduction
     );
 
     return {
@@ -359,6 +438,15 @@ export async function getPayrollData(params?: {
       commissionCount: staffCommissions.length,
       customBonus,
       deductions,
+      advanceDeduction,
+      activeAdvanceTotal,
+      activeAdvanceList: staffAdvancesList.map((a: any) => ({
+        id: a.id,
+        amount: Number(a.amount),
+        remainingAmount: Number(a.remainingAmount),
+        installmentMonthly: a.installmentMonthly ? Number(a.installmentMonthly) : null,
+        note: a.note,
+      })),
       takeHomePay,
       isLocked: saved ? saved.isLocked : false,
       lockedAt: saved?.lockedAt ? saved.lockedAt.toISOString() : null,

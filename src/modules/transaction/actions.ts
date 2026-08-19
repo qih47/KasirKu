@@ -26,12 +26,82 @@ export interface CartItemInput {
   notes?: string;
 }
 
+export type DiscountType = "PERCENT" | "FIXED" | "VOUCHER";
+
+export interface VoucherValidationResult {
+  valid: boolean;
+  code: string;
+  discountType: DiscountType;
+  discountValue: number;
+  discountAmount: number;
+  description: string;
+  minOrder?: number;
+}
+
+export async function verifyVoucherAction(code: string, subtotal: number): Promise<VoucherValidationResult> {
+  const normalized = code.trim().toUpperCase();
+
+  const VOUCHERS: Record<
+    string,
+    { type: DiscountType; value: number; maxDiscount?: number; minOrder?: number; description: string }
+  > = {
+    HEMAT10: { type: "PERCENT", value: 10, description: "Diskon 10% Semua Menu" },
+    PROMO10: { type: "PERCENT", value: 10, description: "Diskon Promo 10%" },
+    PROMO20: { type: "PERCENT", value: 20, minOrder: 30000, description: "Diskon 20% (Min Belanja Rp 30.000)" },
+    DISKON5K: { type: "FIXED", value: 5000, minOrder: 15000, description: "Potongan Langsung Rp 5.000" },
+    DISKON10K: { type: "FIXED", value: 10000, minOrder: 35000, description: "Potongan Langsung Rp 10.000" },
+    DISKON20K: { type: "FIXED", value: 20000, minOrder: 60000, description: "Potongan Langsung Rp 20.000" },
+    KASIRKU: { type: "PERCENT", value: 15, maxDiscount: 30000, description: "Diskon Spesial KasirKu 15% (Maks Rp 30.000)" },
+    MERDEKA: { type: "PERCENT", value: 17, maxDiscount: 45000, description: "Promo Spesial 17% (Maks Rp 45.000)" },
+    VIPMEMBER: { type: "PERCENT", value: 25, maxDiscount: 50000, minOrder: 50000, description: "Voucher Pelanggan VIP 25%" },
+  };
+
+  const matched = VOUCHERS[normalized];
+  if (!matched) {
+    throw new Error(`Kode voucher "${normalized}" tidak valid atau sudah kadaluarsa.`);
+  }
+
+  if (matched.minOrder && subtotal < matched.minOrder) {
+    throw new Error(
+      `Voucher "${normalized}" membutuhkan minimum belanja Rp ${matched.minOrder.toLocaleString("id-ID")}.`
+    );
+  }
+
+  let discountAmount = 0;
+  if (matched.type === "PERCENT") {
+    discountAmount = Math.round((subtotal * matched.value) / 100);
+    if (matched.maxDiscount && discountAmount > matched.maxDiscount) {
+      discountAmount = matched.maxDiscount;
+    }
+  } else {
+    discountAmount = matched.value;
+  }
+
+  discountAmount = Math.min(subtotal, Math.max(0, discountAmount));
+
+  return {
+    valid: true,
+    code: normalized,
+    discountType: matched.type,
+    discountValue: matched.value,
+    discountAmount,
+    description: matched.description,
+    minOrder: matched.minOrder,
+  };
+}
+
 export async function createTransactionAction(data: {
   shiftId: string;
   outletId: string;
   items: CartItemInput[];
   paymentMethod: PaymentMethod;
   amountPaid: number;
+  discountType?: DiscountType | null;
+  discountValue?: number;
+  discountAmount?: number;
+  voucherCode?: string | null;
+  taxAmount?: number;
+  serviceCharge?: number;
   tableId?: string | null;
   orderType?: "DINE_IN" | "TAKEAWAY" | "STANDARD";
   laundryDetails?: {
@@ -44,16 +114,51 @@ export async function createTransactionAction(data: {
   } | null;
 }) {
   const user = await requireCashierOrOwner();
-  const { shiftId, outletId, items, paymentMethod, amountPaid, tableId, orderType, laundryDetails } = data;
+  const {
+    shiftId,
+    outletId,
+    items,
+    paymentMethod,
+    amountPaid,
+    discountType,
+    discountValue,
+    discountAmount,
+    voucherCode,
+    taxAmount = 0,
+    serviceCharge = 0,
+    tableId,
+    orderType,
+    laundryDetails,
+  } = data;
 
   if (!items || items.length === 0) {
     throw new Error("Keranjang belanja kosong.");
   }
 
-  // Hitung total tagihan
-  const totalAmount = items.reduce(
+  // Hitung subtotal produk
+  const subtotalAmount = items.reduce(
     (sum, item) => sum + item.qty * item.price,
     0
+  );
+
+  // Hitung diskon yang valid
+  let finalDiscountAmount = 0;
+  if (discountType === "PERCENT" && discountValue) {
+    finalDiscountAmount = Math.round((subtotalAmount * discountValue) / 100);
+  } else if (discountType === "FIXED" && discountValue) {
+    finalDiscountAmount = discountValue;
+  } else if (discountType === "VOUCHER" && discountAmount) {
+    finalDiscountAmount = discountAmount;
+  } else if (discountAmount) {
+    finalDiscountAmount = discountAmount;
+  }
+
+  finalDiscountAmount = Math.min(subtotalAmount, Math.max(0, finalDiscountAmount));
+
+  // Hitung grand total akhir
+  const totalAmount = Math.max(
+    0,
+    subtotalAmount - finalDiscountAmount + Number(taxAmount || 0) + Number(serviceCharge || 0)
   );
 
   if (amountPaid < totalAmount) {
@@ -80,12 +185,19 @@ export async function createTransactionAction(data: {
       throw new Error("Shift kasir sudah ditutup. Tidak dapat memproses transaksi.");
     }
 
-    // 2. Buat record Transaksi utama
+    // 2. Buat record Transaksi utama dengan detail diskon & pajak
     const newTransaction = await tx.transaction.create({
       data: {
         outletId,
         shiftId,
         transactionNumber,
+        subtotalAmount,
+        discountAmount: finalDiscountAmount,
+        discountType: discountType || null,
+        discountValue: discountValue || 0,
+        voucherCode: voucherCode || null,
+        taxAmount: Number(taxAmount || 0),
+        serviceCharge: Number(serviceCharge || 0),
         totalAmount,
         status: "PAID",
       },

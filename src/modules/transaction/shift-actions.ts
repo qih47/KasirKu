@@ -17,6 +17,14 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
   const user = await requireCashierOrOwner();
   const outletId = explicitOutletId || user.outletId;
 
+  // Ambil tenant untuk membaca setting shiftMode ("FAST" | "STRICT")
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { shiftMode: true, businessName: true },
+  });
+
+  const shiftMode = tenant?.shiftMode || "FAST";
+
   // Jika user adalah Owner tanpa outletId spesifik, ambil outlet pertama
   let targetOutletId = outletId;
   if (!targetOutletId) {
@@ -31,7 +39,7 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
   }
 
   // Cari shift yang sedang aktif (closedAt === null)
-  const activeShift = await prisma.shift.findFirst({
+  let activeShift = await prisma.shift.findFirst({
     where: {
       outletId: targetOutletId,
       closedAt: null,
@@ -53,12 +61,37 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
     },
   });
 
+  // Jika mode FAST (Cepat) dan belum ada shift aktif, buat shift otomatis di background
+  if (!activeShift && shiftMode === "FAST") {
+    activeShift = await prisma.shift.create({
+      data: {
+        outletId: targetOutletId,
+        kasirId: user.id,
+        openingCash: 0,
+        openedAt: new Date(),
+      },
+      include: {
+        kasir: true,
+        outlet: true,
+        cashMovements: true,
+        transactions: {
+          where: { status: "PAID" },
+          include: {
+            items: { include: { product: true } },
+            payments: true,
+          },
+        },
+      },
+    });
+  }
+
   const outlets = await prisma.outlet.findMany({
     where: { tenantId: user.tenantId, isActive: true },
   });
 
   return {
     activeShift,
+    shiftMode,
     outlets,
     currentOutletId: targetOutletId,
     currentUser: {
@@ -102,6 +135,14 @@ export async function openShiftAction(data: {
     include: {
       kasir: true,
       outlet: true,
+      cashMovements: true,
+      transactions: {
+        where: { status: "PAID" },
+        include: {
+          items: { include: { product: true } },
+          payments: true,
+        },
+      },
     },
   });
 
@@ -143,6 +184,116 @@ export async function addCashMovementAction(data: {
   return { success: true, movement };
 }
 
+export async function getLiveShiftSummaryAction(shiftId: string) {
+  const user = await requireCashierOrOwner();
+
+  const shift = await prisma.shift.findUnique({
+    where: { id: shiftId },
+    include: {
+      kasir: true,
+      outlet: true,
+      cashMovements: {
+        orderBy: { createdAt: "desc" },
+      },
+      transactions: {
+        where: { status: "PAID" },
+        include: {
+          payments: true,
+          items: {
+            include: { product: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!shift) {
+    throw new Error("Shift tidak ditemukan.");
+  }
+
+  const opening = Number(shift.openingCash || 0);
+
+  let cashSalesTotal = 0;
+  let qrisSalesTotal = 0;
+  let transferSalesTotal = 0;
+  let cardSalesTotal = 0;
+  let grossSalesTotal = 0;
+
+  shift.transactions.forEach((trx: any) => {
+    grossSalesTotal += Number(trx.totalAmount || 0);
+    trx.payments.forEach((p: any) => {
+      const amt = Number(p.amount || 0);
+      if (p.method === "CASH") cashSalesTotal += amt;
+      else if (p.method === "QRIS") qrisSalesTotal += amt;
+      else if (p.method === "TRANSFER") transferSalesTotal += amt;
+      else if (p.method === "CARD") cardSalesTotal += amt;
+    });
+  });
+
+  let cashIn = 0;
+  let cashOut = 0;
+  shift.cashMovements.forEach((cm: any) => {
+    if (cm.type === "IN") cashIn += Number(cm.amount);
+    if (cm.type === "OUT") cashOut += Number(cm.amount);
+  });
+
+  const expectedCash = opening + cashSalesTotal + cashIn - cashOut;
+
+  // Hitung produk terlaris di shift ini
+  const itemQtyMap: Record<string, { name: string; qty: number; subtotal: number }> = {};
+  shift.transactions.forEach((trx: any) => {
+    trx.items.forEach((item: any) => {
+      const pName = item.product?.name || "Produk";
+      if (!itemQtyMap[pName]) {
+        itemQtyMap[pName] = { name: pName, qty: 0, subtotal: 0 };
+      }
+      itemQtyMap[pName].qty += item.qty;
+      itemQtyMap[pName].subtotal += Number(item.subtotal || 0);
+    });
+  });
+
+  const topProducts = Object.values(itemQtyMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
+
+  return JSON.parse(
+    JSON.stringify({
+      shiftId: shift.id,
+      cashierName: shift.kasir?.name || "Kasir",
+      outletName: shift.outlet?.name || "Outlet",
+      openedAt: shift.openedAt,
+      closedAt: shift.closedAt,
+      openingCash: opening,
+      totalTransactions: shift.transactions.length,
+      grossSalesTotal,
+      cashSalesTotal,
+      qrisSalesTotal,
+      transferSalesTotal,
+      cardSalesTotal,
+      nonCashTotal: qrisSalesTotal + transferSalesTotal + cardSalesTotal,
+      cashIn,
+      cashOut,
+      expectedCash,
+      topProducts,
+      recentTransactions: shift.transactions.map((t: any) => ({
+        id: t.id,
+        transactionNumber: t.transactionNumber,
+        totalAmount: Number(t.totalAmount),
+        paymentMethod: t.payments[0]?.method || "CASH",
+        createdAt: t.createdAt,
+        itemsCount: t.items.reduce((s: number, i: any) => s + i.qty, 0),
+        itemsSummary: t.items.map((i: any) => `${i.product?.name || "Item"} (${i.qty})`).join(", "),
+      })),
+      cashMovements: shift.cashMovements.map((cm: any) => ({
+        id: cm.id,
+        type: cm.type,
+        amount: Number(cm.amount),
+        note: cm.note,
+        createdAt: cm.createdAt,
+      })),
+    })
+  );
+}
+
 export async function closeShiftAction(data: {
   shiftId: string;
   closingCash: number;
@@ -157,10 +308,12 @@ export async function closeShiftAction(data: {
   const shift = await prisma.shift.findUnique({
     where: { id: shiftId },
     include: {
+      kasir: true,
+      outlet: true,
       cashMovements: true,
       transactions: {
         where: { status: "PAID" },
-        include: { payments: true },
+        include: { payments: true, items: { include: { product: true } } },
       },
     },
   });
@@ -169,16 +322,22 @@ export async function closeShiftAction(data: {
     throw new Error("Shift tidak ditemukan atau sudah pernah ditutup.");
   }
 
-  // Hitung total uang tunai yang seharusnya ada di laci kasir:
-  // Modal Awal + Total Penjualan Cash + Kas Masuk - Kas Keluar
-  const opening = Number(shift.openingCash);
+  const opening = Number(shift.openingCash || 0);
 
   let cashSalesTotal = 0;
+  let qrisSalesTotal = 0;
+  let transferSalesTotal = 0;
+  let cardSalesTotal = 0;
+  let grossSalesTotal = 0;
+
   shift.transactions.forEach((trx: any) => {
+    grossSalesTotal += Number(trx.totalAmount || 0);
     trx.payments.forEach((p: any) => {
-      if (p.method === "CASH" && p.status === "SUCCESS") {
-        cashSalesTotal += Number(p.amount);
-      }
+      const amt = Number(p.amount || 0);
+      if (p.method === "CASH") cashSalesTotal += amt;
+      else if (p.method === "QRIS") qrisSalesTotal += amt;
+      else if (p.method === "TRANSFER") transferSalesTotal += amt;
+      else if (p.method === "CARD") cardSalesTotal += amt;
     });
   });
 
@@ -205,14 +364,23 @@ export async function closeShiftAction(data: {
     success: true,
     summary: {
       shiftId,
+      cashierName: shift.kasir?.name || "Kasir",
+      outletName: shift.outlet?.name || "Outlet",
+      openedAt: shift.openedAt,
+      closedAt: closed.closedAt,
       openingCash: opening,
+      totalTransactions: shift.transactions.length,
+      grossSalesTotal,
       cashSalesTotal,
+      qrisSalesTotal,
+      transferSalesTotal,
+      cardSalesTotal,
+      nonCashTotal: qrisSalesTotal + transferSalesTotal + cardSalesTotal,
       cashIn,
       cashOut,
       expectedCash,
       closingCash,
       difference,
-      closedAt: closed.closedAt,
     },
   };
 }

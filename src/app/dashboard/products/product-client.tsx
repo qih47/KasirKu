@@ -78,11 +78,13 @@ export function ProductClient({
   const [imageUrl, setImageUrl] = useState("");
   const [barcode, setBarcode] = useState("");
   const [stockQty, setStockQty] = useState<number | string>("");
+  const [minStockAlert, setMinStockAlert] = useState<number | string>(5);
 
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
 
   const openAddModal = () => {
     setEditItem(null);
@@ -93,6 +95,7 @@ export function ProductClient({
     setImageUrl("");
     setBarcode("");
     setStockQty(10);
+    setMinStockAlert(5);
     setError(null);
     setShowModal(true);
   };
@@ -106,6 +109,7 @@ export function ProductClient({
     setImageUrl(p.imageUrl || "");
     setBarcode(p.barcode || "");
     setStockQty(p.stockQty ?? "");
+    setMinStockAlert(p.minStockAlert ?? 5);
     setError(null);
     setShowModal(true);
   };
@@ -141,6 +145,7 @@ export function ProductClient({
           barcode,
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
+          minStockAlert: type === "BARANG" ? Number(minStockAlert) : 5,
         });
 
         setData((prev) => ({
@@ -160,6 +165,7 @@ export function ProductClient({
           barcode,
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
+          minStockAlert: type === "BARANG" ? Number(minStockAlert) : 5,
         });
 
         setData((prev) => ({
@@ -240,12 +246,15 @@ export function ProductClient({
     const matchType = filterType === "ALL" || p.type === filterType;
     const matchCat =
       selectedCategory === "ALL" || p.category === selectedCategory;
+    const matchLowStock =
+      !filterLowStockOnly ||
+      (p.type === "BARANG" && (p.stockQty ?? 0) <= (p.minStockAlert ?? 5));
     const query = searchQuery.toLowerCase();
     const matchSearch =
       p.name.toLowerCase().includes(query) ||
       (p.barcode && p.barcode.toLowerCase().includes(query)) ||
       (p.category && p.category.toLowerCase().includes(query));
-    return matchType && matchCat && matchSearch;
+    return matchType && matchCat && matchLowStock && matchSearch;
   });
 
   return (
@@ -292,14 +301,28 @@ export function ProductClient({
           <p className="text-[11px] text-slate-500 mt-0.5">{tr("Treatment / service")}</p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold uppercase text-slate-500">
-            {tr("Stok Menipis")}
-          </span>
+        <div
+          onClick={() => setFilterLowStockOnly((prev) => !prev)}
+          className={`p-5 rounded-2xl border shadow-sm transition cursor-pointer ${
+            filterLowStockOnly
+              ? "bg-amber-500/15 border-amber-500/40 ring-2 ring-amber-500/30"
+              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-500/30"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase text-slate-500">
+              {tr("Stok Menipis")}
+            </span>
+            {filterLowStockOnly && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-black">
+                Aktif
+              </span>
+            )}
+          </div>
           <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
             {data.metrics.lowStockCount}
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Stok ≤ 5 unit")}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Klik untuk filter stok ≤ batas alert")}</p>
         </div>
       </div>
 
@@ -416,7 +439,9 @@ export function ProductClient({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredProducts.map((p) => {
                 const isLoading = actionLoadingId === p.id;
-                const isLowStock = p.type === "BARANG" && (p.stockQty ?? 0) <= 5;
+                const minAlert = p.minStockAlert ?? 5;
+                const isOutOfStock = p.type === "BARANG" && (p.stockQty ?? 0) <= 0;
+                const isLowStock = p.type === "BARANG" && !isOutOfStock && (p.stockQty ?? 0) <= minAlert;
 
                 return (
                   <tr
@@ -488,17 +513,23 @@ export function ProductClient({
                             <div className="flex items-center gap-1.5">
                               <span
                                 className={`inline-flex items-center gap-1 font-semibold ${
-                                  isLowStock
-                                    ? "text-amber-600 dark:text-amber-400"
+                                  isOutOfStock
+                                    ? "text-rose-600 dark:text-rose-400 font-bold"
+                                    : isLowStock
+                                    ? "text-amber-600 dark:text-amber-400 font-bold"
                                     : "text-slate-700 dark:text-slate-300"
                                 }`}
                               >
                                 {p.stockQty ?? 0} {tr("unit")}
-                                {isLowStock && (
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold">
-                                    {tr("Menipis")}
+                                {isOutOfStock ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-600 font-bold">
+                                    {tr("Habis (0)")}
                                   </span>
-                                )}
+                                ) : isLowStock ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-600 font-bold">
+                                    {tr("Menipis (≤ " + minAlert + ")")}
+                                  </span>
+                                ) : null}
                               </span>
                               <SlidersHorizontal className="w-3 h-3 text-slate-400 opacity-0 group-hover/stock:opacity-100 transition-opacity text-indigo-500" />
                             </div>
@@ -513,7 +544,9 @@ export function ProductClient({
                                     {os.outlet?.name || "Cabang"}:{" "}
                                     <b
                                       className={
-                                        os.stockQty <= 5
+                                        os.stockQty <= 0
+                                          ? "text-rose-600 font-bold"
+                                          : os.stockQty <= minAlert
                                           ? "text-amber-600 font-bold"
                                           : "text-slate-800 dark:text-slate-200"
                                       }
@@ -731,7 +764,8 @@ export function ProductClient({
                   />
                 </div>
 
-                {type === "BARANG" ? (
+              {type === "BARANG" ? (
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                       {tr("Jumlah Stok")}
@@ -745,16 +779,31 @@ export function ProductClient({
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
-                ) : (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      {tr("Jumlah Stok")}
+                    <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>{tr("Batas Minimum Alert")}</span>
                     </label>
-                    <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 italic">
-                      {tr("Tidak berlaku untuk JASA")}
-                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={minStockAlert}
+                      onChange={(e) => setMinStockAlert(e.target.value)}
+                      placeholder={tr("Contoh: 5")}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
                   </div>
-                )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    {tr("Jumlah Stok")}
+                  </label>
+                  <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 italic">
+                    {tr("Tidak berlaku untuk JASA")}
+                  </div>
+                </div>
+              )}
               </div>
 
               <div>

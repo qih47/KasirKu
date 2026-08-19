@@ -192,8 +192,23 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       activeUiThemeId,
       activePosLayout,
       activeReceiptTemplate: mergedConfig.templateStyle || "DEFAULT",
+      shiftMode: tenant.shiftMode || "FAST",
     })
   );
+}
+
+export async function updateTenantShiftModeAction(shiftMode: "FAST" | "STRICT") {
+  const user = await requireOwner();
+
+  await prisma.tenant.update({
+    where: { id: user.tenantId },
+    data: { shiftMode },
+  });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/store");
+  revalidatePath("/pos");
+  return { success: true, shiftMode };
 }
 
 export async function updateTenantBrandingAction(data: {

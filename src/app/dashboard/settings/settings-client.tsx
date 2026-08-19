@@ -31,8 +31,14 @@ import {
   Tag,
   Utensils,
   Receipt,
+  Zap,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
-import { updateTenantBrandingAction } from "@/modules/tenant/settings-actions";
+import {
+  updateTenantBrandingAction,
+  updateTenantShiftModeAction,
+} from "@/modules/tenant/settings-actions";
 import { ReceiptConfig, defaultReceiptConfig } from "@/types/receipt";
 import Link from "next/link";
 
@@ -57,6 +63,7 @@ interface SettingsClientProps {
     activeUiThemeId: string | null;
     activePosLayout: string;
     activeReceiptTemplate: string;
+    shiftMode?: "FAST" | "STRICT";
   };
 }
 
@@ -67,6 +74,11 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [selectedOutletId, setSelectedOutletId] = useState(
     initialData.selectedOutlet?.id || outlets[0]?.id || ""
   );
+
+  const [shiftMode, setShiftMode] = useState<"FAST" | "STRICT">(
+    initialData.shiftMode || "FAST"
+  );
+  const [savingShiftMode, setSavingShiftMode] = useState(false);
 
   // Outlet Address map for switching between outlets
   const [outletAddresses, setOutletAddresses] = useState<Record<string, string>>(() => {
@@ -216,6 +228,24 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     }
   };
 
+  const handleShiftModeChange = async (newMode: "FAST" | "STRICT") => {
+    setShiftMode(newMode);
+    setSavingShiftMode(true);
+    try {
+      await updateTenantShiftModeAction(newMode);
+      setSuccessMsg(
+        newMode === "FAST"
+          ? "Mode Cepat aktif: Kasir dapat langsung masuk POS tanpa popup modal kas."
+          : "Mode Ketat aktif: Kasir wajib memasukkan modal kas awal sebelum mulai transaksi."
+      );
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal mengubah mode shift kasir.");
+    } finally {
+      setSavingShiftMode(false);
+    }
+  };
+
   // Sample items for thermal live preview
   const sampleItems = [
     { name: "Kopi Susu Gula Aren", qty: 1, price: 22000, mods: ["Normal Ice", "Less Sweet"] },
@@ -338,7 +368,8 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
       {/* TAB 1: PROFIL & BRANDING */}
       {activeTab === "BRANDING" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div
             className="lg:col-span-2 p-6 sm:p-7 border shadow-sm space-y-6"
             style={{
@@ -662,6 +693,100 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               <p>&bull; Kop atas struk belanja pelanggan</p>
             </div>
           </div>
+        </div>
+
+        {/* Card Pengaturan Mode Shift Kasir */}
+        <div
+          className="p-6 border shadow-sm space-y-4"
+          style={{
+            backgroundColor: "var(--theme-card-bg, #ffffff)",
+            borderColor: "var(--theme-card-border, #e2e8f0)",
+            borderRadius: "var(--theme-radius, 1.5rem)",
+          }}
+        >
+          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+            <div className="space-y-0.5">
+              <h2 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <span>Pengaturan Mode Shift &amp; Buka Kasir</span>
+              </h2>
+              <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Tentukan alur kasir saat membuka aplikasi POS: apakah langsung melayani transaksi atau wajib menghitung modal kas laci terlebih dahulu.
+              </p>
+            </div>
+            {savingShiftMode && (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-indigo-600">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Mode Cepat (Fast POS) */}
+            <div
+              onClick={() => !savingShiftMode && handleShiftModeChange("FAST")}
+              className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
+                shiftMode === "FAST"
+                  ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      ⚡ Mode Cepat (Fast POS)
+                    </h3>
+                    <span className="text-[10px] font-bold text-emerald-600">Rekomendasi Solo Owner / Cepat</span>
+                  </div>
+                </div>
+                {shiftMode === "FAST" && (
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
+                    ✓
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Kasir langsung masuk ke katalog menu dan siap transaksi. Shift aktif dibuat otomatis di background (modal Rp 0). Kasir tetap bisa melihat rekap kas kapan saja.
+              </p>
+            </div>
+
+            {/* Mode Ketat (Strict Shift) */}
+            <div
+              onClick={() => !savingShiftMode && handleShiftModeChange("STRICT")}
+              className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
+                shiftMode === "STRICT"
+                  ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      🔒 Mode Ketat (Strict Shift)
+                    </h3>
+                    <span className="text-[10px] font-bold text-rose-600">Kontrol Laci Kasir Ketat</span>
+                  </div>
+                </div>
+                {shiftMode === "STRICT" && (
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
+                    ✓
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Kasir wajib memasukkan uang modal awal kembalian sebelum bisa melayani transaksi. Selisih uang fisik vs catatan sistem akan dihitung saat tutup shift.
+              </p>
+            </div>
+          </div>
+        </div>
         </div>
       )}
 

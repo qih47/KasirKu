@@ -22,6 +22,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 export function StaffClient({
   initialData,
@@ -35,6 +36,7 @@ export function StaffClient({
     isQuotaFull: boolean;
   };
 }) {
+  const { locale, tr } = useTranslation();
   const [data, setData] = useState(initialData);
   const [showModal, setShowModal] = useState(false);
 
@@ -131,32 +133,34 @@ export function StaffClient({
 
   return (
     <div className="space-y-6 text-left">
-      {/* Header & Quota Metric Card - Clean White Surface */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="md:col-span-2 p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2 border border-indigo-100">
-              <Users className="w-3.5 h-3.5" />
-              Role & Akses Kasir
-            </div>
-            <h1 className="text-2xl font-black text-slate-950">
-              Manajemen Staff & Kasir
-            </h1>
-            <p className="text-xs text-slate-500 mt-1 font-medium">
-              Tambahkan kasir untuk mengoperasikan sistem POS di outlet Anda.
-            </p>
-          </div>
-
-          <button
-            onClick={() => setShowModal(true)}
-            disabled={data.isQuotaFull}
-            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold shadow-md shadow-indigo-600/20 transition flex items-center gap-2 flex-shrink-0"
-          >
-            <UserPlus className="w-4 h-4" />
-            Tambah Kasir
-          </button>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+            {tr("Manajemen Staf & Hak Akses")}
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {tr("Atur akun kasir, kapster, barista, dan hak akses staf.")}
+          </p>
         </div>
 
+        <button
+          onClick={() => {
+            if (data.isQuotaFull) {
+              toastError("Kuota akun kasir telah mencapai batas maksimal paket Anda.");
+              return;
+            }
+            setShowModal(true);
+          }}
+          disabled={data.isQuotaFull}
+          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>{tr("Tambah Staf")}</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Quota Progress Card - Clean White */}
         <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">

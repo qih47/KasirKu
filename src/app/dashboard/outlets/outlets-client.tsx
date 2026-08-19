@@ -23,6 +23,7 @@ import {
 } from "@/modules/tenant/outlet-actions";
 import { OperatingHoursModal } from "@/components/outlets/operating-hours-modal";
 import { Clock } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 interface OutletsClientProps {
   initialData?: {
@@ -42,6 +43,7 @@ interface OutletsClientProps {
 }
 
 export function OutletsClient({ initialData, data: propData }: OutletsClientProps) {
+  const { tr } = useTranslation();
   const data = initialData || propData || {
     outlets: [],
     currentCount: 0,
@@ -95,15 +97,15 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
         <div>
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2 border border-indigo-100">
             <Store className="w-3.5 h-3.5" />
-            Manajemen Multi-Outlet & Cabang
+            {tr("Manajemen Multi-Outlet & Cabang")}
           </div>
           <h1 className="text-2xl font-black text-slate-950">
-            Daftar Outlet &amp; Cabang
+            {tr("Daftar Outlet & Cabang")}
           </h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Kuota Cabang:{" "}
+            {tr("Kuota Cabang")}:{" "}
             <strong className="text-slate-900 font-bold">
-              {data.currentCount ?? outletList.length} / {data.outletLimit ?? "Unlimited"} Cabang
+              {data.currentCount ?? outletList.length} / {data.outletLimit ?? tr("Unlimited")} {tr("Cabang")}
             </strong>{" "}
             ({data.tierName || "Lisensi"})
           </p>
@@ -115,7 +117,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
             className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            <span>Tambah Cabang Baru</span>
+            <span>{tr("Tambah Cabang Baru")}</span>
           </button>
         ) : (
           <Link
@@ -123,7 +125,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
             className="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-md shadow-amber-500/20 transition flex items-center gap-1.5"
           >
             <ArrowUpRight className="w-4 h-4" />
-            <span>Upgrade Lisensi untuk Tambah Cabang</span>
+            <span>{tr("Upgrade Lisensi untuk Tambah Cabang")}</span>
           </Link>
         )}
       </div>

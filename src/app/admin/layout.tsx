@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AdminNavLinks } from "./admin-nav-links";
+import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 
 export default async function SuperAdminLayout({
   children,
@@ -57,6 +58,7 @@ export default async function SuperAdminLayout({
 
         {/* Bottom Profile & Actions */}
         <div className="pt-4 mt-6 border-t border-slate-800/80 space-y-3">
+
           <Link
             href="/"
             target="_blank"

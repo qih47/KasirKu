@@ -22,6 +22,7 @@ import {
   Shirt,
   Layers,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 interface TenantWithDetails {
   id: string;
@@ -43,6 +44,7 @@ export function TenantTableClient({
 }: {
   initialTenants: any[];
 }) {
+  const { locale, tr } = useTranslation();
   const [tenants, setTenants] = useState<any[]>(initialTenants);
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,13 +195,13 @@ export function TenantTableClient({
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 text-slate-400 border-b border-slate-800">
+            <thead className="bg-slate-950/60 border-b border-slate-800 text-slate-400 uppercase text-[11px] font-semibold tracking-wider">
               <tr>
-                <th className="py-3 px-4">Nama Bisnis &amp; Pemilik</th>
-                <th className="py-3 px-4">Lisensi & Outlet</th>
-                <th className="py-3 px-4">Modul Plugin</th>
-                <th className="py-3 px-4">Status & Masa Aktif</th>
-                <th className="py-3 px-4 text-right">Aksi Super Admin</th>
+                <th className="py-3 px-4">{tr("Nama Bisnis & Pemilik")}</th>
+                <th className="py-3 px-4">{tr("Paket Lisensi")}</th>
+                <th className="py-3 px-4">{tr("Modul Plugin")}</th>
+                <th className="py-3 px-4">{tr("Status")}</th>
+                <th className="py-3 px-4 text-right">{tr("Aksi Super Admin")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">

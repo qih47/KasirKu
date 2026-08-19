@@ -59,6 +59,8 @@ import {
 } from "lucide-react";
 
 
+import { useTranslation } from "@/lib/i18n/language-context";
+
 export function CatalogClient({
   initialLicenses,
   initialPlugins,
@@ -73,6 +75,7 @@ export function CatalogClient({
   initialFeatureEntitlements?: FeatureEntitlement[];
 }) {
   const searchParams = useSearchParams();
+  const { locale, t, tr } = useTranslation();
   const defaultTab = (searchParams.get("tab") as any) || "LICENSES";
   const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "DURATIONS" | "FEATURE_MATRIX">(defaultTab);
 
@@ -421,7 +424,7 @@ export function CatalogClient({
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Lisensi Kapasitas (Core)</span>
+            <span>{locale === "en" ? "Capacity Licenses (Core)" : "Lisensi Kapasitas (Core)"}</span>
           </button>
 
           <button
@@ -433,7 +436,7 @@ export function CatalogClient({
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Plugin Vertikal &amp; Modul</span>
+            <span>{locale === "en" ? "Vertical Plugins & Modules" : "Plugin Vertikal & Modul"}</span>
           </button>
 
           <button
@@ -445,7 +448,7 @@ export function CatalogClient({
             }`}
           >
             <Palette className="w-4 h-4" />
-            <span>Tema &amp; Tampilan UI</span>
+            <span>{locale === "en" ? "Themes & UI Appearance" : "Tema & Tampilan UI"}</span>
           </button>
 
           <button
@@ -457,7 +460,7 @@ export function CatalogClient({
             }`}
           >
             <Layout className="w-4 h-4" />
-            <span>Tata Letak Layar POS</span>
+            <span>{locale === "en" ? "POS Screen Layouts" : "Tata Letak Layar POS"}</span>
           </button>
 
           <button
@@ -469,7 +472,7 @@ export function CatalogClient({
             }`}
           >
             <Printer className="w-4 h-4" />
-            <span>Studio &amp; Template Struk</span>
+            <span>{locale === "en" ? "Receipt Presets & Studio" : "Studio & Template Struk"}</span>
           </button>
 
           <button
@@ -481,7 +484,7 @@ export function CatalogClient({
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Diskon Durasi Langganan ⚙️</span>
+            <span>{locale === "en" ? "Subscription Durations & Discounts ⚙️" : "Diskon Durasi Langganan ⚙️"}</span>
           </button>
 
           <button
@@ -493,7 +496,7 @@ export function CatalogClient({
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Matriks Hak Akses Fitur Tier 🛡️</span>
+            <span>{locale === "en" ? "Feature Entitlements Matrix" : "Matriks Hak Akses Fitur"}</span>
           </button>
         </div>
       </div>
@@ -515,13 +518,13 @@ export function CatalogClient({
         <div className="space-y-4">
           <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
             <div>
-              <p className="font-bold text-white">Konfigurasi Harga &amp; Kuota Lisensi Platform</p>
+              <p className="font-bold text-white">{tr("Konfigurasi Harga & Kuota Lisensi Platform")}</p>
               <p className="text-slate-400 text-[11px] mt-0.5">
-                Perubahan harga dan limit cabang/kasir langsung berlaku untuk tagihan tenant baru dan perpanjangan langganan.
+                {tr("Perubahan harga dan limit cabang/kasir langsung berlaku untuk tagihan tenant baru dan perpanjangan langganan.")}
               </p>
             </div>
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
-              {licenses.length} Paket Lisensi
+              {licenses.length} {tr("Paket Lisensi")}
             </span>
           </div>
 
@@ -544,7 +547,7 @@ export function CatalogClient({
                     <div className="space-y-3">
                       <div>
                         <label className="block text-[11px] font-semibold uppercase text-slate-400 mb-1">
-                          Nama Lisensi
+                          {tr("Nama Lisensi")}
                         </label>
                         <input
                           type="text"
@@ -558,7 +561,7 @@ export function CatalogClient({
                       <div className="grid grid-cols-2 gap-2.5">
                         <div>
                           <label className="block text-[11px] font-semibold uppercase text-slate-400 mb-1">
-                            Harga Bulanan (Rp)
+                            {tr("Harga Bulanan")} (Rp)
                           </label>
                           <input
                             type="number"
@@ -681,7 +684,7 @@ export function CatalogClient({
                     className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    <span>Simpan Lisensi</span>
+                    <span>{isLoading ? tr("Menyimpan...") : tr("Simpan Perubahan")}</span>
                   </button>
                 </div>
               );

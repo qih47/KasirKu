@@ -25,7 +25,10 @@ import {
   Sparkles,
   AlertTriangle,
   Layers,
+  FileSpreadsheet,
 } from "lucide-react";
+import { ImportProductModal } from "@/components/products/import-product-modal";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 export function ProductClient({
   initialData,
@@ -41,6 +44,7 @@ export function ProductClient({
     };
   };
 }) {
+  const { locale, tr } = useTranslation();
   const [data, setData] = useState(initialData);
   const [filterType, setFilterType] = useState<"ALL" | "BARANG" | "JASA">("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -48,6 +52,7 @@ export function ProductClient({
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
 
   // Form State
@@ -230,46 +235,56 @@ export function ProductClient({
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+          {tr("Daftar Produk & Layanan")}
+        </h1>
+        <p className="text-xs text-slate-500 mt-1">
+          {tr("Kelola inventori barang fisik dan layanan jasa bisnis Anda.")}
+        </p>
+      </div>
+
       {/* Metric Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-semibold uppercase text-slate-500">
-            Total Katalog
+            {tr("Total Katalog")}
           </span>
           <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
             {data.metrics.totalItems}
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Barang & Jasa</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Barang & Jasa")}</p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-semibold uppercase text-slate-500">
-            Barang Fisik
+            {tr("Barang Fisik")}
           </span>
           <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
             {data.metrics.totalBarang}
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Memiliki stok & barcode</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Memiliki stok & barcode")}</p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-semibold uppercase text-slate-500">
-            Layanan Jasa
+            {tr("Layanan Jasa")}
           </span>
           <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
             {data.metrics.totalJasa}
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Treatment / service</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Treatment / service")}</p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-semibold uppercase text-slate-500">
-            Stok Menipis
+            {tr("Stok Menipis")}
           </span>
           <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
             {data.metrics.lowStockCount}
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Stok &le; 5 unit</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{tr("Stok ≤ 5 unit")}</p>
         </div>
       </div>
 
@@ -293,7 +308,7 @@ export function ProductClient({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              Semua
+              {tr("Semua")}
             </button>
             <button
               onClick={() => setFilterType("BARANG")}
@@ -303,7 +318,7 @@ export function ProductClient({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              Barang
+              {tr("Barang")}
             </button>
             <button
               onClick={() => setFilterType("JASA")}
@@ -313,17 +328,28 @@ export function ProductClient({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              Jasa
+              {tr("Jasa")}
             </button>
           </div>
 
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Tambah Produk / Jasa
-          </button>
+          {/* Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{tr("Impor Produk (CSV)")}</span>
+            </button>
+
+            <button
+              onClick={openAddModal}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{tr("Tambah Produk Baru")}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -334,7 +360,7 @@ export function ProductClient({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama produk, kategori, atau barcode SKU..."
+              placeholder={tr("Cari nama produk, kategori, atau barcode SKU...")}
               className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
@@ -346,7 +372,7 @@ export function ProductClient({
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="w-full sm:w-48 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
-              <option value="ALL">Semua Kategori</option>
+              <option value="ALL">{tr("Semua Kategori")}</option>
               {data.categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -363,13 +389,13 @@ export function ProductClient({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="py-3 px-4">Nama Produk / Jasa</th>
-                <th className="py-3 px-4">Tipe & Kategori</th>
-                <th className="py-3 px-4">Barcode / SKU</th>
-                <th className="py-3 px-4">Harga Jual</th>
-                <th className="py-3 px-4">Stok</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Aksi</th>
+                <th className="py-3 px-4">{tr("Nama Produk / Jasa")}</th>
+                <th className="py-3 px-4">{tr("Tipe & Kategori")}</th>
+                <th className="py-3 px-4">{tr("Barcode / SKU")}</th>
+                <th className="py-3 px-4">{tr("Harga Jual")}</th>
+                <th className="py-3 px-4">{tr("Stok")}</th>
+                <th className="py-3 px-4">{tr("Status")}</th>
+                <th className="py-3 px-4 text-right">{tr("Aksi")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -410,11 +436,11 @@ export function ProductClient({
                       <div className="flex items-center gap-1.5">
                         {p.type === "BARANG" ? (
                           <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[10px] font-semibold">
-                            BARANG
+                            {tr("BARANG")}
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                            JASA
+                            {tr("JASA")}
                           </span>
                         )}
                         <span className="text-slate-500 text-[11px]">
@@ -434,7 +460,7 @@ export function ProductClient({
                     <td className="py-3.5 px-4">
                       {p.type === "JASA" ? (
                         <span className="text-slate-400 italic text-[11px]">
-                          Tidak terbatas
+                          {tr("Tidak terbatas")}
                         </span>
                       ) : (
                         <span
@@ -444,10 +470,10 @@ export function ProductClient({
                               : "text-slate-700 dark:text-slate-300"
                           }`}
                         >
-                          {p.stockQty ?? 0} unit
+                          {p.stockQty ?? 0} {tr("unit")}
                           {isLowStock && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold">
-                              Menipis
+                              {tr("Menipis")}
                             </span>
                           )}
                         </span>
@@ -469,7 +495,7 @@ export function ProductClient({
                             p.isActive ? "bg-emerald-500" : "bg-slate-400"
                           }`}
                         />
-                        {p.isActive ? "Aktif" : "Non-aktif"}
+                        {p.isActive ? tr("Aktif") : tr("Non-aktif")}
                       </button>
                     </td>
 
@@ -481,14 +507,14 @@ export function ProductClient({
                           <button
                             onClick={() => openEditModal(p)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
-                            title="Edit Produk"
+                            title={tr("Edit Produk")}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(p.id, p.name)}
                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
-                            title="Hapus Produk"
+                            title={tr("Hapus Produk")}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -514,10 +540,10 @@ export function ProductClient({
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                    {editItem ? "Edit Produk / Jasa" : "Tambah Produk / Jasa"}
+                    {editItem ? tr("Edit Produk / Jasa") : tr("Tambah Produk / Jasa")}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Lengkapi rincian katalog item untuk kasir
+                    {tr("Lengkapi rincian katalog item untuk kasir")}
                   </p>
                 </div>
               </div>
@@ -540,7 +566,7 @@ export function ProductClient({
               {/* Foto Produk / Jasa */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Foto / Gambar Item (Opsional)
+                  {tr("Foto / Gambar Item (Opsional)")}
                 </label>
                 <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   {imageUrl ? (
@@ -550,7 +576,7 @@ export function ProductClient({
                         type="button"
                         onClick={() => setImageUrl("")}
                         className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition"
-                        title="Hapus gambar"
+                        title={tr("Hapus gambar")}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -558,7 +584,7 @@ export function ProductClient({
                   ) : (
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 flex-shrink-0">
                       <Package className="w-5 h-5 opacity-40" />
-                      <span className="text-[8px] font-bold mt-0.5">No Image</span>
+                      <span className="text-[8px] font-bold mt-0.5">{tr("No Image")}</span>
                     </div>
                   )}
 
@@ -566,7 +592,7 @@ export function ProductClient({
                     <div className="flex items-center gap-2">
                       <label className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] cursor-pointer shadow-sm transition flex items-center gap-1">
                         <Plus className="w-3 h-3" />
-                        <span>Upload File</span>
+                        <span>{tr("Upload File")}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -574,7 +600,7 @@ export function ProductClient({
                           className="hidden"
                         />
                       </label>
-                      <span className="text-[10px] text-slate-400">atau paste link gambar URL:</span>
+                      <span className="text-[10px] text-slate-400">{tr("atau paste link gambar URL:")}</span>
                     </div>
 
                     <input
@@ -590,14 +616,14 @@ export function ProductClient({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Nama Item
+                  {tr("Nama Item")}
                 </label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Contoh: Potong Rambut Fade / Kopi Susu Aren / Pomade"
+                  placeholder={tr("Contoh: Potong Rambut Fade / Kopi Susu Aren / Pomade")}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -605,27 +631,27 @@ export function ProductClient({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                    Tipe Item
+                    {tr("Tipe Item")}
                   </label>
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value as ProductType)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="BARANG">BARANG (Fisik, ada stok)</option>
-                    <option value="JASA">JASA (Layanan/Treatment)</option>
+                    <option value="BARANG">{tr("BARANG (Fisik, ada stok)")}</option>
+                    <option value="JASA">{tr("JASA (Layanan/Treatment)")}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                    Kategori
+                    {tr("Kategori")}
                   </label>
                   <input
                     type="text"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    placeholder="Contoh: Haircut / Minuman"
+                    placeholder={tr("Contoh: Haircut / Minuman")}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
@@ -634,7 +660,7 @@ export function ProductClient({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                    Harga Jual (Rp)
+                    {tr("Harga Jual (Rp)")}
                   </label>
                   <input
                     type="number"
@@ -642,7 +668,7 @@ export function ProductClient({
                     min={0}
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    placeholder="Contoh: 35000"
+                    placeholder={tr("Contoh: 35000")}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
@@ -650,24 +676,24 @@ export function ProductClient({
                 {type === "BARANG" ? (
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                      Jumlah Stok
+                      {tr("Jumlah Stok")}
                     </label>
                     <input
                       type="number"
                       min={0}
                       value={stockQty}
                       onChange={(e) => setStockQty(e.target.value)}
-                      placeholder="Contoh: 50"
+                      placeholder={tr("Contoh: 50")}
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
                 ) : (
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      Jumlah Stok
+                      {tr("Jumlah Stok")}
                     </label>
                     <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 italic">
-                      Tidak berlaku untuk JASA
+                      {tr("Tidak berlaku untuk JASA")}
                     </div>
                   </div>
                 )}
@@ -676,17 +702,17 @@ export function ProductClient({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Barcode / SKU (Opsional)
+                    {tr("Barcode / SKU (Opsional)")}
                   </label>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <ScanLine className="w-3 h-3" /> Scanner keyboard ready
+                    <ScanLine className="w-3 h-3" /> {tr("Scanner keyboard ready")}
                   </span>
                 </div>
                 <input
                   type="text"
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
-                  placeholder="Scan atau ketik kode barcode SKU..."
+                  placeholder={tr("Scan atau ketik kode barcode SKU...")}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -697,7 +723,7 @@ export function ProductClient({
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                 >
-                  Batal
+                  {tr("Batal")}
                 </button>
                 <button
                   type="submit"
@@ -705,13 +731,20 @@ export function ProductClient({
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50 transition flex items-center gap-2"
                 >
                   {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {editItem ? "Simpan Perubahan" : "Tambah Produk"}
+                  {editItem ? tr("Simpan Perubahan") : tr("Tambah Produk")}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Bulk Import & Image Optimizer Modal */}
+      <ImportProductModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={() => window.location.reload()}
+      />
     </div>
   );
 }

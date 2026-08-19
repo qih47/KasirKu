@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import {
   Store,
   Scissors,
@@ -31,6 +32,7 @@ import {
   DurationSettingItem,
   calculateDurationPrice,
 } from "@/types/subscription-duration";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 export function LandingClient({
   tiers = [],
@@ -38,11 +40,12 @@ export function LandingClient({
   themes = [],
   durationSettings = DEFAULT_DURATION_SETTINGS,
 }: {
-  tiers: any[];
-  plugins: any[];
-  themes: any[];
+  tiers?: any[];
+  plugins?: any[];
+  themes?: any[];
   durationSettings?: DurationSettingItem[];
 }) {
+  const { locale, t: translate, tr } = useTranslation();
   const [isDark, setIsDark] = useState(false);
   const activeDurations = durationSettings.filter((d) => d.isActive);
   const [selectedDurationKey, setSelectedDurationKey] = useState<string>(
@@ -284,20 +287,21 @@ export function LandingClient({
 
           {/* Center Nav */}
           <nav className="hidden md:flex items-center gap-8 text-xs font-bold" style={{ color: t.textSub }}>
-            <a href="#solutions" className="hover:text-indigo-500 transition">Solusi Vertikal</a>
-            <a href="#features" className="hover:text-indigo-500 transition">Fitur Unggulan</a>
-            <a href="#store" className="hover:text-indigo-500 transition">Store & Add-on</a>
-            <a href="#pricing" className="hover:text-indigo-500 transition">Pilihan Paket</a>
-            <a href="#faq" className="hover:text-indigo-500 transition">FAQ</a>
+            <a href="#solutions" className="hover:text-indigo-500 transition">{locale === "en" ? "Vertical Solutions" : "Solusi Vertikal"}</a>
+            <a href="#features" className="hover:text-indigo-500 transition">{locale === "en" ? "Features" : "Fitur Unggulan"}</a>
+            <a href="#store" className="hover:text-indigo-500 transition">{locale === "en" ? "Add-on Store" : "Store & Add-on"}</a>
+            <a href="#pricing" className="hover:text-indigo-500 transition">{locale === "en" ? "Pricing Plans" : "Pilihan Paket"}</a>
+            <a href="#faq" className="hover:text-indigo-500 transition">{locale === "en" ? "FAQ" : "FAQ"}</a>
           </nav>
 
           {/* Right CTA + Dark/Light Toggle */}
           <div className="flex items-center gap-2">
+
             {/* Dark / Light Mode Toggle */}
             <button
               type="button"
               onClick={() => setIsDark(!isDark)}
-              title={isDark ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
+              title={isDark ? (locale === "en" ? "Switch to Light Mode" : "Ganti ke Mode Terang") : (locale === "en" ? "Switch to Dark Mode" : "Ganti ke Mode Gelap")}
               className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all hover:scale-105"
               style={{ backgroundColor: t.toggleBg, borderColor: t.borderSoft, color: t.textSub }}
             >
@@ -309,13 +313,13 @@ export function LandingClient({
               className="px-4 py-2.5 rounded-xl text-xs font-bold transition"
               style={{ color: t.textSub }}
             >
-              Masuk
+              {locale === "en" ? "Sign In" : "Masuk"}
             </Link>
             <Link
               href="/register"
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 transition flex items-center gap-1.5 active:scale-95"
             >
-              <span>Coba Gratis 30 Hari</span>
+              <span>{locale === "en" ? "Try Free for 30 Days" : "Coba Gratis 30 Hari"}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -329,19 +333,39 @@ export function LandingClient({
           style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
         >
           <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Platform POS Multi-Vertikal Generasi Terbaru di Indonesia</span>
+          <span>{locale === "en" ? "Next-Gen Multi-Vertical Smart POS Platform" : "Platform POS Multi-Vertikal Generasi Terbaru di Indonesia"}</span>
         </div>
 
         <div className="space-y-4 max-w-4xl mx-auto">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]" style={{ color: t.text }}>
-            Satu Sistem Kasir Cerdas untuk{" "}
-            <span className="bg-gradient-to-r from-indigo-500 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              Segala Bidang Bisnis Anda.
-            </span>
+            {locale === "en" ? (
+              <>
+                One Intelligent POS Platform for{" "}
+                <span className="bg-gradient-to-r from-indigo-500 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                  All Your Business Needs.
+                </span>
+              </>
+            ) : (
+              <>
+                Satu Sistem Kasir Cerdas untuk{" "}
+                <span className="bg-gradient-to-r from-indigo-500 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                  Segala Bidang Bisnis Anda.
+                </span>
+              </>
+            )}
           </h1>
           <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed font-medium" style={{ color: t.textSub }}>
-            Qassa menghadirkan alur kerja kasir yang dirancang khusus untuk{" "}
-            <strong style={{ color: t.text }}>F&B Cafe, Barbershop, Retail, dan Laundry</strong>. Lengkap dengan kontrol multi-cabang dan analitik laba real-time.
+            {locale === "en" ? (
+              <>
+                Qassa delivers tailor-made POS workflows for{" "}
+                <strong style={{ color: t.text }}>F&B Cafes, Barbershops, Retail, and Laundry</strong>. Complete with multi-branch control and real-time profit analytics.
+              </>
+            ) : (
+              <>
+                Qassa menghadirkan alur kerja kasir yang dirancang khusus untuk{" "}
+                <strong style={{ color: t.text }}>F&B Cafe, Barbershop, Retail, dan Laundry</strong>. Lengkap dengan kontrol multi-cabang dan analitik laba real-time.
+              </>
+            )}
           </p>
         </div>
 
@@ -350,16 +374,16 @@ export function LandingClient({
             href="/register"
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-2xl shadow-indigo-600/35 transition flex items-center justify-center gap-2 active:scale-95"
           >
-            <span>Mulai Uji Coba Gratis 30 Hari</span>
+            <span>{locale === "en" ? "Start 30-Day Free Trial" : "Mulai Uji Coba Gratis 30 Hari"}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
-            href="/pos"
-            className="w-full sm:w-auto px-7 py-4 rounded-2xl font-bold text-sm border transition flex items-center justify-center gap-2"
+            href="/demo"
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl border transition flex items-center justify-center gap-2 text-sm font-bold active:scale-95"
             style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft, color: t.text }}
           >
             <Play className="w-4 h-4 text-indigo-500 fill-indigo-500" />
-            <span>Coba Demo Kasir POS Langsung</span>
+            <span>{locale === "en" ? "View Interactive Demo" : "Lihat Demo Interaktif"}</span>
           </Link>
         </div>
 
@@ -428,11 +452,11 @@ export function LandingClient({
                 className="px-3 py-1 rounded-full font-extrabold text-[10px] border uppercase tracking-wider"
                 style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
               >
-                {currentVert.badge}
+                {tr(currentVert.badge)}
               </span>
-              <h3 className="text-2xl font-black" style={{ color: t.text }}>{currentVert.name}</h3>
+              <h3 className="text-2xl font-black" style={{ color: t.text }}>{tr(currentVert.name)}</h3>
               <p className="text-xs sm:text-sm leading-relaxed font-medium" style={{ color: t.textSub }}>
-                {currentVert.tagline}
+                {tr(currentVert.tagline)}
               </p>
             </div>
 
@@ -444,7 +468,7 @@ export function LandingClient({
                   style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft, color: t.textSub }}
                 >
                   <span className="text-emerald-500 font-bold text-sm">✓</span>
-                  <span className="leading-snug">{feat}</span>
+                  <span className="leading-snug">{tr(feat)}</span>
                 </div>
               ))}
             </div>
@@ -922,8 +946,8 @@ export function LandingClient({
                   <IconC className="w-6 h-6 text-indigo-500" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base" style={{ color: t.text }}>{pillar.title}</h3>
-                  <p className="text-xs mt-1.5 leading-relaxed" style={{ color: t.textSub }}>{pillar.desc}</p>
+                  <h3 className="font-black text-base" style={{ color: t.text }}>{tr(pillar.title)}</h3>
+                  <p className="text-xs mt-1.5 leading-relaxed" style={{ color: t.textSub }}>{tr(pillar.desc)}</p>
                 </div>
               </div>
             );
@@ -968,8 +992,8 @@ export function LandingClient({
                     style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
                   >
                     <IconC className={`w-5 h-5 ${item.color}`} />
-                    <h4 className="font-bold text-xs" style={{ color: t.text }}>{item.title}</h4>
-                    <p className="text-[11px]" style={{ color: t.textMuted }}>{item.desc}</p>
+                    <h4 className="font-bold text-xs" style={{ color: t.text }}>{tr(item.title)}</h4>
+                    <p className="text-[11px]" style={{ color: t.textMuted }}>{tr(item.desc)}</p>
                   </div>
                 );
               })}
@@ -1268,9 +1292,9 @@ export function LandingClient({
       {/* ── FAQ ── */}
       <section id="faq" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-8">
         <div className="text-center space-y-2">
-          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">Pertanyaan Umum</span>
+          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">{locale === "en" ? "Common Questions" : "Pertanyaan Umum"}</span>
           <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
-            Pertanyaan yang Sering Diajukan
+            {locale === "en" ? "Frequently Asked Questions" : "Pertanyaan yang Sering Diajukan"}
           </h2>
         </div>
 
@@ -1289,7 +1313,7 @@ export function LandingClient({
                   className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm transition"
                   style={{ color: t.text }}
                 >
-                  <span>{faq.q}</span>
+                  <span>{tr(faq.q)}</span>
                   {isOpen
                     ? <ChevronUp className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                     : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: t.textMuted }} />
@@ -1300,7 +1324,7 @@ export function LandingClient({
                     className="px-5 pb-5 text-xs sm:text-sm leading-relaxed border-t pt-3"
                     style={{ color: t.textSub, borderColor: t.borderSoft }}
                   >
-                    {faq.a}
+                    {tr(faq.a)}
                   </div>
                 )}
               </div>

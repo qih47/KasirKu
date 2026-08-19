@@ -281,3 +281,41 @@ export async function getBarberCommissionsReport(params?: {
     },
   };
 }
+
+export async function updateStaffBarberRateAction(data: {
+  staffId: string;
+  schemeType: "PERCENTAGE" | "FLAT";
+  serviceRate: number;
+  productCommissionRate?: number;
+  tierLabel?: string;
+}) {
+  const user = await requireTenantBarbershopUser();
+  const { staffId, schemeType, serviceRate, productCommissionRate, tierLabel } = data;
+
+  const staff = await prisma.user.findUnique({
+    where: { id: staffId },
+  });
+
+  if (!staff || staff.tenantId !== user.tenantId) {
+    throw new Error("Kapster tidak ditemukan.");
+  }
+
+  const currentAttrs: Record<string, any> = ((staff as any).attributes as any) || {};
+
+  await prisma.user.update({
+    where: { id: staffId },
+    data: {
+      attributes: {
+        ...currentAttrs,
+        schemeType,
+        serviceRate: Number(serviceRate),
+        productCommissionRate: Number(productCommissionRate || 5),
+        tierLabel: tierLabel || "Kapster",
+      },
+    } as any,
+  });
+
+  revalidatePath("/dashboard/barbershop/commissions");
+  return { success: true };
+}
+

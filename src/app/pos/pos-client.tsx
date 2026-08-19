@@ -12,6 +12,8 @@ import {
   createTransactionAction,
   CartItemInput,
 } from "@/modules/transaction/actions";
+import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
+import { useTranslation } from "@/lib/i18n/language-context";
 import {
   ShoppingCart,
   Store,
@@ -87,7 +89,7 @@ export function PosClient({
   appliedTheme,
   tenantInfo,
 }: PosClientProps) {
-
+  const { locale, tr, t } = useTranslation();
   const [shiftData, setShiftData] = useState(initialShiftData);
   const [products, setProducts] = useState(initialProducts);
 
@@ -741,7 +743,7 @@ export function PosClient({
                         isDineIn ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500"
                       }`}
                     >
-                      Dine In
+                      {tr("Makan di Tempat")}
                     </button>
                     <button
                       type="button"
@@ -750,7 +752,7 @@ export function PosClient({
                         !isDineIn ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500"
                       }`}
                     >
-                      Take Away
+                      {tr("Bawa Pulang")}
                     </button>
                   </div>
                 </div>

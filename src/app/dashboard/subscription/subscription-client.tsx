@@ -28,6 +28,7 @@ import {
   DurationSettingItem,
   calculateDurationPrice,
 } from "@/types/subscription-duration";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 interface SubscriptionClientProps {
   initialData?: any;
@@ -35,6 +36,7 @@ interface SubscriptionClientProps {
 }
 
 export function SubscriptionClient({ initialData, data: propData }: SubscriptionClientProps) {
+  const { locale, tr } = useTranslation();
   const data = initialData || propData || {
     tenant: { status: "TRIAL", daysRemaining: 30 },
     activeSubscription: { billingCycle: "MONTHLY", durationKey: "1M", durationMonths: 1 },

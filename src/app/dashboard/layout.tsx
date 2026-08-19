@@ -9,6 +9,7 @@ import { DashboardNavLinks } from "./dashboard-nav-links";
 import { prisma } from "@/lib/prisma";
 import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 import { getActiveBroadcastForTenant } from "@/modules/superadmin/broadcast-actions";
+import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 
 export default async function DashboardLayout({
   children,

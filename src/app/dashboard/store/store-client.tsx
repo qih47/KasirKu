@@ -31,6 +31,7 @@ import {
   Scale,
   Smartphone,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/language-context";
 import {
   purchaseReceiptThemeAction,
   applyUiThemeAction,
@@ -73,6 +74,7 @@ interface StoreClientProps {
 }
 
 export function StoreClient({ initialData }: StoreClientProps) {
+  const { tr } = useTranslation();
   const [activeTab, setActiveTab] = useState<
     "POS_LAYOUTS" | "RECEIPT_THEMES" | "UI_THEMES"
   >("POS_LAYOUTS");
@@ -204,19 +206,19 @@ export function StoreClient({ initialData }: StoreClientProps) {
             }}
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            KasirKu Add-on & Theme Marketplace
+            {tr("KasirKu Add-on & Theme Marketplace")}
           </div>
           <h1
             className="text-2xl font-black"
             style={{ color: "var(--theme-text-primary, #0f172a)" }}
           >
-            Store & Add-on Marketplace
+            {tr("Store & Add-on Marketplace")}
           </h1>
           <p
             className="text-xs mt-1 font-medium"
             style={{ color: "var(--theme-text-secondary, #64748b)" }}
           >
-            Pusat belanja tema layout antarmuka kasir POS, tema cetak struk thermal, tema UI sistem, dan plugin modul vertikal.
+            {tr("Pusat belanja tema layout antarmuka kasir POS, tema cetak struk thermal, tema UI sistem, dan plugin modul vertikal.")}
           </p>
         </div>
 
@@ -250,7 +252,7 @@ export function StoreClient({ initialData }: StoreClientProps) {
             }}
           >
             <Monitor className="w-3.5 h-3.5" />
-            <span>Tema POS</span>
+            <span>{tr("Tema POS")}</span>
           </button>
 
           <button
@@ -274,7 +276,7 @@ export function StoreClient({ initialData }: StoreClientProps) {
             }}
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Tema Struk Kasir</span>
+            <span>{tr("Tema Struk Kasir")}</span>
           </button>
 
           <button
@@ -298,7 +300,7 @@ export function StoreClient({ initialData }: StoreClientProps) {
             }}
           >
             <Palette className="w-3.5 h-3.5" />
-            <span>Tema UI Dashboard</span>
+            <span>{tr("Tema UI Dashboard")}</span>
           </button>
         </div>
       </div>

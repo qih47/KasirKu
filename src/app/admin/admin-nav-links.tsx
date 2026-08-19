@@ -11,36 +11,39 @@ import {
   ScrollText,
 } from "lucide-react";
 
+import { useTranslation } from "@/lib/i18n/language-context";
+
 export function AdminNavLinks() {
   const pathname = usePathname();
+  const { locale, t } = useTranslation();
 
   // Jangan render nav jika berada di /admin/login
   if (pathname === "/admin/login") return null;
 
   const links = [
     {
-      name: "Dashboard Overview",
+      name: locale === "en" ? "Dashboard Overview" : "Ringkasan Platform",
       href: "/admin",
       icon: LayoutDashboard,
       exact: true,
     },
     {
-      name: "Manajemen Tenant",
+      name: locale === "en" ? "Manage Businesses" : "Kelola Bisnis & Tenant",
       href: "/admin/tenants",
       icon: Building2,
     },
     {
-      name: "Katalog & Harga",
+      name: locale === "en" ? "Catalog & Pricing" : "Katalog & Durasi Lisensi",
       href: "/admin/catalog",
       icon: Tags,
     },
     {
-      name: "Broadcast Pesan",
+      name: locale === "en" ? "Broadcast Message" : "Pesan Broadcast",
       href: "/admin/broadcast",
       icon: Radio,
     },
     {
-      name: "Audit Logs",
+      name: locale === "en" ? "Audit Logs" : "Catatan Log Aktivitas",
       href: "/admin/audit",
       icon: ScrollText,
     },

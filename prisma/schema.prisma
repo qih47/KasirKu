@@ -194,6 +194,7 @@ model Tenant {
   logoUrl          String?      // null = pakai default, hanya aktif jika lisensi/tema mendukung custom branding
   receiptConfig    Json?        // Konfigurasi dinamis struk: logo, pajak, diskon, service charge, checklist komponen
   dashboardWidgets Json?        // Konfigurasi tata letak widget dashboard ringkasan dinamis tenant
+  attributes       Json?        // Konfigurasi dinamis fleksibel (misal: service charge rate, dll)
   status           TenantStatus @default(TRIAL)
   trialStartAt     DateTime?    @default(now())
   trialEndAt       DateTime?
@@ -250,6 +251,7 @@ model User {
   name         String
   email        String
   passwordHash String
+  attributes   Json?    // Konfigurasi komisi & spesialisasi staf (misal: rate kapster, laundry, dll)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 

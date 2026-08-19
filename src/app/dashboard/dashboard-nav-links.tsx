@@ -9,16 +9,14 @@ import {
   Store,
   TrendingUp,
   CreditCard,
-  ShoppingCart,
   Scissors,
   Percent,
   Coffee,
   Shirt,
   Settings,
-  Palette,
-  Printer,
-  Sparkles,
   ShoppingBag,
+  Scale,
+  Award,
 } from "lucide-react";
 
 interface DashboardNavLinksProps {
@@ -44,6 +42,7 @@ export function DashboardNavLinks({
   );
   const isCafeActive = activePlugins.some((p) => p.code === "cafe");
   const isLaundryActive = activePlugins.some((p) => p.code === "laundry");
+  const isRetailActive = activePlugins.some((p) => p.code === "retail");
 
   const links = [
     {
@@ -58,49 +57,69 @@ export function DashboardNavLinks({
       icon: Store,
     },
     {
-      name: "Produk & Jasa",
+      name: "Produk",
       href: "/dashboard/products",
       icon: Package,
     },
     {
-      name: "Staff & Kasir",
+      name: "Staf",
       href: "/dashboard/staff",
       icon: Users,
     },
     // Modul Dinamis Barbershop
     ...(isBarbershopActive
       ? [
-        {
-          name: "Antrian",
-          href: "/dashboard/barbershop/queue",
-          icon: Scissors,
-        },
-        {
-          name: "Komisi Barber",
-          href: "/dashboard/barbershop/commissions",
-          icon: Percent,
-        },
-      ]
+          {
+            name: "Antrean",
+            href: "/dashboard/barbershop/queue",
+            icon: Scissors,
+          },
+          {
+            name: "Komisi",
+            href: "/dashboard/barbershop/commissions",
+            icon: Percent,
+          },
+        ]
       : []),
     // Modul Dinamis Cafe
     ...(isCafeActive
       ? [
-        {
-          name: "Meja Cafe",
-          href: "/dashboard/cafe/tables",
-          icon: Coffee,
-        },
-      ]
+          {
+            name: "Denah Meja",
+            href: "/dashboard/cafe/tables",
+            icon: Coffee,
+          },
+          {
+            name: "Bagi Hasil",
+            href: "/dashboard/cafe/commissions",
+            icon: Percent,
+          },
+        ]
       : []),
     // Modul Dinamis Laundry
     ...(isLaundryActive
       ? [
-        {
-          name: "Order Laundry",
-          href: "/dashboard/laundry/orders",
-          icon: Shirt,
-        },
-      ]
+          {
+            name: "Pesanan",
+            href: "/dashboard/laundry/orders",
+            icon: Shirt,
+          },
+          {
+            name: "Komisi",
+            href: "/dashboard/laundry/commissions",
+            icon: Scale,
+          },
+        ]
+      : []),
+    // Modul Dinamis Retail
+    ...(isRetailActive
+      ? [
+          {
+            name: "Insentif",
+            href: "/dashboard/retail/commissions",
+            icon: Award,
+          },
+        ]
       : []),
     {
       name: "Laporan",
@@ -113,7 +132,7 @@ export function DashboardNavLinks({
       icon: CreditCard,
     },
     {
-      name: "Store & Add-on",
+      name: "Store",
       href: "/dashboard/store",
       icon: ShoppingBag,
     },
@@ -126,9 +145,9 @@ export function DashboardNavLinks({
 
   return (
     <div className="mb-6">
-      {/* Dynamic Theme Pill Navigation Bar */}
+      {/* Compact Pill Navigation Bar with no scrollbar */}
       <div
-        className={`flex items-center gap-1 sm:gap-1.5 p-1.5 rounded-2xl border shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full transition-colors ${
+        className={`flex items-center justify-start lg:justify-between gap-1 p-1 rounded-2xl border shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full transition-colors [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
           isLuxeDark
             ? "bg-[#111827] border-slate-800"
             : "bg-white border-slate-200/90"
@@ -150,20 +169,20 @@ export function DashboardNavLinks({
                   ? {
                       backgroundColor: primaryColor,
                       color: "#ffffff",
-                      boxShadow: `0 4px 14px ${primaryColor}40`,
+                      boxShadow: `0 4px 12px ${primaryColor}35`,
                     }
                   : undefined
               }
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95 flex-shrink-0 ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-150 active:scale-95 flex-shrink-0 ${
                 isActive
                   ? "text-white"
                   : isLuxeDark
-                  ? "text-slate-300 hover:text-white hover:bg-slate-800/80 active:bg-slate-800"
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800/80 active:bg-slate-800"
                   : "text-slate-600 hover:text-slate-950 hover:bg-slate-100/80 active:bg-slate-200"
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{link.name}</span>
+              <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           );
         })}

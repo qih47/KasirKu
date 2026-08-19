@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { calculateItemCommission } from "@/modules/commission/commission-engine";
 
 export type PaymentMethod = "CASH" | "QRIS" | "TRANSFER" | "CARD";
 
@@ -117,28 +118,39 @@ export async function createTransactionAction(data: {
         },
       });
 
-      // Hitung komisi jika item memiliki penugasan staff / kapster (Barbershop)
+      // Hitung komisi jika item memiliki penugasan staff / kapster / terapis
       if (item.staffId) {
-        const productAttrs: any = product.attributes || {};
-        const commissionType = productAttrs.commissionType || "PERCENTAGE";
-        const commissionRate = productAttrs.commissionValue || 30; // default 30% bagi hasil
-        const itemSubtotal = item.qty * item.price;
-        const commissionAmount =
-          commissionType === "PERCENTAGE"
-            ? (itemSubtotal * commissionRate) / 100
-            : commissionRate * item.qty;
-
-        await tx.staffCommission.create({
-          data: {
-            tenantId: user.tenantId,
-            outletId,
+        const staffUser = await tx.user.findUnique({ where: { id: item.staffId } });
+        const calcResult = calculateItemCommission({
+          item: {
+            productId: item.productId,
+            qty: item.qty,
+            price: item.price,
             staffId: item.staffId,
-            transactionItemId: trxItem.id,
-            commissionType,
-            rate: commissionRate,
-            amount: commissionAmount,
           },
+          product: {
+            type: product.type as any,
+            price: Number(product.price),
+            attributes: (product.attributes as any) || {},
+          },
+          staffUser: staffUser
+            ? { id: staffUser.id, name: staffUser.name, attributes: (staffUser.attributes as any) || {} }
+            : null,
         });
+
+        if (calcResult && calcResult.amount > 0) {
+          await tx.staffCommission.create({
+            data: {
+              tenantId: user.tenantId,
+              outletId,
+              staffId: item.staffId,
+              transactionItemId: trxItem.id,
+              commissionType: calcResult.commissionType,
+              rate: calcResult.rate,
+              amount: calcResult.amount,
+            },
+          });
+        }
       }
 
       // Jika transaksi ini berasal dari antrian booking, ubah status antrian menjadi COMPLETED

@@ -110,6 +110,63 @@ export async function createCafeTableAction(data: {
   return { success: true, table };
 }
 
+export async function updateCafeTableAction(data: {
+  tableId: string;
+  tableNumber: string;
+  capacity?: number;
+  areaZone?: string;
+}) {
+  const user = await requireTenantCafeUser();
+  const { tableId, tableNumber, capacity = 4, areaZone = "INDOOR" } = data;
+
+  if (!tableNumber.trim()) throw new Error("Nomor/Nama meja wajib diisi.");
+
+  const table = await prisma.cafeTable.findUnique({
+    where: { id: tableId },
+  });
+
+  if (!table || table.tenantId !== user.tenantId) {
+    throw new Error("Meja tidak ditemukan.");
+  }
+
+  const updated = await prisma.cafeTable.update({
+    where: { id: tableId },
+    data: {
+      tableNumber: tableNumber.trim(),
+      capacity: Number(capacity) || 4,
+      areaZone: areaZone || "INDOOR",
+    },
+  });
+
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
+  return { success: true, table: updated };
+}
+
+export async function deleteCafeTableAction(tableId: string) {
+  const user = await requireTenantCafeUser();
+
+  const table = await prisma.cafeTable.findUnique({
+    where: { id: tableId },
+  });
+
+  if (!table || table.tenantId !== user.tenantId) {
+    throw new Error("Meja tidak ditemukan.");
+  }
+
+  if (table.status === "OCCUPIED") {
+    throw new Error("Meja sedang digunakan (Occupied / Ada Tamu). Harap selesaikan billing sebelum menghapus meja.");
+  }
+
+  await prisma.cafeTable.delete({
+    where: { id: tableId },
+  });
+
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
+  return { success: true };
+}
+
 export async function updateTableStatusAction(data: {
   tableId: string;
   status: TableStatus;

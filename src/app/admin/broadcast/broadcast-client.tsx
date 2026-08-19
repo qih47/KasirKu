@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastSuccess, toastError } from "@/lib/swal";
 import {
   createBroadcastAction,
   toggleBroadcastAction,
@@ -49,9 +50,9 @@ export function AdminBroadcastClient({
       setShowAddModal(false);
       setTitle("");
       setContent("");
-      window.location.reload();
+      toastSuccess("Pengumuman berhasil dibuat!");
     } catch (err: any) {
-      alert(err.message || "Gagal membuat pengumuman.");
+      toastError(err.message || "Gagal membuat pengumuman.");
     } finally {
       setLoading(false);
     }
@@ -62,7 +63,7 @@ export function AdminBroadcastClient({
       await toggleBroadcastAction(id);
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status broadcast.");
+      toastError(err.message || "Gagal mengubah status broadcast.");
     }
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import { getBarberCommissionsReport } from "@/plugins/barbershop/actions";
 import {
   Scissors,
@@ -33,7 +34,7 @@ export function BarberCommissionsClient({
       const res = await getBarberCommissionsReport({ barberId });
       setData(res);
     } catch (err: any) {
-      alert(err.message || "Gagal memfilter laporan komisi.");
+      toastError(err.message || "Gagal memfilter laporan komisi.");
     }
   };
 

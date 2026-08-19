@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { swalWarning, toastError } from "@/lib/swal";
 import Link from "next/link";
 import {
   openShiftAction,
@@ -211,14 +212,14 @@ export function PosClient({
   const change = Math.max(0, parsedPaid - totalAmount);
 
   // Tambah item ke keranjang
-  const addToCart = (product: any) => {
+  const addToCart = async (product: any) => {
     if (!activeShift) {
       setShowOpenShiftModal(true);
       return;
     }
 
     if (product.type === "BARANG" && (product.stockQty ?? 0) <= 0) {
-      alert("Stok barang ini sudah habis.");
+      await swalWarning("Stok Habis", "Stok barang ini sudah habis.");
       return;
     }
 
@@ -246,17 +247,20 @@ export function PosClient({
       defaultNote = `[${laundryWeight} Kg, ${laundryFragrance}, ${laundryRack}]`;
     }
 
+    const existing = cart.find((item) => item.productId === product.id && item.notes === defaultNote);
+    if (
+      existing &&
+      product.type === "BARANG" &&
+      product.stockQty !== null &&
+      existing.qty >= product.stockQty
+    ) {
+      await swalWarning("Stok Tidak Cukup", `Maksimal stok tersedia hanya ${product.stockQty}`);
+      return;
+    }
+
     setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id && item.notes === defaultNote);
-      if (existing) {
-        if (
-          product.type === "BARANG" &&
-          product.stockQty !== null &&
-          existing.qty >= product.stockQty
-        ) {
-          alert(`Maksimal stok tersedia hanya ${product.stockQty}`);
-          return prev;
-        }
+      const existingInPrev = prev.find((item) => item.productId === product.id && item.notes === defaultNote);
+      if (existingInPrev) {
         return prev.map((item) =>
           item.productId === product.id && item.notes === defaultNote
             ? { ...item, qty: item.qty + 1 }
@@ -277,22 +281,26 @@ export function PosClient({
     });
   };
 
-  const updateCartQty = (productId: string, delta: number) => {
+  const updateCartQty = async (productId: string, delta: number) => {
+    const existing = cart.find((item) => item.productId === productId);
+    if (existing && delta > 0) {
+      const product = products.find((p) => p.id === productId);
+      if (
+        product &&
+        product.type === "BARANG" &&
+        product.stockQty !== null &&
+        existing.qty + delta > product.stockQty
+      ) {
+        await swalWarning("Stok Tidak Cukup", `Maksimal stok hanya ${product.stockQty}`);
+        return;
+      }
+    }
+
     setCart((prev) => {
       return prev
         .map((item) => {
           if (item.productId === productId) {
-            const product = products.find((p) => p.id === productId);
             const newQty = item.qty + delta;
-            if (
-              product &&
-              product.type === "BARANG" &&
-              product.stockQty !== null &&
-              newQty > product.stockQty
-            ) {
-              alert(`Maksimal stok hanya ${product.stockQty}`);
-              return item;
-            }
             return newQty > 0 ? { ...item, qty: newQty } : null;
           }
           return item;
@@ -360,15 +368,15 @@ export function PosClient({
   // Handle Checkout Transaksi
   const handleCheckout = async () => {
     if (!activeShift) {
-      alert("Harap buka shift kasir terlebih dahulu.");
+      await swalWarning("Shift Belum Dibuka", "Harap buka shift kasir terlebih dahulu.");
       return;
     }
     if (cart.length === 0) {
-      alert("Keranjang belanja masih kosong.");
+      await swalWarning("Keranjang Kosong", "Keranjang belanja masih kosong.");
       return;
     }
     if (parsedPaid < totalAmount) {
-      alert("Uang pembayaran kurang dari total tagihan.");
+      await swalWarning("Pembayaran Kurang", "Uang pembayaran kurang dari total tagihan.");
       return;
     }
 

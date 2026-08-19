@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import {
   Palette,
   CheckCircle2,
@@ -117,7 +118,7 @@ export function ThemesClient({
         setTimeout(() => setSuccessMsg(null), 4000);
       }
     } catch (err: any) {
-      alert(err.message || "Gagal menerapkan tema.");
+      toastError(err.message || "Gagal menerapkan tema.");
     } finally {
       setLoadingId(null);
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError, toastSuccess } from "@/lib/swal";
 import {
   ShoppingBag,
   Printer,
@@ -139,7 +140,7 @@ export function StoreClient({ initialData }: StoreClientProps) {
         setPreviewTheme(null);
       }
     } catch (err: any) {
-      alert(err.message || "Gagal membeli tema struk.");
+      toastError(err.message || "Gagal membeli tema struk.");
     } finally {
       setLoadingId(null);
     }
@@ -156,10 +157,10 @@ export function StoreClient({ initialData }: StoreClientProps) {
         setActivePosLayout(layout.id);
         setSuccessMsg(`Layout Kasir POS "${layout.name}" berhasil diterapkan ke kasir!`);
         setTimeout(() => setSuccessMsg(null), 4000);
-        setPreviewLayout(null);
+        toastSuccess("Layout POS berhasil diterapkan!");
       }
     } catch (err: any) {
-      alert(err.message || "Gagal memasang layout POS.");
+      toastError(err.message || "Gagal memasang layout POS.");
     } finally {
       setLoadingId(null);
     }
@@ -175,7 +176,7 @@ export function StoreClient({ initialData }: StoreClientProps) {
         setTimeout(() => setSuccessMsg(null), 4000);
       }
     } catch (err: any) {
-      alert(err.message || "Gagal menerapkan tema UI.");
+      toastError(err.message || "Gagal menerapkan tema UI.");
     } finally {
       setLoadingId(null);
     }
@@ -859,39 +860,123 @@ export function StoreClient({ initialData }: StoreClientProps) {
 
                       {/* Mini Visual Thermal Simulation Box */}
                       <div className="p-3 bg-[#FFFDF9] border border-dashed border-stone-300 rounded-xl font-mono text-[10px] text-stone-800 space-y-1.5 shadow-inner select-none">
-                        <div className="text-center font-bold text-stone-950 uppercase">
-                          {theme.vertical === "BARBERSHOP"
-                            ? "💈 BARBER LOUNGE"
-                            : theme.vertical === "CAFE"
-                              ? "☕ FORE COFFEE"
-                              : theme.vertical === "LAUNDRY"
-                                ? "🧺 BERSIH LAUNDRY"
-                                : "🛒 SUPERMARKET"}
-                        </div>
-                        <div className="border-b border-stone-300 border-dashed pb-1 flex justify-between text-[9px] text-stone-500">
-                          <span>
-                            {theme.vertical === "CAFE"
-                              ? "Meja 04 • Dine In"
-                              : theme.vertical === "BARBERSHOP"
-                                ? "Kapster: Dimas"
-                                : "No: #8821"}
-                          </span>
-                          <span>14:30</span>
-                        </div>
-                        <div className="space-y-0.5 text-[9.5px]">
-                          <div className="flex justify-between">
-                            <span>1x Menu Utama</span>
-                            <span className="font-bold">35.000</span>
-                          </div>
-                          <div className="flex justify-between text-[8.5px] text-stone-500">
-                            <span>+ Service Charge</span>
-                            <span>2.500</span>
-                          </div>
-                        </div>
-                        <div className="border-t border-stone-300 border-dashed pt-1 flex justify-between font-black text-[11px] text-stone-950">
-                          <span>TOTAL</span>
-                          <span>Rp 37.500</span>
-                        </div>
+                        {theme.vertical === "BARBERSHOP" ? (
+                          <>
+                            <div className="text-center font-black text-stone-950 uppercase text-[10.5px]">
+                              💈 BARBERSHOP &amp; SALON
+                            </div>
+                            <div className="border-b border-stone-300 border-dashed pb-1 flex justify-between text-[8.5px] text-stone-600">
+                              <span>[ Kursi #01 • Hendra ]</span>
+                              <span>19/08 16:30</span>
+                            </div>
+                            <div className="space-y-0.5 text-[9px]">
+                              <div className="flex justify-between">
+                                <span>Gentleman Cut (45m)</span>
+                                <span className="font-bold">65.000</span>
+                              </div>
+                              <div className="flex justify-between text-emerald-600 text-[8.5px]">
+                                <span>Disc VIP Member</span>
+                                <span>-15.000</span>
+                              </div>
+                            </div>
+                            <div className="border-t border-stone-300 border-dashed pt-1 flex justify-between font-black text-[10.5px] text-stone-950">
+                              <span>TOTAL (LUNAS)</span>
+                              <span>Rp 50.000</span>
+                            </div>
+                            <p className="text-[7.5px] text-center text-amber-800 font-bold bg-amber-50 rounded py-0.5">
+                              ⭐ +5 Poin Loyalty Member
+                            </p>
+                          </>
+                        ) : theme.vertical === "CAFE" ? (
+                          <>
+                            <div className="text-center font-black text-stone-950 uppercase text-[10.5px]">
+                              ☕ FORE COFFEE &amp; RESTO
+                            </div>
+                            <div className="border-b border-stone-300 border-dashed pb-1 flex justify-between text-[8.5px] text-stone-600">
+                              <span>[ Meja 08 • Dine In ]</span>
+                              <span>#KOT-042</span>
+                            </div>
+                            <div className="space-y-0.5 text-[9px]">
+                              <div className="flex justify-between">
+                                <span>1x Kopi Susu Aren</span>
+                                <span className="font-bold">22.000</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>1x Butter Croissant</span>
+                                <span className="font-bold">24.000</span>
+                              </div>
+                              <div className="flex justify-between text-[8px] text-stone-500">
+                                <span>+ PB1 &amp; Service (15%)</span>
+                                <span>6.900</span>
+                              </div>
+                            </div>
+                            <div className="border-t border-stone-300 border-dashed pt-1 flex justify-between font-black text-[10.5px] text-stone-950">
+                              <span>TOTAL (QRIS)</span>
+                              <span>Rp 52.900</span>
+                            </div>
+                            <p className="text-[7.5px] text-center text-stone-500">
+                              📶 WiFi: FORE_GUEST (pass: kopipagi)
+                            </p>
+                          </>
+                        ) : theme.vertical === "LAUNDRY" ? (
+                          <>
+                            <div className="text-center font-black text-stone-950 uppercase text-[10.5px]">
+                              🧺 CLEAN &amp; FRESH LAUNDRY
+                            </div>
+                            <div className="border-b border-stone-300 border-dashed pb-1 flex justify-between text-[8.5px] text-stone-600">
+                              <span>NOTA #LND-9921</span>
+                              <span className="font-bold text-purple-800">[ RAK C-04 ]</span>
+                            </div>
+                            <div className="space-y-0.5 text-[9px]">
+                              <div className="flex justify-between">
+                                <span>Cuci Lipat (3.5 Kg)</span>
+                                <span className="font-bold">28.000</span>
+                              </div>
+                              <div className="flex justify-between text-[8px] text-stone-500">
+                                <span>Parfum: Lavender</span>
+                                <span>Siap: 21/08</span>
+                              </div>
+                            </div>
+                            <div className="border-t border-stone-300 border-dashed pt-1 flex justify-between font-black text-[10.5px] text-stone-950">
+                              <span>TOTAL BIAYA</span>
+                              <span>Rp 28.000</span>
+                            </div>
+                            <p className="text-[7.5px] text-center text-purple-800 font-bold">
+                              *Wajib bawa nota saat ambil
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-center font-black text-stone-950 uppercase text-[10.5px]">
+                              🛒 SMART MART RETAIL
+                            </div>
+                            <div className="border-b border-stone-300 border-dashed pb-1 flex justify-between text-[8.5px] text-stone-600">
+                              <span>Kasir: Siti • POS 02</span>
+                              <span>19/08 19:45</span>
+                            </div>
+                            <div className="space-y-0.5 text-[9px]">
+                              <div className="flex justify-between">
+                                <span>Minyak Goreng 2L</span>
+                                <span className="font-bold">34.500</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>5x Indomie Goreng</span>
+                                <span className="font-bold">15.500</span>
+                              </div>
+                              <div className="flex justify-between text-emerald-600 text-[8px]">
+                                <span>Promo Hemat Combo</span>
+                                <span>-4.000</span>
+                              </div>
+                            </div>
+                            <div className="border-t border-stone-300 border-dashed pt-1 flex justify-between font-black text-[10.5px] text-stone-950">
+                              <span>TOTAL (CASH)</span>
+                              <span>Rp 46.000</span>
+                            </div>
+                            <p className="text-[7.5px] text-center font-mono tracking-widest text-stone-600">
+                              |||| ||| || |||| |||
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
 

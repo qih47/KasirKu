@@ -203,9 +203,107 @@ export async function getSalesReportData(params: {
     (a, b) => b.totalRevenue - a.totalRevenue
   );
 
-  // 7. Advanced Analytics: Jam Ramai Transaksi (Peak Hours)
+  // 7. Advanced Analytics: Jam Ramai Transaksi (Peak Hours) Dinamis Sesuai Jam Operasional
+  let targetOutletSchedule: any = null;
+  if (params.outletId && params.outletId !== "ALL") {
+    const matchedOutlet = allOutlets.find((o) => o.id === params.outletId);
+    targetOutletSchedule = (matchedOutlet as any)?.operatingHours;
+  } else if (allOutlets.length > 0) {
+    targetOutletSchedule = (allOutlets[0] as any)?.operatingHours;
+  }
+
+  // Helper: Konversi day-of-week number ke key jadwal (0=Minggu, 1=Senin, dst)
+  const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const todayDayKey = DAY_KEYS[new Date().getDay()];
+  const todaySchedule = targetOutletSchedule?.[todayDayKey] ?? null;
+
+  // Helper: Parse closeTime — "00:00" artinya tengah malam (24:00), bukan jam 0 pagi
+  const parseCloseHour = (closeTime: string, openHour: number): number => {
+    const [h] = closeTime.split(":").map(Number);
+    if (h === 0 && openHour > 0) return 24; // tengah malam → 24 (setelah 23)
+    if (h < openHour && h > 0) return 23;   // melewati tengah malam → tampilkan s/d 23
+    return h;
+  };
+
+  // Hitung rentang jam operasional dari HARI INI dulu, fallback ke aggregate semua hari
+  let startH = 8;
+  let endH = 22;
+  let is24H = false;
+  // Simpan string waktu lengkap (HH:MM) untuk label agar menit tidak hilang
+  let labelOpenStr = "08:00";
+  let labelCloseStr = "22:00";
+  let labelIsMidnight = false; // tutup di tengah malam (00:00)
+
+  if (targetOutletSchedule) {
+    // Prioritas: gunakan jadwal hari ini untuk label
+    if (todaySchedule && todaySchedule.isOpen) {
+      if (todaySchedule.is24Hours) {
+        is24H = true;
+        labelOpenStr = "00:00";
+        labelCloseStr = "23:59";
+        startH = 0;
+        endH = 23;
+      } else {
+        const rawOpen  = todaySchedule.openTime  || "08:00";
+        const rawClose = todaySchedule.closeTime || "22:00";
+        const [opH]  = rawOpen.split(":").map(Number);
+        const clHParsed = parseCloseHour(rawClose, opH);
+
+        labelOpenStr  = rawOpen;
+        labelIsMidnight = clHParsed === 24;
+        labelCloseStr = labelIsMidnight ? "23:59" : rawClose;
+
+        startH = isNaN(opH) ? 8 : opH;
+        endH   = clHParsed === 24 ? 23 : clHParsed;
+      }
+    }
+
+    // Perluas range heatmap ke seluruh hari jika periode lebih dari 1 hari
+    if (period !== "TODAY") {
+      const allDays = Object.values(targetOutletSchedule) as any[];
+      allDays.forEach((d) => {
+        if (d && d.isOpen) {
+          if (d.is24Hours) { is24H = true; return; }
+          const [opH] = (d.openTime || "08:00").split(":").map(Number);
+          const rawClose = d.closeTime || "22:00";
+          const clHParsed = parseCloseHour(rawClose, opH);
+          if (!isNaN(opH)) startH = Math.min(startH, opH);
+          endH = Math.max(endH, clHParsed === 24 ? 23 : clHParsed);
+        }
+      });
+    }
+  }
+
+  // Cari jam transaksi terluar agar tidak ada transaksi yang terpotong
+  transactions.forEach((t: any) => {
+    const h = new Date(t.createdAt).getHours();
+    startH = Math.min(startH, h);
+    endH = Math.max(endH, h);
+  });
+
+  if (is24H) {
+    startH = 0;
+    endH = 23;
+    labelOpenStr  = "00:00";
+    labelCloseStr = "23:59";
+  }
+
+  // Bangun label dinamis — gunakan string asli (HH:MM) bukan hanya angka jam
+  let peakHoursLabel: string;
+  if (is24H) {
+    peakHoursLabel = "00:00 - 23:59 (24 Jam)";
+  } else if (todaySchedule && todaySchedule.isOpen) {
+    peakHoursLabel = `${labelOpenStr} - ${labelCloseStr} WIB`;
+    peakHoursLabel += period !== "TODAY" ? " (Hari Ini)" : "";
+  } else {
+    const fmtH = (h: number) => String(h).padStart(2, "0") + ":00";
+    peakHoursLabel = `${fmtH(startH)} - ${fmtH(endH)} WIB`;
+  }
+
   const hourlyCounts: Record<number, number> = {};
-  for (let i = 8; i <= 22; i++) hourlyCounts[i] = 0;
+  for (let i = startH; i <= endH; i++) {
+    hourlyCounts[i] = 0;
+  }
 
   transactions.forEach((t: any) => {
     const hour = new Date(t.createdAt).getHours();
@@ -215,7 +313,7 @@ export async function getSalesReportData(params: {
   });
 
   const peakHours = Object.entries(hourlyCounts).map(([hour, count]) => ({
-    hour: `${hour.padStart(2, "0")}:00`,
+    hour: `${String(hour).padStart(2, "0")}:00`,
     count,
   }));
 
@@ -240,6 +338,12 @@ export async function getSalesReportData(params: {
     topProducts,
     cashierPerformance,
     peakHours,
+    peakHoursRange: {
+      startH,
+      endH,
+      is24H,
+      label: peakHoursLabel,
+    },
     transactionsList: transactions.map((t: any) => ({
       id: t.id,
       transactionNumber: t.transactionNumber,

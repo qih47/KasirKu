@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import {
   createLaundryOrderAction,
   updateLaundryStatusAction,
@@ -72,7 +73,7 @@ export function LaundryOrdersClient({
       setNotes("");
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal membuat order laundry.");
+      toastError(err.message || "Gagal membuat order laundry.");
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export function LaundryOrdersClient({
       await updateLaundryStatusAction(orderId, status);
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal memperbarui status order.");
+      toastError(err.message || "Gagal memperbarui status order.");
     }
   };
 

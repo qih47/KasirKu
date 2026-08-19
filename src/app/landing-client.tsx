@@ -503,58 +503,390 @@ export function LandingClient({
             </div>
 
             <div
-              className="w-full max-w-[280px] rounded-2xl p-5 font-mono shadow-2xl space-y-2 text-xs select-none border"
+              className="w-full max-w-[290px] rounded-2xl p-4 sm:p-5 font-mono shadow-2xl space-y-2 text-xs select-none border transition-all duration-300 transform hover:scale-[1.02]"
               style={{
-                backgroundColor: isDark ? "#FFFDF9" : "#FFFDF9",
+                backgroundColor: "#FFFDF9",
                 color: "#1C1917",
                 borderColor: "#D6D3D1",
+                boxShadow: "0 15px 30px -5px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)",
               }}
             >
-              <div className="text-center space-y-0.5">
-                <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
-                  {currentVert.receiptSample.title}
-                </h4>
-                <p className="text-[9px] font-bold text-stone-600">Cabang Pusat • Jakarta</p>
-                <p className="text-[9px] text-stone-500">Telp: 0812-8899-7700</p>
-              </div>
-
-              <div className="border-b border-stone-400 border-dashed my-2" />
-
-              <div className="flex justify-between text-[10px] font-bold text-stone-700">
-                <span>{currentVert.receiptSample.meta}</span>
-                <span>#INV-5078</span>
-              </div>
-
-              <div className="border-b border-stone-400 border-dashed my-2" />
-
-              <div className="space-y-1.5 text-[10px]">
-                {currentVert.sampleProducts.map((item, idx) => (
-                  <div key={idx} className="flex justify-between font-semibold">
-                    <span className="truncate pr-2">1x {item.name}</span>
-                    <span>{item.price}</span>
+              {/* === 1. CAFE & RESTO RECEIPT === */}
+              {activeVerticalTab === "cafe" && (
+                <div className="space-y-2 animate-fadeIn">
+                  <div className="text-center space-y-0.5">
+                    <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 font-black text-xs mx-auto flex items-center justify-center mb-1">
+                      ☕
+                    </div>
+                    <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
+                      FORE COFFEE &amp; ROASTERY
+                    </h4>
+                    <p className="text-[9px] font-bold text-stone-600">Senopati Flagship • Jakarta</p>
+                    <p className="text-[9px] text-stone-500">Telp: (021) 5790-2211</p>
                   </div>
-                ))}
-              </div>
 
-              <div className="border-b border-stone-400 border-dashed my-2" />
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
 
-              <div className="space-y-0.5 text-[10px]">
-                <div className="flex justify-between text-stone-600">
-                  <span>Subtotal:</span>
-                  <span>{currentVert.receiptSample.total}</span>
+                  <div className="text-[10px] font-semibold text-stone-700 space-y-0.5">
+                    <div className="flex justify-between font-black text-stone-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
+                      <span>[ MEJA 08 • DINE IN ]</span>
+                      <span>#KOT-042</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-stone-500 pt-0.5">
+                      <span>Kasir: Budi #02</span>
+                      <span>19/08/2026 14:23</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-2 text-[10px]">
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Kopi Susu Aren</span>
+                        <span>22.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Less Sugar, Normal Ice</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Iced Caramel Macchiato</span>
+                        <span>28.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Oat Milk (+5k), Extra Shot (+4k)</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Butter Croissant</span>
+                        <span>24.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Diangatkan (Warm Up)</p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Subtotal:</span>
+                      <span>74.000</span>
+                    </div>
+                    <div className="flex justify-between text-stone-600">
+                      <span>Service Charge (5%):</span>
+                      <span>3.700</span>
+                    </div>
+                    <div className="flex justify-between text-stone-600">
+                      <span>PB1 Resto (10%):</span>
+                      <span>7.770</span>
+                    </div>
+                    <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
+                      <span>TOTAL:</span>
+                      <span>Rp 85.470</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-emerald-700 font-bold pt-0.5">
+                      <span>Bayar (QRIS BCA):</span>
+                      <span>LUNAS</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="p-1.5 bg-stone-100 rounded text-center text-[8.5px] space-y-0.5 border border-stone-200">
+                    <p className="font-bold text-stone-800">📶 Free WiFi: FORE_GUEST</p>
+                    <p className="text-stone-600">Password: <span className="font-mono font-black">kopipagi2026</span></p>
+                  </div>
+
+                  <div className="text-center text-[8.5px] text-stone-500 pt-0.5">
+                    <p>Terima kasih atas kunjungan Anda!</p>
+                    <p className="text-[7.5px] opacity-70">Powered by Qassa F&amp;B POS</p>
+                  </div>
                 </div>
-                <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
-                  <span>TOTAL:</span>
-                  <span>{currentVert.receiptSample.total}</span>
+              )}
+
+              {/* === 2. BARBERSHOP & SALON RECEIPT === */}
+              {activeVerticalTab === "barbershop" && (
+                <div className="space-y-2 animate-fadeIn">
+                  <div className="text-center space-y-0.5">
+                    <div className="w-7 h-7 rounded-full bg-slate-900 text-amber-400 font-black text-xs mx-auto flex items-center justify-center mb-1">
+                      ✂️
+                    </div>
+                    <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
+                      CAPTAIN BARBERSHOP
+                    </h4>
+                    <p className="text-[9px] font-bold text-stone-600">Galaxy City Branch • Bekasi</p>
+                    <p className="text-[9px] text-stone-500">Telp: 0811-9988-7711</p>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="text-[10px] font-semibold text-stone-700 space-y-0.5">
+                    <div className="flex justify-between font-black text-stone-900 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
+                      <span>[ KURSI #01 • CAPSTER HENDRA ]</span>
+                      <span>#TRX-882</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-stone-600 pt-0.5">
+                      <span>Cust: Dimas P. (VIP Silver)</span>
+                      <span>19/08 16:40</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-2 text-[10px]">
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Gentleman Cut &amp; Wash (45m)</span>
+                        <span>65.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Hot Towel + Tonic Head Massage</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Beard Shave &amp; Shaping</span>
+                        <span>35.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Cooling Aftershave Lotion</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>1x Matte Clay Pomade 100g</span>
+                        <span>85.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-2">└ Produk Takeaway (Hold 5/5)</p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Subtotal Jasa &amp; Produk:</span>
+                      <span>185.000</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Diskon Member VIP:</span>
+                      <span>-15.000</span>
+                    </div>
+                    <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
+                      <span>TOTAL BAYAR:</span>
+                      <span>Rp 170.000</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-stone-600 pt-0.5">
+                      <span>Metode: Debit Mandiri</span>
+                      <span>LUNAS</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="p-1.5 bg-amber-50/80 rounded text-center text-[8.5px] space-y-0.5 border border-amber-200">
+                    <p className="font-extrabold text-amber-900">⭐ Reward: +17 Poin (Total: 145 Poin)</p>
+                    <p className="text-amber-800 font-medium">3x Kunjungan lagi dapat FREE Haircut!</p>
+                  </div>
+
+                  <div className="text-center text-[8.5px] text-stone-500 pt-0.5">
+                    <p>Booking kapster favorit: captainbarber.id</p>
+                    <p className="text-[7.5px] opacity-70">Powered by Qassa Barbershop POS</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="border-b border-stone-400 border-dashed my-2" />
+              {/* === 3. RETAIL & MINIMARKET RECEIPT === */}
+              {activeVerticalTab === "retail" && (
+                <div className="space-y-2 animate-fadeIn">
+                  <div className="text-center space-y-0.5">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-800 font-black text-xs mx-auto flex items-center justify-center mb-1">
+                      🛒
+                    </div>
+                    <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
+                      SMART MART SUPERSTORE
+                    </h4>
+                    <p className="text-[9px] font-bold text-stone-600">Kelapa Gading Mall • LG-12</p>
+                    <p className="text-[9px] text-stone-500">NPWP: 01.889.332.1-042.000</p>
+                  </div>
 
-              <div className="text-center text-[9px] text-stone-500 pt-1">
-                <p>Terima kasih atas kunjungan Anda!</p>
-                <p className="text-[8px] opacity-70">Powered by Qassa POS</p>
-              </div>
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="text-[9px] text-stone-600 flex justify-between font-mono">
+                    <span>Kasir: Siti #04 • POS 02</span>
+                    <span>19/08/2026 19:45</span>
+                  </div>
+                  <div className="text-[9px] font-bold text-stone-800 flex justify-between">
+                    <span>No: TRX-992014</span>
+                    <span>Member: 0812998811</span>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-1.5 text-[9.5px]">
+                    <div>
+                      <p className="font-bold text-stone-900">8992753 Sania Minyak Goreng 2L</p>
+                      <div className="flex justify-between text-stone-600 pl-1">
+                        <span>1 Pcs x 34.500</span>
+                        <span className="font-semibold text-stone-900">34.500</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-stone-900">8991002 Indomie Goreng Spesial</p>
+                      <div className="flex justify-between text-stone-600 pl-1">
+                        <span>5 Pcs x 3.100</span>
+                        <span className="font-semibold text-stone-900">15.500</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-stone-900">8998866 Ultra Milk Cokelat 1L</p>
+                      <div className="flex justify-between text-stone-600 pl-1">
+                        <span>2 Pcs x 19.000</span>
+                        <span className="font-semibold text-stone-900">38.000</span>
+                      </div>
+                      <div className="flex justify-between text-[8px] text-emerald-600 font-bold pl-1">
+                        <span>└ Promo Beli 2 Disc:</span>
+                        <span>-4.000</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Total Item (8 Pcs):</span>
+                      <span>88.000</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span>Hemat Promo Retail:</span>
+                      <span>-4.000</span>
+                    </div>
+                    <div className="flex justify-between text-stone-500 text-[8.5px]">
+                      <span>PPN 11% (Termasuk):</span>
+                      <span>8.324</span>
+                    </div>
+                    <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
+                      <span>TOTAL AKHIR:</span>
+                      <span>Rp 84.000</span>
+                    </div>
+                    <div className="flex justify-between text-stone-700 pt-0.5">
+                      <span>Tunai (Cash):</span>
+                      <span>100.000</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-stone-900">
+                      <span>KEMBALIAN:</span>
+                      <span>16.000</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  {/* Realistic Thermal Barcode */}
+                  <div className="text-center pt-1 space-y-0.5">
+                    <div className="font-mono text-xs font-black tracking-widest text-stone-800 select-none">
+                      ||| | | |||| || || | |||| |||
+                    </div>
+                    <p className="text-[7.5px] text-stone-400">TRX-992014-20260819</p>
+                    <p className="text-[7.5px] text-stone-500">Barang yang dibeli dapat ditukar 1x24 jam dengan struk.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* === 4. LAUNDRY SERVICE RECEIPT === */}
+              {activeVerticalTab === "laundry" && (
+                <div className="space-y-2 animate-fadeIn">
+                  <div className="text-center space-y-0.5">
+                    <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-800 font-black text-xs mx-auto flex items-center justify-center mb-1">
+                      🧺
+                    </div>
+                    <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
+                      CLEAN &amp; FRESH LAUNDRY
+                    </h4>
+                    <p className="text-[9px] font-bold text-stone-600">Margonda Raya No. 88 • Depok</p>
+                    <p className="text-[9px] text-stone-500">WhatsApp: 0812-3344-5566</p>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="text-[9.5px] font-semibold text-stone-700 space-y-0.5">
+                    <div className="flex justify-between font-black text-stone-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60">
+                      <span>NOTA KLAIM: #LND-9921</span>
+                      <span>[ RAK: C-04 ]</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-stone-600 pt-0.5">
+                      <span>Pelanggan: Ibu Ratna</span>
+                      <span>0812-8899-xxxx</span>
+                    </div>
+                    <div className="grid grid-cols-2 text-[8px] text-stone-500 pt-0.5 border-t border-stone-200">
+                      <span>Masuk: 19/08 09:30</span>
+                      <span className="text-right font-bold text-purple-800">Selesai: 21/08 17:00</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-2 text-[9.5px]">
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>Cuci Kering Lipat Reguler</span>
+                        <span>28.000</span>
+                      </div>
+                      <div className="flex justify-between text-[8.5px] text-stone-500 pl-1">
+                        <span>3.50 Kg x Rp 8.000/Kg</span>
+                        <span>Parfum: Lavender</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>Dry Clean Jas Pria (Satuan)</span>
+                        <span>35.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-1">1 Pcs • Hanger + Plastik Cover</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-bold">
+                        <span>Bed Cover King Size (Satuan)</span>
+                        <span>25.000</span>
+                      </div>
+                      <p className="text-[8.5px] text-stone-500 pl-1">1 Pcs • Plastik Vakum</p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Total Berat &amp; Item:</span>
+                      <span>3.50 Kg + 2 Pcs</span>
+                    </div>
+                    <div className="flex justify-between font-black text-stone-950 text-xs pt-1 border-t border-stone-300">
+                      <span>TOTAL BIAYA:</span>
+                      <span>Rp 88.000</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-emerald-700 font-bold pt-0.5">
+                      <span>Status: LUNAS (QRIS)</span>
+                      <span>Cucian: 3 Paket</span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-stone-400 border-dashed my-1.5" />
+
+                  <div className="p-1.5 bg-stone-100 rounded text-center text-[8px] space-y-0.5 border border-stone-200">
+                    <p className="font-bold text-stone-800">⚠️ Syarat Pengambilan:</p>
+                    <p className="text-stone-600">1. Wajib tunjukkan nota ini saat ambil pakaian.</p>
+                    <p className="text-stone-600">2. Klaim keluhan maksimal 1x24 jam setelah diambil.</p>
+                  </div>
+
+                  <div className="text-center text-[8px] text-stone-500 pt-0.5">
+                    <p>Cek status cucian online: qassa.id/c/9921</p>
+                    <p className="text-[7.5px] opacity-70">Powered by Qassa Laundry POS</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

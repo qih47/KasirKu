@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import {
   extendTenantTrial,
   updateTenantStatus,
@@ -77,7 +78,7 @@ export function TenantTableClient({
       setMsg({ id: tenantId, text: `Trial diperpanjang +${days} hari!` });
       setTimeout(() => setMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Gagal memperpanjang trial");
+      toastError(err.message || "Gagal memperpanjang trial");
     } finally {
       setActionLoadingId(null);
     }
@@ -96,7 +97,7 @@ export function TenantTableClient({
       setMsg({ id: tenantId, text: `Status diubah ke ${newStatus}` });
       setTimeout(() => setMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status tenant");
+      toastError(err.message || "Gagal mengubah status tenant");
     } finally {
       setActionLoadingId(null);
     }

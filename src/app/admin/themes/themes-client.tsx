@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import { createThemeAction } from "@/modules/superadmin/theme-actions";
 import {
   Palette,
@@ -64,7 +65,7 @@ export function AdminThemesClient({
       setDescription("");
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal menambah tema.");
+      toastError(err.message || "Gagal menambah tema.");
     } finally {
       setLoading(false);
     }

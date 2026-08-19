@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import {
   Coffee,
   ShoppingCart,
@@ -87,7 +88,7 @@ export function CustomerMenuClient({
       setCart({});
       setShowCartModal(false);
     } catch (err: any) {
-      alert(err.message || "Gagal mengirim pesanan.");
+      toastError(err.message || "Gagal mengirim pesanan.");
     } finally {
       setIsSubmitting(false);
     }

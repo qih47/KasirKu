@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { toastError, swalWarning } from "@/lib/swal";
 import {
   getSalesReportData,
   ReportPeriod,
 } from "@/modules/transaction/report-actions";
+import { CafeReportView } from "@/modules/cafe/components/cafe-report-view";
+import { BarberReportView } from "@/modules/barbershop/components/barber-report-view";
+import { LaundryReportView } from "@/modules/laundry/components/laundry-report-view";
+import { RetailReportView } from "@/modules/retail/components/retail-report-view";
+import { FeatureGate, ReportPaywallCard } from "@/components/features/feature-gate";
 import {
   TrendingUp,
   DollarSign,
@@ -22,13 +28,26 @@ import {
   Layers,
   ArrowUpRight,
   Store,
+  Coffee,
+  Scissors,
+  Shirt,
+  ShoppingBag,
+  Lock,
 } from "lucide-react";
+
+interface ReportsClientProps {
+  initialData: any;
+  activeTierCode?: string;
+  activePlugins?: { code: string; name: string }[];
+  featureMatrix?: any[];
+}
 
 export function ReportsClient({
   initialData,
-}: {
-  initialData: any;
-}) {
+  activeTierCode = "basic",
+  activePlugins = [],
+  featureMatrix = [],
+}: ReportsClientProps) {
   const [data, setData] = useState(initialData);
   const [period, setPeriod] = useState<ReportPeriod>("LAST_7_DAYS");
   const [selectedOutletId, setSelectedOutletId] = useState<string>(
@@ -36,6 +55,26 @@ export function ReportsClient({
   );
   const [loading, setLoading] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [activeReportTab, setActiveReportTab] = useState<string>("CORE");
+
+  const isCafeActive = activePlugins.some((p) => p.code === "cafe");
+  const isBarberActive = activePlugins.some((p) => p.code === "barbershop");
+  const isLaundryActive = activePlugins.some((p) => p.code === "laundry");
+  const isRetailActive = activePlugins.some((p) => p.code === "retail");
+
+  // Dynamic Feature Entitlement Checkers
+  const isFeatureAllowed = (key: string) => {
+    if (!featureMatrix || featureMatrix.length === 0) return true;
+    const feat = featureMatrix.find((f: any) => f.key === key);
+    if (!feat) return true;
+    const normalizedTier = activeTierCode.toLowerCase() === "basic" ? "starter" : activeTierCode.toLowerCase();
+    return feat.allowedTiers.some(
+      (t: string) => t.toLowerCase() === normalizedTier || t.toLowerCase() === activeTierCode.toLowerCase()
+    );
+  };
+
+  const canExportExcel = isFeatureAllowed("REPORT_EXPORT_EXCEL");
+  const canViewProfitLoss = isFeatureAllowed("REPORT_PROFIT_LOSS");
 
   const fetchReports = async (newPeriod: ReportPeriod, outletId: string) => {
     setLoading(true);
@@ -46,7 +85,7 @@ export function ReportsClient({
       });
       setData(res);
     } catch (err: any) {
-      alert(err.message || "Gagal memuat laporan.");
+      toastError(err.message || "Gagal memuat laporan.");
     } finally {
       setLoading(false);
     }
@@ -63,9 +102,9 @@ export function ReportsClient({
   };
 
   // Export to CSV
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     if (!data.transactionsList || data.transactionsList.length === 0) {
-      alert("Tidak ada transaksi untuk diexport pada periode ini.");
+      await swalWarning("Tidak Ada Data", "Tidak ada transaksi untuk diexport pada periode ini.");
       return;
     }
 
@@ -188,36 +227,122 @@ export function ReportsClient({
             </button>
           </div>
 
+            <button
+              onClick={async () => {
+                if (!canExportExcel) {
+                  await swalWarning("Fitur Terkunci 🔒", "Fitur Export Excel memerlukan Lisensi Pro/Enterprise. Silakan upgrade paket langganan Anda.");
+                  return;
+                }
+                handleExportCSV();
+              }}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
+              title={canExportExcel ? "Download CSV" : "Terkunci: Khusus Paket Pro"}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Export CSV</span>
+              {!canExportExcel && <Lock className="w-3 h-3 text-amber-500" />}
+            </button>
+
+            <button
+              onClick={() => setShowPrintModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Cetak / PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Vertical Sub-Tabs Navigation */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
           <button
-            onClick={handleExportCSV}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
-            title="Download CSV"
+            onClick={() => setActiveReportTab("CORE")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+              activeReportTab === "CORE"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+            }`}
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Export CSV</span>
+            <TrendingUp className="w-4 h-4" />
+            <span>📊 Laporan Finansial &amp; POS Inti</span>
           </button>
 
-          <button
-            onClick={() => setShowPrintModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Cetak / PDF</span>
-          </button>
-        </div>
-      </div>
+          {isCafeActive && (
+            <button
+              onClick={() => setActiveReportTab("CAFE")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+                activeReportTab === "CAFE"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+              }`}
+            >
+              <Coffee className="w-4 h-4 text-amber-500" />
+              <span>☕ Analitik Cafe &amp; Meja Resto</span>
+            </button>
+          )}
 
-      {/* 4 KPI Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold uppercase text-slate-500">
-            Total Omset Penjualan
-          </span>
-          <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-            Rp {data.metrics.totalRevenue.toLocaleString("id-ID")}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Semua transaksi sukses</p>
+          {isBarberActive && (
+            <button
+              onClick={() => setActiveReportTab("BARBERSHOP")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+                activeReportTab === "BARBERSHOP"
+                  ? "bg-cyan-600 text-white shadow-md shadow-cyan-600/30"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+              }`}
+            >
+              <Scissors className="w-4 h-4 text-cyan-500" />
+              <span>✂️ Kinerja &amp; Komisi Barber</span>
+            </button>
+          )}
+
+          {isLaundryActive && (
+            <button
+              onClick={() => setActiveReportTab("LAUNDRY")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+                activeReportTab === "LAUNDRY"
+                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+              }`}
+            >
+              <Shirt className="w-4 h-4 text-purple-500" />
+              <span>🧺 Timbangan &amp; SLA Laundry</span>
+            </button>
+          )}
+
+          {isRetailActive && (
+            <button
+              onClick={() => setActiveReportTab("RETAIL")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+                activeReportTab === "RETAIL"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4 text-blue-500" />
+              <span>🛒 Analisis SKU &amp; Retail</span>
+            </button>
+          )}
         </div>
+
+        {/* Conditional Tab Rendering */}
+        {activeReportTab === "CAFE" && <CafeReportView />}
+        {activeReportTab === "BARBERSHOP" && <BarberReportView />}
+        {activeReportTab === "LAUNDRY" && <LaundryReportView />}
+        {activeReportTab === "RETAIL" && <RetailReportView />}
+
+        {activeReportTab === "CORE" && (
+          <div className="space-y-6">
+            {/* 4 KPI Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Total Omset Penjualan
+                </span>
+                <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                  Rp {data.metrics.totalRevenue.toLocaleString("id-ID")}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Semua transaksi sukses</p>
+              </div>
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-xs font-semibold uppercase text-slate-500">
@@ -258,7 +383,9 @@ export function ReportsClient({
               <span className="p-1 rounded-lg bg-amber-500/10 text-amber-500 font-bold">⚡</span>
               Analisis Jam Ramai (Peak Hours / Jam Sibuk Transaksi)
             </h3>
-            <span className="text-xs text-slate-500">08:00 - 22:00 WIB</span>
+            <span className="text-xs text-slate-500">
+              {data.peakHoursRange?.label || "00:00 - 23:00 WIB"}
+            </span>
           </div>
 
           <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-15 gap-2 pt-2">
@@ -518,6 +645,8 @@ export function ReportsClient({
           </div>
         </div>
       </div>
+    </div>
+  )}
 
       {/* Printable Report Modal */}
       {showPrintModal && (

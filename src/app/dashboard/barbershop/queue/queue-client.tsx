@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastError } from "@/lib/swal";
 import {
   createQueueBookingAction,
   updateBookingStatusAction,
@@ -68,7 +69,7 @@ export function BarbershopQueueClient({
       setNotes("");
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal membuat antrian.");
+      toastError(err.message || "Gagal membuat antrian.");
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export function BarbershopQueueClient({
       await updateBookingStatusAction(bookingId, newStatus, chair);
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status antrian.");
+      toastError(err.message || "Gagal mengubah status antrian.");
     }
   };
 

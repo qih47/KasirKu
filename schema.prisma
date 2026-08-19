@@ -173,6 +173,17 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+
 // ============================================================
 // TENANT LAYER
 // ============================================================
@@ -182,6 +193,7 @@ model Tenant {
   businessName     String
   logoUrl          String?      // null = pakai default, hanya aktif jika lisensi/tema mendukung custom branding
   receiptConfig    Json?        // Konfigurasi dinamis struk: logo, pajak, diskon, service charge, checklist komponen
+  dashboardWidgets Json?        // Konfigurasi tata letak widget dashboard ringkasan dinamis tenant
   status           TenantStatus @default(TRIAL)
   trialStartAt     DateTime?    @default(now())
   trialEndAt       DateTime?
@@ -206,13 +218,14 @@ model Tenant {
 // Struktur cabang. Di MVP biasanya 1 tenant = 1 outlet (sesuai limit Lisensi Basic),
 // tapi struktur sudah disiapkan untuk multi-outlet (Lisensi Pro/Enterprise).
 model Outlet {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  name      String
-  address   String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  name           String
+  address        String?
+  operatingHours Json?    // Konfigurasi jadwal jam kerja mingguan 7 hari (Senin - Minggu)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
 
   users         User[]
   products      Product[]
@@ -259,10 +272,13 @@ model TenantSubscription {
   licenseTierId      String
   licenseTier        LicenseTier  @relation(fields: [licenseTierId], references: [id])
   billingCycle       BillingCycle
+  durationMonths     Int?         @default(1)
+  durationKey        String?      @default("1M")
   currentPeriodStart DateTime
   currentPeriodEnd   DateTime
   isActive           Boolean      @default(true)
   createdAt          DateTime     @default(now())
+
 
   plugins TenantPlugin[]
   theme   TenantTheme?
@@ -509,6 +525,7 @@ model CafeTable {
   outlet            Outlet      @relation(fields: [outletId], references: [id])
   tableNumber       String      // misal "Meja 01", "VIP-1", "Outdoor 3"
   capacity          Int         @default(4)
+  areaZone          String?     @default("INDOOR") // "INDOOR" | "OUTDOOR" | "VIP" | "LANTAI_2"
   status            TableStatus @default(AVAILABLE)
   currentGuestName  String?
   currentOrderNotes String?

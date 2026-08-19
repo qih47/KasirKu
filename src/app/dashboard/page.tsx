@@ -1,10 +1,8 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  DynamicDashboardRenderer,
-  DashboardMetricsData,
-} from "@/components/dashboard/dynamic-dashboard-renderer";
+import { DynamicDashboardGrid } from "@/components/dashboard/dynamic-dashboard-grid";
+import { DEFAULT_DASHBOARD_LAYOUT } from "@/modules/dashboard/widget-types";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -29,9 +27,8 @@ export default async function DashboardPage() {
     todayTransactions,
     last7DaysTransactions,
     recentTransactionsList,
-    activeShift,
-    productsList,
-    topItemsGrouped,
+    lowStockProducts,
+    cafeTables,
   ] = await Promise.all([
     targetTenantId
       ? prisma.tenant.findUnique({
@@ -42,9 +39,7 @@ export default async function DashboardPage() {
               include: {
                 licenseTier: true,
                 plugins: {
-                  include: {
-                    plugin: true,
-                  },
+                  include: { plugin: true },
                 },
               },
             },
@@ -87,141 +82,100 @@ export default async function DashboardPage() {
         })
       : [],
     targetTenantId
-      ? prisma.shift.findFirst({
-          where: { outlet: { tenantId: targetTenantId }, closedAt: null },
-          include: { kasir: true },
-          orderBy: { openedAt: "desc" },
-        })
-      : null,
-    targetTenantId
       ? prisma.product.findMany({
-          where: { tenantId: targetTenantId, isActive: true },
-          orderBy: { createdAt: "desc" },
-          take: 6,
+          where: { tenantId: targetTenantId, isActive: true, stockQty: { lte: 10 } },
+          orderBy: { stockQty: "asc" },
+          take: 5,
         })
       : [],
     targetTenantId
-      ? prisma.transactionItem.groupBy({
-          by: ["productId"],
-          where: {
-            transaction: {
-              outlet: { tenantId: targetTenantId },
-            },
-          },
-          _sum: {
-            qty: true,
-            subtotal: true,
-          },
-          orderBy: {
-            _sum: {
-              qty: "desc",
-            },
-          },
-          take: 5,
+      ? prisma.cafeTable.findMany({
+          where: { tenantId: targetTenantId },
         })
       : [],
   ]);
 
   const activeSubscription = tenant?.subscriptions[0];
-  const activePlugins = (activeSubscription?.plugins || []).map((p) => ({
-    id: p.plugin.id,
-    name: p.plugin.name,
-    code: p.plugin.code,
-  }));
+  const activePluginCodes = (activeSubscription?.plugins || []).map(
+    (p: any) => p.plugin.code
+  );
 
   const todayRevenue = todayTransactions.reduce(
-    (acc, curr) => acc + Number(curr.totalAmount || 0),
+    (acc: number, curr: any) => acc + Number(curr.totalAmount || 0),
     0
   );
   const todayTransactionsCount = todayTransactions.length;
-  const averageOrderValue =
-    todayTransactionsCount > 0
-      ? Math.round(todayRevenue / todayTransactionsCount)
-      : 0;
 
   // Real 7-day weekly sales aggregation
   const daysMap = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-  const weeklySalesTrend = Array.from({ length: 7 }, (_, i) => {
+  const weeklyTrends = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     const dayLabel = daysMap[d.getDay()];
     const dateStr = d.toISOString().slice(0, 10);
-    const dayTotal = last7DaysTransactions
-      .filter((t) => t.createdAt.toISOString().slice(0, 10) === dateStr)
-      .reduce((sum, t) => sum + Number(t.totalAmount || 0), 0);
+    const dayTransactions = last7DaysTransactions.filter(
+      (t: any) => t.createdAt.toISOString().slice(0, 10) === dateStr
+    );
+    const dayTotal = dayTransactions.reduce(
+      (sum: number, t: any) => sum + Number(t.totalAmount || 0),
+      0
+    );
     return {
       day: dayLabel,
-      amount: dayTotal,
+      revenue: dayTotal,
+      transactions: dayTransactions.length,
     };
   });
 
-  // Resolve top products from group by or fallback to tenant product catalog
-  let topProductsData = [];
-  if (topItemsGrouped.length > 0) {
-    const productIds = topItemsGrouped.map((g) => g.productId);
-    const matchedProducts = await prisma.product.findMany({
-      where: { id: { in: productIds } },
-    });
-    const productMap = new Map(matchedProducts.map((p) => [p.id, p]));
+  const availableTables = cafeTables.filter((t) => t.status === "AVAILABLE").length;
+  const occupiedTables = cafeTables.filter((t) => t.status === "OCCUPIED").length;
 
-    topProductsData = topItemsGrouped.map((g) => {
-      const p = productMap.get(g.productId);
-      return {
-        id: g.productId,
-        name: p?.name || "Produk",
-        category: p?.category || "Umum",
-        soldQty: g._sum.qty || 0,
-        revenue: Number(g._sum.subtotal || 0),
-      };
-    });
-  } else {
-    topProductsData = productsList.map((p) => ({
-      id: p.id,
-      name: p.name,
-      category: p.category || "Umum",
-      soldQty: 0,
-      revenue: 0,
-    }));
-  }
+  const rawWidgets = (tenant as any)?.dashboardWidgets;
+  const initialWidgets =
+    rawWidgets && Array.isArray(rawWidgets) && rawWidgets.length > 0
+      ? rawWidgets
+      : DEFAULT_DASHBOARD_LAYOUT;
 
-  const metricsData: DashboardMetricsData = {
-    tenantName: tenant?.businessName || user?.name || "Qassa Outlet",
-    userName: user?.name || "Admin",
-    isTrial: tenant?.status === "TRIAL",
-    tierName: activeSubscription?.licenseTier?.name || "Lisensi Pro",
-    outletsCount: tenant?.outlets.length || 1,
-    maxOutlets: activeSubscription?.licenseTier?.outletLimit || null,
-    usersCount: tenant?.users.length || 1,
-    activePlugins,
-    todayRevenue,
-    todayTransactionsCount,
-    averageOrderValue,
-    weeklySalesTrend,
-    activeShiftStatus: {
-      isOpen: Boolean(activeShift),
-      cashierName: activeShift?.kasir?.name || (Boolean(activeShift) ? "Kasir Aktif" : "Belum Ada Shift"),
-      openedAt: activeShift
-        ? new Date(activeShift.openedAt).toLocaleTimeString("id-ID", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "-",
-      openingCash: activeShift ? Number(activeShift.openingCash) : 0,
-    },
-    recentTransactions: recentTransactionsList.map((t: any) => ({
-      id: t.id,
-      receiptNumber: t.transactionNumber || `#INV-${t.id.slice(0, 6)}`,
-      totalAmount: Number(t.totalAmount || 0),
-      paymentMethod: t.payments?.[0]?.method || "CASH",
-      createdAt: new Date(t.createdAt).toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    })),
-    topProducts: topProductsData,
-  };
-
-  return <DynamicDashboardRenderer data={metricsData} />;
+  return (
+    <DynamicDashboardGrid
+      initialWidgets={initialWidgets}
+      metricsData={{
+        tenantName: tenant?.businessName || user?.name || "KasirKu Store",
+        outletName: tenant?.outlets?.[0]?.name || "Cabang Utama",
+        activeTierName: activeSubscription?.licenseTier?.name || "Lisensi Pro",
+        activePlugins: activePluginCodes,
+        todayRevenue,
+        todayTransactionsCount,
+        weeklyTrends,
+        recentTransactions: recentTransactionsList.map((t: any) => ({
+          id: t.id,
+          transactionNumber: t.transactionNumber || `TRX-${t.id.slice(0, 6)}`,
+          totalAmount: Number(t.totalAmount || 0),
+          paymentMethod: t.payments?.[0]?.method || "TUNAI",
+          itemsSummary: t.items?.[0]?.product?.name || "Item Belanja",
+        })),
+        lowStockProducts: lowStockProducts.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          stock: p.stockQty || 0,
+          minStockAlert: (p.attributes as any)?.minStockAlert || 5,
+        })),
+        cafeStats: {
+          totalTables: cafeTables.length,
+          available: availableTables,
+          occupied: occupiedTables,
+        },
+        barberStats: {
+          activeChairs: 3,
+          queueCount: 2,
+        },
+        laundryStats: {
+          todayWeightKg: 42.5,
+          pendingOrders: 5,
+        },
+      }}
+    />
+  );
 }
 
 

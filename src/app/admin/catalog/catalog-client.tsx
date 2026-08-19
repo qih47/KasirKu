@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastSuccess, toastError } from "@/lib/swal";
 import { useSearchParams } from "next/navigation";
 import {
   updateLicenseTierAction,
@@ -16,6 +17,13 @@ import {
   calculateDurationPrice,
 } from "@/types/subscription-duration";
 import { updateSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
+import {
+  FeatureEntitlement,
+  CATEGORY_LABELS,
+  FeatureCategory,
+} from "@/modules/features/types";
+import { DEFAULT_FEATURE_ENTITLEMENTS } from "@/modules/features/feature-registry";
+import { updateFeatureEntitlementsMatrixAction } from "@/modules/features/feature-actions";
 import {
   Tags,
   CheckCircle2,
@@ -46,6 +54,8 @@ import {
   Box,
   Clock,
   Percent,
+  Sliders,
+  Lock,
 } from "lucide-react";
 
 
@@ -54,15 +64,17 @@ export function CatalogClient({
   initialPlugins,
   initialThemes,
   initialDurationSettings,
+  initialFeatureEntitlements,
 }: {
   initialLicenses: any[];
   initialPlugins: any[];
   initialThemes: any[];
   initialDurationSettings?: DurationSettingItem[];
+  initialFeatureEntitlements?: FeatureEntitlement[];
 }) {
   const searchParams = useSearchParams();
   const defaultTab = (searchParams.get("tab") as any) || "LICENSES";
-  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "DURATIONS">(defaultTab);
+  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "DURATIONS" | "FEATURE_MATRIX">(defaultTab);
 
 
   const [licenses, setLicenses] = useState(initialLicenses);
@@ -74,6 +86,27 @@ export function CatalogClient({
       : DEFAULT_DURATION_SETTINGS
   );
   const [durationLoading, setDurationLoading] = useState(false);
+
+  // Dynamic Feature Entitlements Matrix State
+  const [featureEntitlements, setFeatureEntitlements] = useState<FeatureEntitlement[]>(
+    initialFeatureEntitlements && initialFeatureEntitlements.length > 0
+      ? initialFeatureEntitlements
+      : DEFAULT_FEATURE_ENTITLEMENTS
+  );
+  const [featureFilterCategory, setFeatureFilterCategory] = useState<string>("ALL");
+  const [featureLoading, setFeatureLoading] = useState(false);
+
+  const handleSaveFeatureMatrix = async () => {
+    setFeatureLoading(true);
+    try {
+      await updateFeatureEntitlementsMatrixAction(featureEntitlements);
+      toastSuccess("Matriks fitur berhasil disimpan!");
+    } catch (err: any) {
+      toastError(err.message || "Gagal menyimpan matriks fitur.");
+    } finally {
+      setFeatureLoading(false);
+    }
+  };
 
 
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -228,7 +261,7 @@ export function CatalogClient({
       setSuccessMsg(`Lisensi "${l.name}" berhasil disimpan!`);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan lisensi.");
+      toastError(err.message || "Gagal menyimpan lisensi.");
     } finally {
       setLoadingId(null);
     }
@@ -263,7 +296,7 @@ export function CatalogClient({
       setSuccessMsg(`Plugin "${p.name}" berhasil disimpan!`);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan plugin.");
+      toastError(err.message || "Gagal menyimpan plugin.");
     } finally {
       setLoadingId(null);
     }
@@ -280,7 +313,7 @@ export function CatalogClient({
         setTimeout(() => setSuccessMsg(null), 4000);
       }
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan pengaturan diskon durasi.");
+      toastError(err.message || "Gagal menyimpan pengaturan diskon durasi.");
     } finally {
       setDurationLoading(false);
     }
@@ -304,7 +337,7 @@ export function CatalogClient({
       setSuccessMsg(`Tema "${t.name}" berhasil disimpan!`);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan tema.");
+      toastError(err.message || "Gagal menyimpan tema.");
     } finally {
       setLoadingId(null);
     }
@@ -342,7 +375,7 @@ export function CatalogClient({
         setTimeout(() => setSuccessMsg(null), 3000);
       }
     } catch (err: any) {
-      alert(err.message || "Gagal membuat tema baru.");
+      toastError(err.message || "Gagal membuat tema baru.");
     } finally {
       setThemeModalLoading(false);
     }
@@ -449,6 +482,18 @@ export function CatalogClient({
           >
             <Clock className="w-4 h-4" />
             <span>Diskon Durasi Langganan ⚙️</span>
+          </button>
+
+          <button
+            onClick={() => setTab("FEATURE_MATRIX")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              tab === "FEATURE_MATRIX"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Matriks Hak Akses Fitur Tier 🛡️</span>
           </button>
         </div>
       </div>
@@ -1481,6 +1526,232 @@ export function CatalogClient({
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 7. MATRIKS HAK AKSES FITUR TIER & VERTIKAL (DYNAMIC)     */}
+      {/* ======================================================== */}
+      {tab === "FEATURE_MATRIX" && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header Action Bar */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <ShieldCheck className="w-4 h-4" />
+                </span>
+                <p className="font-bold text-white text-sm">
+                  Matriks Hak Akses Fitur Tier &amp; Vertikal (Tanpa Hardcode)
+                </p>
+              </div>
+              <p className="text-slate-400 text-xs leading-relaxed max-w-2xl">
+                Atur fitur mana saja yang aktif di paket <strong>Starter (Basic)</strong>, <strong>Pro</strong>, <strong>Enterprise</strong>, atau yang memerlukan <strong>Modul Vertikal Khusus</strong>. Perubahan ini langsung disinkronkan secara live ke dashboard seluruh tenant.
+              </p>
+            </div>
+
+            <button
+              onClick={handleSaveFeatureMatrix}
+              disabled={featureLoading}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50 flex-shrink-0"
+            >
+              {featureLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Menyimpan Matriks...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Perubahan Matriks</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+            <button
+              onClick={() => setFeatureFilterCategory("ALL")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
+                featureFilterCategory === "ALL"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+              }`}
+            >
+              Semua Modul ({featureEntitlements.length})
+            </button>
+            {(Object.keys(CATEGORY_LABELS) as FeatureCategory[]).map((catKey) => {
+              const info = CATEGORY_LABELS[catKey];
+              const count = featureEntitlements.filter((f) => f.category === catKey).length;
+              if (count === 0) return null;
+
+              return (
+                <button
+                  key={catKey}
+                  onClick={() => setFeatureFilterCategory(catKey)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 flex items-center gap-1.5 ${
+                    featureFilterCategory === catKey
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                      : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  }`}
+                >
+                  <span>{info.name}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Interactive Feature Matrix Table */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+              <thead>
+                <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 bg-slate-950/60">
+                  <th className="py-3 px-4 w-[35%]">Fitur &amp; Deskripsi Upsell</th>
+                  <th className="py-3 px-3">Kategori</th>
+                  <th className="py-3 px-3 text-center">Starter (Basic)</th>
+                  <th className="py-3 px-3 text-center">Pro</th>
+                  <th className="py-3 px-3 text-center">Enterprise</th>
+                  <th className="py-3 px-4">Prasyarat Vertikal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {featureEntitlements
+                  .filter(
+                    (f) =>
+                      featureFilterCategory === "ALL" ||
+                      f.category === featureFilterCategory
+                  )
+                  .map((feat) => {
+                    const isStarter = feat.allowedTiers.includes("starter") || feat.allowedTiers.includes("basic");
+                    const isPro = feat.allowedTiers.includes("pro");
+                    const isEnterprise = feat.allowedTiers.includes("enterprise");
+                    const catInfo = CATEGORY_LABELS[feat.category] || {
+                      name: feat.category,
+                      color: "text-slate-400 bg-slate-800 border-slate-700",
+                    };
+
+                    const handleToggleTier = (tier: string) => {
+                      const updated = featureEntitlements.map((item) => {
+                        if (item.key !== feat.key) return item;
+                        let tiers = [...item.allowedTiers];
+
+                        if (tier === "starter") {
+                          if (isStarter) {
+                            tiers = tiers.filter((t) => t !== "starter" && t !== "basic");
+                          } else {
+                            tiers.push("starter");
+                          }
+                        } else if (tier === "pro") {
+                          if (isPro) {
+                            tiers = tiers.filter((t) => t !== "pro");
+                          } else {
+                            tiers.push("pro");
+                          }
+                        } else if (tier === "enterprise") {
+                          if (isEnterprise) {
+                            tiers = tiers.filter((t) => t !== "enterprise");
+                          } else {
+                            tiers.push("enterprise");
+                          }
+                        }
+
+                        return { ...item, allowedTiers: tiers };
+                      });
+
+                      setFeatureEntitlements(updated);
+                    };
+
+                    const handlePluginChange = (pluginVal: string) => {
+                      const updated = featureEntitlements.map((item) => {
+                        if (item.key !== feat.key) return item;
+                        return {
+                          ...item,
+                          requiredPlugin: pluginVal === "none" ? null : pluginVal,
+                        };
+                      });
+                      setFeatureEntitlements(updated);
+                    };
+
+                    return (
+                      <tr key={feat.key} className="hover:bg-slate-800/30 transition">
+                        {/* Feature Info */}
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-white text-xs">
+                            {feat.name}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                            {feat.description}
+                          </p>
+                          <span className="font-mono text-[9px] text-indigo-400/80 bg-indigo-500/10 px-1.5 py-0.5 rounded mt-1 inline-block">
+                            {feat.key}
+                          </span>
+                        </td>
+
+                        {/* Category */}
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${catInfo.color}`}>
+                            {catInfo.name}
+                          </span>
+                        </td>
+
+                        {/* Starter Checkbox */}
+                        <td className="py-3 px-3 text-center">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isStarter}
+                              onChange={() => handleToggleTier("starter")}
+                              className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                            />
+                          </label>
+                        </td>
+
+                        {/* Pro Checkbox */}
+                        <td className="py-3 px-3 text-center">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isPro}
+                              onChange={() => handleToggleTier("pro")}
+                              className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                            />
+                          </label>
+                        </td>
+
+                        {/* Enterprise Checkbox */}
+                        <td className="py-3 px-3 text-center">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isEnterprise}
+                              onChange={() => handleToggleTier("enterprise")}
+                              className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                            />
+                          </label>
+                        </td>
+
+                        {/* Required Plugin Dropdown */}
+                        <td className="py-3 px-4">
+                          <select
+                            value={feat.requiredPlugin || "none"}
+                            onChange={(e) => handlePluginChange(e.target.value)}
+                            className="w-full px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="none">Bebas (Tanpa Plugin)</option>
+                            <option value="cafe">☕ Wajib Plugin Cafe</option>
+                            <option value="barbershop">✂️ Wajib Plugin Barbershop</option>
+                            <option value="laundry">🧺 Wajib Plugin Laundry</option>
+                            <option value="retail">🛒 Wajib Plugin Retail</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

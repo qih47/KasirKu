@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastSuccess, toastError, swalConfirm } from "@/lib/swal";
 import {
   createCashierAction,
   toggleStaffStatusAction,
@@ -96,16 +97,19 @@ export function StaffClient({
         ),
       }));
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status staff.");
+      toastError(err.message || "Gagal mengubah status staff.");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleDelete = async (userId: string, staffName: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus kasir "${staffName}"?`)) {
-      return;
-    }
+    const ok = await swalConfirm(
+      "Hapus Kasir?",
+      `Kasir "${staffName}" akan dihapus permanen.`,
+      { confirmText: "Ya, Hapus", isDanger: true }
+    );
+    if (!ok) return;
     setActionLoadingId(userId);
     try {
       await deleteStaffAction(userId);
@@ -117,10 +121,9 @@ export function StaffClient({
           prev.kasirLimit !== null &&
           prev.currentCashierCount - 1 >= prev.kasirLimit,
       }));
-      setSuccessMsg(`Kasir "${staffName}" berhasil dihapus.`);
-      setTimeout(() => setSuccessMsg(null), 3000);
+      toastSuccess(`Kasir "${staffName}" berhasil dihapus.`);
     } catch (err: any) {
-      alert(err.message || "Gagal menghapus kasir.");
+      toastError(err.message || "Gagal menghapus kasir.");
     } finally {
       setActionLoadingId(null);
     }

@@ -101,6 +101,66 @@ export async function createOutletAction(data: {
   return { success: true, outlet: newOutlet };
 }
 
+export async function updateOutletAction(data: {
+  outletId: string;
+  name: string;
+  address?: string;
+}) {
+  const user = await requireOwner();
+  const { outletId, name, address } = data;
+
+  if (!name.trim()) throw new Error("Nama cabang outlet wajib diisi.");
+
+  const outlet = await prisma.outlet.findUnique({
+    where: { id: outletId },
+  });
+
+  if (!outlet || outlet.tenantId !== user.tenantId) {
+    throw new Error("Outlet tidak ditemukan.");
+  }
+
+  const updated = await prisma.outlet.update({
+    where: { id: outletId },
+    data: {
+      name: name.trim(),
+      address: address?.trim() || null,
+    },
+  });
+
+  revalidatePath("/dashboard/outlets");
+  revalidatePath("/dashboard/settings");
+  return { success: true, outlet: updated };
+}
+
+export async function updateOutletOperatingHoursAction(data: {
+  outletId: string;
+  operatingHours: any;
+}) {
+  const user = await requireOwner();
+  const { outletId, operatingHours } = data;
+
+  const outlet = await prisma.outlet.findUnique({
+    where: { id: outletId },
+  });
+
+  if (!outlet || outlet.tenantId !== user.tenantId) {
+    throw new Error("Outlet tidak ditemukan.");
+  }
+
+  const updated = await prisma.outlet.update({
+    where: { id: outletId },
+    data: {
+      operatingHours,
+    },
+  });
+
+  revalidatePath("/dashboard/outlets");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard");
+  return { success: true, outlet: updated };
+}
+
 export async function toggleOutletStatusAction(outletId: string) {
   const user = await requireOwner();
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toastSuccess, toastError, swalConfirm } from "@/lib/swal";
 import {
   createProductAction,
   updateProductAction,
@@ -183,14 +184,19 @@ export function ProductClient({
         ),
       }));
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status produk.");
+      toastError(err.message || "Gagal mengubah status produk.");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleDelete = async (id: string, prodName: string) => {
-    if (!confirm(`Hapus "${prodName}" dari katalog?`)) return;
+    const ok = await swalConfirm(
+      "Hapus Produk?",
+      `"${prodName}" akan dihapus permanen dari katalog.`,
+      { confirmText: "Ya, Hapus", isDanger: true }
+    );
+    if (!ok) return;
     setActionLoadingId(id);
     try {
       await deleteProductAction(id);
@@ -202,10 +208,9 @@ export function ProductClient({
           totalItems: prev.metrics.totalItems - 1,
         },
       }));
-      setSuccessMsg(`"${prodName}" berhasil dihapus.`);
-      setTimeout(() => setSuccessMsg(null), 3000);
+      toastSuccess(`"${prodName}" berhasil dihapus.`);
     } catch (err: any) {
-      alert(err.message || "Gagal menghapus produk.");
+      toastError(err.message || "Gagal menghapus produk.");
     } finally {
       setActionLoadingId(null);
     }

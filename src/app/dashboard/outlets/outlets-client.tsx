@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { toastError } from "@/lib/swal";
 import {
   Store,
   Plus,
@@ -20,6 +21,8 @@ import {
   createOutletAction,
   toggleOutletStatusAction,
 } from "@/modules/tenant/outlet-actions";
+import { OperatingHoursModal } from "@/components/outlets/operating-hours-modal";
+import { Clock } from "lucide-react";
 
 interface OutletsClientProps {
   initialData?: {
@@ -48,6 +51,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
   };
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedScheduleOutlet, setSelectedScheduleOutlet] = useState<any>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
@@ -78,7 +82,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
       await toggleOutletStatusAction(outletId);
       window.location.reload();
     } catch (err: any) {
-      alert(err.message || "Gagal mengubah status outlet.");
+      toastError(err.message || "Gagal mengubah status outlet.");
     }
   };
 
@@ -195,20 +199,39 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-400 text-[11px]">
-                  Terdaftar: {new Date(outlet.createdAt).toLocaleDateString("id-ID")}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedScheduleOutlet(outlet)}
+                  className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] flex items-center gap-1.5 transition border border-indigo-200/50"
+                  title="Atur jam buka-tutup mingguan (Senin - Minggu) untuk analitik jam ramai"
+                >
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Atur Jam Kerja</span>
+                </button>
+
                 <Link
                   href="/pos"
-                  className="font-bold text-indigo-600 hover:text-indigo-700 text-xs"
+                  className="font-bold text-indigo-600 hover:text-indigo-700 text-xs flex items-center gap-1"
                 >
-                  Buka Kasir &rarr;
+                  <span>Buka Kasir</span> &rarr;
                 </Link>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Modal Atur Jam Operasional Mingguan */}
+      {selectedScheduleOutlet && (
+        <OperatingHoursModal
+          isOpen={true}
+          onClose={() => setSelectedScheduleOutlet(null)}
+          outletId={selectedScheduleOutlet.id}
+          outletName={selectedScheduleOutlet.name}
+          initialSchedule={selectedScheduleOutlet.operatingHours}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
 
       {/* Modal Tambah Cabang Baru */}
       {showAddModal && (
@@ -241,10 +264,10 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
                 <input
                   type="text"
                   required
-                  placeholder="Misal: Cabang Serpong, Cabang Bandung"
+                  placeholder="Contoh: Cabang Kemang, Outlet Bandung..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-[#FAFAFC] focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
 
@@ -253,7 +276,7 @@ export function OutletsClient({ initialData, data: propData }: OutletsClientProp
                   Alamat Lengkap Cabang
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   placeholder="Jl. Raya Utama No. 123..."
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}

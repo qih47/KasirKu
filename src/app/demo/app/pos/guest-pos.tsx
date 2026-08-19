@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { swalWarning } from "@/lib/swal";
 import Link from "next/link";
 import {
   Store,
@@ -108,10 +109,10 @@ export function GuestPOS() {
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const change = Math.max(0, paidAmount - totalAmount);
 
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
     if (cart.length === 0) return;
     if (paidAmount < totalAmount) {
-      alert("Nominal pembayaran kurang dari total tagihan.");
+      await swalWarning("Pembayaran Kurang", "Nominal pembayaran kurang dari total tagihan.");
       return;
     }
     const newTrx = `TRX-DEMO-${Math.floor(1000 + Math.random() * 9000)}`;

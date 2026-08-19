@@ -106,6 +106,58 @@ export function ReportsClient({
   };
 
   // Export to CSV
+  const [stockTypeFilter, setStockTypeFilter] = useState<string>("ALL");
+  const [stockSearchQuery, setStockSearchQuery] = useState<string>("" );
+
+  const handleExportStockLedgerCSV = () => {
+    const movements = data.stockLedger?.movements || [];
+    if (movements.length === 0) {
+      swalWarning("Data Kosong", "Tidak ada log mutasi stok pada periode ini.");
+      return;
+    }
+
+    const headers = [
+      "Waktu",
+      "Cabang",
+      "Nama Produk",
+      "Barcode SKU",
+      "Tipe Mutasi",
+      "Perubahan Qty",
+      "No. Referensi",
+      "Petugas/Kasir",
+      "Catatan",
+    ];
+
+    const rows = movements.map((m: any) => [
+      `"${m.date}"`,
+      `"${m.outletName}"`,
+      `"${m.productName.replace(/"/g, '""')}"`,
+      `"${m.productBarcode}"`,
+      `"${m.type}"`,
+      m.qty,
+      `"${m.referenceId}"`,
+      `"${m.performedByName}"`,
+      `"${m.note.replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e: any) => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `Log_Mutasi_Stok_${data.tenantName.replace(/\s+/g, "_")}_${
+        data.dateRange.from
+      }_to_${data.dateRange.to}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleExportCSV = async () => {
     if (!data.transactionsList || data.transactionsList.length === 0) {
       await swalWarning("Tidak Ada Data", "Tidak ada transaksi untuk diexport pada periode ini.");
@@ -271,6 +323,18 @@ export function ReportsClient({
             <span>📊 Laporan Finansial &amp; POS Inti</span>
           </button>
 
+          <button
+            onClick={() => setActiveReportTab("STOCK_LEDGER")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+              activeReportTab === "STOCK_LEDGER"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md"
+                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+            }`}
+          >
+            <Layers className="w-4 h-4 text-indigo-500" />
+            <span>📋 Log Audit Mutasi Stok</span>
+          </button>
+
           {isCafeActive && (
             <button
               onClick={() => setActiveReportTab("CAFE")}
@@ -333,6 +397,208 @@ export function ReportsClient({
         {activeReportTab === "BARBERSHOP" && <BarberReportView data={data.barberAnalytics} />}
         {activeReportTab === "LAUNDRY" && <LaundryReportView data={data.laundryAnalytics} />}
         {activeReportTab === "RETAIL" && <RetailReportView data={data.retailAnalytics} />}
+
+        {/* Tab 5: Stock Ledger Audit Trail */}
+        {activeReportTab === "STOCK_LEDGER" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* 4 KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Total Barang Masuk (IN)
+                </span>
+                <p className="text-2xl font-black text-emerald-600">
+                  +{data.stockLedger?.totalIn || 0}{" "}
+                  <span className="text-xs font-normal text-slate-400">Unit</span>
+                </p>
+                <p className="text-[11px] text-slate-500">Restock &amp; Transfer Masuk</p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Total Barang Keluar (OUT)
+                </span>
+                <p className="text-2xl font-black text-rose-600">
+                  -{data.stockLedger?.totalOut || 0}{" "}
+                  <span className="text-xs font-normal text-slate-400">Unit</span>
+                </p>
+                <p className="text-[11px] text-slate-500">Penjualan Kasir &amp; Transfer Keluar</p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Total Penyesuaian Opname
+                </span>
+                <p className="text-2xl font-black text-indigo-600">
+                  {data.stockLedger?.totalAdjustment || 0}{" "}
+                  <span className="text-xs font-normal text-slate-400">Unit</span>
+                </p>
+                <p className="text-[11px] text-slate-500">Koreksi audit fisik gudang</p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                <span className="text-xs font-semibold uppercase text-slate-500">
+                  Pergerakan Transfer Cabang
+                </span>
+                <p className="text-2xl font-black text-purple-600">
+                  {data.stockLedger?.totalTransfer || 0}{" "}
+                  <span className="text-xs font-normal text-slate-400">Unit</span>
+                </p>
+                <p className="text-[11px] text-slate-500">Rotasi stok antar cabang</p>
+              </div>
+            </div>
+
+            {/* Filter & Export Bar */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={stockTypeFilter}
+                    onChange={(e) => setStockTypeFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="ALL">Semua Tipe Mutasi</option>
+                    <option value="IN">Restock Masuk (+)</option>
+                    <option value="OUT">Penjualan Kasir / Buang (-)</option>
+                    <option value="ADJUSTMENT">Koreksi Opname</option>
+                    <option value="TRANSFER_OUT">Transfer Keluar Cabang</option>
+                    <option value="TRANSFER_IN">Transfer Masuk Cabang</option>
+                  </select>
+                </div>
+
+                <input
+                  type="text"
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                  placeholder="Cari produk, SKU, no ref..."
+                  className="px-3.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none w-56"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportStockLedgerCSV}
+                className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Log Mutasi CSV</span>
+              </button>
+            </div>
+
+            {/* Stock Movement Ledger Table */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50/80 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-3.5 px-4">Waktu</th>
+                      <th className="py-3.5 px-4">Cabang</th>
+                      <th className="py-3.5 px-4">Produk &amp; SKU</th>
+                      <th className="py-3.5 px-4">Tipe Mutasi</th>
+                      <th className="py-3.5 px-4">Perubahan Qty</th>
+                      <th className="py-3.5 px-4">No. Referensi</th>
+                      <th className="py-3.5 px-4">Petugas / Kasir</th>
+                      <th className="py-3.5 px-4">Catatan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {(() => {
+                      const list = (data.stockLedger?.movements || []).filter((m: any) => {
+                        if (stockTypeFilter !== "ALL" && m.type !== stockTypeFilter) return false;
+                        if (stockSearchQuery.trim()) {
+                          const q = stockSearchQuery.toLowerCase();
+                          const matchProd = m.productName?.toLowerCase().includes(q);
+                          const matchSku = m.productBarcode?.toLowerCase().includes(q);
+                          const matchRef = m.referenceId?.toLowerCase().includes(q);
+                          if (!matchProd && !matchSku && !matchRef) return false;
+                        }
+                        return true;
+                      });
+
+                      if (list.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                              Tidak ada riwayat mutasi stok yang sesuai dengan filter.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return list.map((m: any) => {
+                        const isIn = m.type === "IN" || m.type === "TRANSFER_IN";
+                        const isOut = m.type === "OUT" || m.type === "TRANSFER_OUT";
+                        const isAdj = m.type === "ADJUSTMENT";
+
+                        return (
+                          <tr key={m.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                            <td className="py-3 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                              {m.date}
+                            </td>
+                            <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
+                              <span className="inline-flex items-center gap-1">
+                                <Store className="w-3 h-3 text-slate-400" />
+                                {m.outletName}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-900 dark:text-white block">
+                                {m.productName}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                SKU: {m.productBarcode}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                  m.type === "IN"
+                                    ? "bg-emerald-500/10 text-emerald-600"
+                                    : m.type === "OUT"
+                                    ? "bg-rose-500/10 text-rose-600"
+                                    : m.type === "TRANSFER_IN"
+                                    ? "bg-teal-500/10 text-teal-600"
+                                    : m.type === "TRANSFER_OUT"
+                                    ? "bg-purple-500/10 text-purple-600"
+                                    : "bg-indigo-500/10 text-indigo-600"
+                                }`}
+                              >
+                                {m.type}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono font-black text-xs">
+                              <span
+                                className={
+                                  isIn
+                                    ? "text-emerald-600"
+                                    : isOut
+                                    ? "text-rose-600"
+                                    : "text-indigo-600"
+                                }
+                              >
+                                {isIn ? `+${m.qty}` : isOut ? `-${m.qty}` : `Set: ${m.qty}`}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                              {m.referenceId}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium">
+                              {m.performedByName}
+                            </td>
+                            <td className="py-3 px-4 text-slate-500 text-[11px] max-w-xs truncate">
+                              {m.note}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeReportTab === "CORE" && (
           <div className="space-y-6">

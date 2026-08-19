@@ -74,6 +74,7 @@ export async function getSalesReportData(params: {
     laundryOrders,
     commissions,
     outletStocks,
+    stockMovements,
   ] = await Promise.all([
     prisma.transaction.findMany({
       where: whereClause,
@@ -120,16 +121,39 @@ export async function getSalesReportData(params: {
     prisma.staffCommission.findMany({
       where: {
         tenantId: user.tenantId,
+        ...outletFilter,
         createdAt: { gte: fromDate, lte: toDate },
       },
       include: { staff: true },
     }),
     prisma.outletStock.findMany({
       where: {
-        outlet: { tenantId: user.tenantId },
-        ...outletFilter,
+        outlet: {
+          tenantId: user.tenantId,
+          ...(params.outletId && params.outletId !== "ALL" ? { id: params.outletId } : {}),
+        },
       },
       include: { product: true, outlet: true },
+    }),
+    prisma.stockMovement.findMany({
+      where: {
+        outletStock: {
+          outlet: {
+            tenantId: user.tenantId,
+            ...(params.outletId && params.outletId !== "ALL" ? { id: params.outletId } : {}),
+          },
+        },
+        createdAt: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        outletStock: {
+          include: {
+            product: true,
+            outlet: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -483,6 +507,31 @@ export async function getSalesReportData(params: {
     deadStockSku: deadStockSku.slice(0, 6),
   };
 
+  // 7. Stock Ledger Movements Analytics
+  const ledgerMovements = stockMovements.map((sm: any) => ({
+    id: sm.id,
+    date: format(new Date(sm.createdAt), "dd/MM/yyyy HH:mm"),
+    rawDate: sm.createdAt,
+    outletName: sm.outletStock?.outlet?.name || "Cabang",
+    outletId: sm.outletStock?.outlet?.id,
+    productName: sm.outletStock?.product?.name || "Produk",
+    productBarcode: sm.outletStock?.product?.barcode || "-",
+    type: sm.type, // "IN" | "OUT" | "ADJUSTMENT" | "TRANSFER_OUT" | "TRANSFER_IN"
+    qty: sm.qty,
+    referenceId: sm.referenceId || "-",
+    performedByName: sm.performedById ? "Kasir / Admin" : "Sistem POS",
+    note: sm.note || "-",
+  }));
+
+  const stockLedgerSummary = {
+    totalIn: stockMovements.filter((m: any) => m.type === "IN" || m.type === "TRANSFER_IN").reduce((acc: number, m: any) => acc + m.qty, 0),
+    totalOut: stockMovements.filter((m: any) => m.type === "OUT" || m.type === "TRANSFER_OUT").reduce((acc: number, m: any) => acc + m.qty, 0),
+    totalAdjustment: stockMovements.filter((m: any) => m.type === "ADJUSTMENT").reduce((acc: number, m: any) => acc + m.qty, 0),
+    totalTransfer: stockMovements.filter((m: any) => m.type === "TRANSFER_OUT" || m.type === "TRANSFER_IN").reduce((acc: number, m: any) => acc + m.qty, 0),
+    totalLogs: stockMovements.length,
+    movements: ledgerMovements,
+  };
+
   return JSON.parse(
     JSON.stringify({
       tenantName: tenant?.businessName || "POS Universal",
@@ -516,6 +565,7 @@ export async function getSalesReportData(params: {
       barberAnalytics,
       laundryAnalytics,
       retailAnalytics,
+      stockLedger: stockLedgerSummary,
       transactionsList: transactions.map((t: any) => ({
         id: t.id,
         transactionNumber: t.transactionNumber,

@@ -26,16 +26,25 @@ export interface CartItemInput {
   notes?: string;
 }
 
-
 export async function createTransactionAction(data: {
   shiftId: string;
   outletId: string;
   items: CartItemInput[];
   paymentMethod: PaymentMethod;
   amountPaid: number;
+  tableId?: string | null;
+  orderType?: "DINE_IN" | "TAKEAWAY" | "STANDARD";
+  laundryDetails?: {
+    customerName?: string;
+    customerPhone?: string;
+    weightKg?: number;
+    unitQty?: number;
+    fragrance?: string;
+    rackNumber?: string;
+  } | null;
 }) {
   const user = await requireCashierOrOwner();
-  const { shiftId, outletId, items, paymentMethod, amountPaid } = data;
+  const { shiftId, outletId, items, paymentMethod, amountPaid, tableId, orderType, laundryDetails } = data;
 
   if (!items || items.length === 0) {
     throw new Error("Keranjang belanja kosong.");
@@ -82,28 +91,33 @@ export async function createTransactionAction(data: {
       },
     });
 
-    // 3. Simpan item-item transaksi & update stok barang
+    // 3. Batch Pre-fetch produk, outlet stock, dan staf penanggung jawab
+    const productIds = Array.from(new Set(items.map((i) => i.productId)));
+    const staffIds = Array.from(new Set(items.map((i) => i.staffId).filter(Boolean))) as string[];
+
+    const [productsBatch, outletStocksBatch, staffUsersBatch] = await Promise.all([
+      tx.product.findMany({ where: { id: { in: productIds } } }),
+      tx.outletStock.findMany({ where: { outletId, productId: { in: productIds } } }),
+      staffIds.length > 0
+        ? tx.user.findMany({ where: { id: { in: staffIds } } })
+        : Promise.resolve([]),
+    ]);
+
+    const productMap = new Map<string, any>(productsBatch.map((p: any) => [p.id, p]));
+    const outletStockMap = new Map<string, any>(outletStocksBatch.map((os: any) => [os.productId, os]));
+    const staffMap = new Map<string, any>(staffUsersBatch.map((s: any) => [s.id, s]));
+
+    // 4. Simpan item-item transaksi & update stok barang
     for (const item of items) {
-      const product = await tx.product.findUnique({
-        where: { id: item.productId },
-      });
+      const product = productMap.get(item.productId);
 
       if (!product) {
         throw new Error(`Produk "${item.name}" tidak ditemukan.`);
       }
 
       // Kurangi stok di OutletStock & catat pergerakan StockMovement jika bertipe BARANG
-      let targetOutletStock = null;
+      let targetOutletStock = outletStockMap.get(item.productId) || null;
       if (product.type === "BARANG") {
-        targetOutletStock = await tx.outletStock.findUnique({
-          where: {
-            outletId_productId: {
-              outletId,
-              productId: item.productId,
-            },
-          },
-        });
-
         const currentStock = targetOutletStock
           ? targetOutletStock.stockQty
           : (product.stockQty ?? 0);
@@ -119,6 +133,7 @@ export async function createTransactionAction(data: {
             where: { id: targetOutletStock.id },
             data: { stockQty: currentStock - item.qty },
           });
+          targetOutletStock.stockQty = currentStock - item.qty;
         } else {
           targetOutletStock = await tx.outletStock.create({
             data: {
@@ -128,6 +143,7 @@ export async function createTransactionAction(data: {
               isAvailable: true,
             },
           });
+          outletStockMap.set(item.productId, targetOutletStock);
         }
 
         // Update legacy product stockQty juga untuk sinkronisasi
@@ -165,36 +181,49 @@ export async function createTransactionAction(data: {
 
       // Hitung komisi jika item memiliki penugasan staff / kapster / terapis
       if (item.staffId) {
-        const staffUser = await tx.user.findUnique({ where: { id: item.staffId } });
-        const calcResult = calculateItemCommission({
-          item: {
-            productId: item.productId,
-            qty: item.qty,
-            price: item.price,
-            staffId: item.staffId,
-          },
-          product: {
-            type: product.type as any,
-            price: Number(product.price),
-            attributes: (product.attributes as any) || {},
-          },
-          staffUser: staffUser
-            ? { id: staffUser.id, name: staffUser.name, attributes: (staffUser.attributes as any) || {} }
-            : null,
-        });
+        const staffUser = staffMap.get(item.staffId);
+        const isEligible =
+          staffUser &&
+          staffUser.tenantId === user.tenantId &&
+          staffUser.isActive &&
+          (staffUser as any).isCommissionActive === true &&
+          (!staffUser.outletId || staffUser.outletId === outletId);
 
-        if (calcResult && calcResult.amount > 0) {
-          await tx.staffCommission.create({
-            data: {
-              tenantId: user.tenantId,
-              outletId,
+        if (isEligible) {
+          const calcResult = calculateItemCommission({
+            item: {
+              productId: item.productId,
+              qty: item.qty,
+              price: item.price,
               staffId: item.staffId,
-              transactionItemId: trxItem.id,
-              commissionType: calcResult.commissionType,
-              rate: calcResult.rate,
-              amount: calcResult.amount,
+            },
+            product: {
+              type: product.type as any,
+              price: Number(product.price),
+              attributes: (product.attributes as any) || {},
+            },
+            staffUser: {
+              id: staffUser.id,
+              name: staffUser.name,
+              commissionPercent: staffUser.commissionPercent,
+              commissionFlat: staffUser.commissionFlat,
+              attributes: (staffUser.attributes as any) || {},
             },
           });
+
+          if (calcResult && calcResult.amount > 0) {
+            await tx.staffCommission.create({
+              data: {
+                tenantId: user.tenantId,
+                outletId,
+                staffId: item.staffId,
+                transactionItemId: trxItem.id,
+                commissionType: calcResult.commissionType,
+                rate: calcResult.rate,
+                amount: calcResult.amount,
+              },
+            });
+          }
         }
       }
 
@@ -208,6 +237,36 @@ export async function createTransactionAction(data: {
           },
         });
       }
+    }
+
+    // 4. Update status Meja Cafe jika Dine-In
+    if (tableId && orderType === "DINE_IN") {
+      await tx.cafeTable.update({
+        where: { id: tableId },
+        data: { status: "OCCUPIED" },
+      });
+    }
+
+    // 5. Buat Laundry Order jika ada metadata laundry
+    if (laundryDetails && (laundryDetails.weightKg || laundryDetails.unitQty)) {
+      const orderNumber = `LND-${todayStr}-${randomSuffix}`;
+      await tx.laundryOrder.create({
+        data: {
+          tenantId: user.tenantId,
+          outletId,
+          orderNumber,
+          customerName: laundryDetails.customerName || "Pelanggan POS",
+          customerPhone: laundryDetails.customerPhone || null,
+          packageType: laundryDetails.weightKg ? "KILOAN" : "SATUAN",
+          weightKg: laundryDetails.weightKg || null,
+          unitQty: laundryDetails.unitQty || null,
+          fragrance: laundryDetails.fragrance || "Standard",
+          status: "RECEIVED",
+          totalPrice: totalAmount,
+          paidStatus: "PAID",
+          rackNumber: laundryDetails.rackNumber || null,
+        },
+      });
     }
 
     // 4. Catat record Pembayaran

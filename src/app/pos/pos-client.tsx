@@ -73,6 +73,7 @@ interface PosClientProps {
   initialProducts: any[];
   categories: string[];
   cafeTables?: any[];
+  staffList?: any[];
   appliedTheme?: any;
   tenantInfo?: {
     businessName?: string;
@@ -86,6 +87,7 @@ export function PosClient({
   initialProducts,
   categories,
   cafeTables = [],
+  staffList = [],
   appliedTheme,
   tenantInfo,
 }: PosClientProps) {
@@ -172,9 +174,10 @@ export function PosClient({
   const [kitchenSlipSent, setKitchenSlipSent] = useState<boolean>(false);
 
   // 2. Barbershop Station Workflow States
+  const barbersList = staffList.filter((s: any) => s.position === "BARBER" || s.role === "KASIR" || s.position === "KASIR");
   const [selectedChair, setSelectedChair] = useState<string>("Kursi 1");
-  const [selectedCapster, setSelectedCapster] = useState<string>("Hendra");
-  const capsterOptions = ["Hendra (Top Stylist)", "Budi (Senior)", "Anton (Junior)"];
+  const [selectedCapsterId, setSelectedCapsterId] = useState<string>(barbersList[0]?.id || staffList[0]?.id || "");
+  const [selectedCapster, setSelectedCapster] = useState<string>(barbersList[0]?.name || "Stylist");
   const [barberTip, setBarberTip] = useState<number>(0);
 
   // 3. Retail Fast-Barcode Workflow States
@@ -216,6 +219,10 @@ export function PosClient({
   // Tambah item ke keranjang
   const addToCart = async (product: any) => {
     if (!activeShift) {
+      await swalWarning(
+        "Shift Belum Dibuka",
+        "Silakan buka shift kasir terlebih dahulu untuk mulai melayani transaksi."
+      );
       setShowOpenShiftModal(true);
       return;
     }
@@ -249,6 +256,12 @@ export function PosClient({
       defaultNote = `[${laundryWeight} Kg, ${laundryFragrance}, ${laundryRack}]`;
     }
 
+    // Tentukan staf penanggung jawab otomatis
+    let staffIdToAssign: string | undefined = undefined;
+    if (posLayout === "BARBERSHOP_STATION" || product.type === "JASA") {
+      staffIdToAssign = selectedCapsterId || (barbersList[0]?.id || staffList[0]?.id);
+    }
+
     const existing = cart.find((item) => item.productId === product.id && item.notes === defaultNote);
     if (
       existing &&
@@ -277,6 +290,7 @@ export function PosClient({
             price: Number(product.price),
             qty: 1,
             notes: defaultNote,
+            staffId: staffIdToAssign,
           },
         ];
       }
@@ -309,6 +323,14 @@ export function PosClient({
         })
         .filter(Boolean) as CartItemInput[];
     });
+  };
+
+  const updateItemStaff = (productId: string, staffId: string) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, staffId: staffId || undefined } : item
+      )
+    );
   };
 
   const removeFromCart = (productId: string) => {
@@ -386,12 +408,24 @@ export function PosClient({
     setLoading(true);
 
     try {
+      const selectedTblObj = cafeTables.find((t: any) => t.tableNumber === selectedTable || t.id === selectedTable);
+
       const res = await createTransactionAction({
         shiftId: activeShift.id,
         outletId: shiftData.currentOutletId,
         items: cart,
         paymentMethod: "CASH",
         amountPaid: parsedPaid,
+        tableId: isDineIn && selectedTblObj ? selectedTblObj.id : null,
+        orderType: isDineIn ? "DINE_IN" : "TAKEAWAY",
+        laundryDetails:
+          posLayout === "LAUNDRY_WEIGHING"
+            ? {
+                weightKg: Number(laundryWeight) || undefined,
+                fragrance: laundryFragrance,
+                rackNumber: laundryRack,
+              }
+            : undefined,
       });
 
       if (res.success) {
@@ -793,27 +827,33 @@ export function PosClient({
                       💈 {chair}
                     </button>
                   ))}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span className="text-[10px] opacity-70">Capster:</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-[10px] opacity-70">Stylist:</span>
                   <select
-                    value={selectedCapster}
-                    onChange={(e) => setSelectedCapster(e.target.value)}
-                    className="px-2 py-1 rounded-lg border font-bold text-xs cursor-pointer"
+                    value={selectedCapsterId}
+                    onChange={(e) => {
+                      setSelectedCapsterId(e.target.value);
+                      const found = staffList.find((s: any) => s.id === e.target.value);
+                      if (found) setSelectedCapster(found.name);
+                    }}
+                    className="px-2.5 py-1 rounded-lg border font-bold text-xs cursor-pointer"
                     style={{
                       backgroundColor: cardBg,
                       borderColor: cardBorder,
                       color: textPrimary,
                     }}
                   >
-                    {capsterOptions.map((c, idx) => (
-                      <option key={idx} value={c.split(" ")[0]}>
-                        👤 {c}
-                      </option>
-                    ))}
+                    {barbersList.length > 0 ? (
+                      barbersList.map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          👤 {c.name} ({c.position || "Stylist"})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">👤 Semua Stylist</option>
+                    )}
                   </select>
-                </div>
+                </div>            </div>
               </div>
             )}
 
@@ -1167,6 +1207,25 @@ export function PosClient({
                         <p className="text-[9px] text-indigo-600 italic truncate mt-0.5">
                           {item.notes}
                         </p>
+                      )}
+                      {/* Staff Assignment per Item */}
+                      {staffList && staffList.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[9px] text-slate-400 font-semibold">Petugas:</span>
+                          <select
+                            value={item.staffId || ""}
+                            onChange={(e) => updateItemStaff(item.productId, e.target.value)}
+                            className="px-2 py-0.5 rounded-lg border text-[9.5px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
+                            style={{ borderColor: cardBorder }}
+                          >
+                            <option value="">-- Tanpa Komisi (Opsional) --</option>
+                            {staffList.map((st: any) => (
+                              <option key={st.id} value={st.id}>
+                                {st.name} ({st.position || "Staff"})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       )}
                     </div>
 

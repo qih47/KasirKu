@@ -18,6 +18,8 @@ export interface CalculationInput {
   staffUser?: {
     id: string;
     name: string;
+    commissionPercent?: number | null;
+    commissionFlat?: number | any | null;
     attributes?: Record<string, any> | null;
   } | null;
 }
@@ -43,7 +45,9 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
 
   // ─── 1. Penanganan Jasa Laundry Kiloan Berdasarkan Berat (Kg) ─────────────
   if (item.weightKg && item.weightKg > 0) {
-    const ratePerKg = Number(productAttrs.ironingRatePerKg || staffAttrs.ironingRatePerKg || 900);
+    const ratePerKg = Number(
+      staffUser?.commissionFlat || productAttrs.ironingRatePerKg || staffAttrs.ironingRatePerKg || 1000
+    );
     const amount = item.weightKg * ratePerKg;
     return {
       commissionType: "WEIGHT_RATE",
@@ -68,7 +72,9 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
     }
 
     // Default rate komisi produk retail (misal 5% atau rate staff)
-    const productRate = Number(staffAttrs.productCommissionRate || productAttrs.productCommissionRate || 5);
+    const productRate = Number(
+      staffUser?.commissionPercent || staffAttrs.productCommissionRate || productAttrs.productCommissionRate || 5
+    );
     const amount = (subtotal * productRate) / 100;
     return {
       commissionType: "PERCENTAGE",
@@ -103,9 +109,33 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
     }
   }
 
-  // Prioritas 2: Rate default pada profil staf (Kapster/Terapis)
+  // Prioritas 2: Flat Rate di profil staff
+  if (staffUser?.commissionFlat && Number(staffUser.commissionFlat) > 0) {
+    const staffRate = Number(staffUser.commissionFlat);
+    const amount = staffRate * item.qty;
+    return {
+      commissionType: "FLAT",
+      rate: staffRate,
+      amount,
+      breakdown: `Flat Rp ${staffRate.toLocaleString("id-ID")} x ${item.qty}`,
+    };
+  }
+
+  // Prioritas 3: Percentage Rate di profil staff
+  if (staffUser?.commissionPercent && Number(staffUser.commissionPercent) > 0) {
+    const staffRate = Number(staffUser.commissionPercent);
+    const amount = (subtotal * staffRate) / 100;
+    return {
+      commissionType: "PERCENTAGE",
+      rate: staffRate,
+      amount: Math.round(amount),
+      breakdown: `${staffRate}% dari Rp ${subtotal.toLocaleString("id-ID")}`,
+    };
+  }
+
+  // Prioritas 4: Fallback attributes / standard
   const staffScheme = staffAttrs.schemeType === "FLAT" ? "FLAT" : "PERCENTAGE";
-  const staffRate = Number(staffAttrs.serviceRate || (staffScheme === "FLAT" ? 15000 : 40));
+  const staffRate = Number(staffAttrs.serviceRate || (staffScheme === "FLAT" ? 15000 : 30));
 
   if (staffScheme === "FLAT") {
     const amount = staffRate * item.qty;

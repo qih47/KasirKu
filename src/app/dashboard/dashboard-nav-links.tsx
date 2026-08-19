@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Scale,
   Award,
+  DollarSign,
 } from "lucide-react";
 
 interface DashboardNavLinksProps {
@@ -66,6 +67,11 @@ export function DashboardNavLinks({
       href: "/dashboard/staff",
       icon: Users,
     },
+    {
+      name: "Gaji & Komisi",
+      href: "/dashboard/payroll",
+      icon: DollarSign,
+    },
     // Modul Dinamis Barbershop
     ...(isBarbershopActive
       ? [
@@ -73,11 +79,6 @@ export function DashboardNavLinks({
             name: "Antrean",
             href: "/dashboard/barbershop/queue",
             icon: Scissors,
-          },
-          {
-            name: "Komisi",
-            href: "/dashboard/barbershop/commissions",
-            icon: Percent,
           },
         ]
       : []),
@@ -89,11 +90,6 @@ export function DashboardNavLinks({
             href: "/dashboard/cafe/tables",
             icon: Coffee,
           },
-          {
-            name: "Bagi Hasil",
-            href: "/dashboard/cafe/commissions",
-            icon: Percent,
-          },
         ]
       : []),
     // Modul Dinamis Laundry
@@ -103,21 +99,6 @@ export function DashboardNavLinks({
             name: "Pesanan",
             href: "/dashboard/laundry/orders",
             icon: Shirt,
-          },
-          {
-            name: "Komisi",
-            href: "/dashboard/laundry/commissions",
-            icon: Scale,
-          },
-        ]
-      : []),
-    // Modul Dinamis Retail
-    ...(isRetailActive
-      ? [
-          {
-            name: "Insentif",
-            href: "/dashboard/retail/commissions",
-            icon: Award,
           },
         ]
       : []),

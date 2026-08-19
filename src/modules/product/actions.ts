@@ -428,3 +428,143 @@ export async function deleteProductAction(id: string) {
   revalidatePath("/dashboard/products");
   return { success: true };
 }
+
+export async function transferProductStockAction(data: {
+  productId: string;
+  fromOutletId: string;
+  toOutletId: string;
+  qty: number;
+  note?: string;
+}) {
+  const user = await requireTenantUser();
+  const { productId, fromOutletId, toOutletId, qty, note } = data;
+
+  if (!fromOutletId || !toOutletId) {
+    throw new Error("Cabang asal dan cabang tujuan harus dipilih.");
+  }
+  if (fromOutletId === toOutletId) {
+    throw new Error("Cabang asal dan tujuan tidak boleh sama.");
+  }
+  if (isNaN(qty) || qty <= 0) {
+    throw new Error("Jumlah unit yang ditransfer harus lebih besar dari 0.");
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: {
+      outletStocks: {
+        where: {
+          outletId: { in: [fromOutletId, toOutletId] },
+        },
+        include: { outlet: true },
+      },
+    },
+  });
+
+  if (!product || product.tenantId !== user.tenantId) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  const [fromOutlet, toOutlet] = await Promise.all([
+    prisma.outlet.findUnique({ where: { id: fromOutletId } }),
+    prisma.outlet.findUnique({ where: { id: toOutletId } }),
+  ]);
+
+  if (!fromOutlet || fromOutlet.tenantId !== user.tenantId) {
+    throw new Error("Cabang asal tidak valid.");
+  }
+  if (!toOutlet || toOutlet.tenantId !== user.tenantId) {
+    throw new Error("Cabang tujuan tidak valid.");
+  }
+
+  const fromStock = product.outletStocks.find((s) => s.outletId === fromOutletId);
+  const currentFromQty = fromStock ? fromStock.stockQty : (product.stockQty ?? 0);
+
+  if (currentFromQty < qty) {
+    throw new Error(
+      `Stok di ${fromOutlet.name} tidak mencukupi. Sisa stok: ${currentFromQty} unit, permintaan transfer: ${qty} unit.`
+    );
+  }
+
+  const transferRefCode = `TRF-${Date.now().toString().slice(-6)}`;
+
+  // Run atomic transfer transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Deduct from source outlet
+    const updatedFrom = await tx.outletStock.upsert({
+      where: {
+        outletId_productId: {
+          outletId: fromOutletId,
+          productId,
+        },
+      },
+      create: {
+        outletId: fromOutletId,
+        productId,
+        stockQty: Math.max(0, currentFromQty - qty),
+        isAvailable: true,
+      },
+      update: {
+        stockQty: { decrement: qty },
+      },
+    });
+
+    // 2. Add to destination outlet
+    const updatedTo = await tx.outletStock.upsert({
+      where: {
+        outletId_productId: {
+          outletId: toOutletId,
+          productId,
+        },
+      },
+      create: {
+        outletId: toOutletId,
+        productId,
+        stockQty: qty,
+        isAvailable: true,
+      },
+      update: {
+        stockQty: { increment: qty },
+      },
+    });
+
+    // 3. Write StockMovement TRANSFER_OUT
+    await tx.stockMovement.create({
+      data: {
+        outletStockId: updatedFrom.id,
+        type: "TRANSFER_OUT",
+        qty: qty,
+        performedById: user.id || null,
+        referenceId: transferRefCode,
+        note: `Transfer ke ${toOutlet.name}${note ? `: ${note}` : ""}`,
+        status: "CONFIRMED",
+      },
+    });
+
+    // 4. Write StockMovement TRANSFER_IN
+    await tx.stockMovement.create({
+      data: {
+        outletStockId: updatedTo.id,
+        type: "TRANSFER_IN",
+        qty: qty,
+        performedById: user.id || null,
+        referenceId: transferRefCode,
+        note: `Diterima dari ${fromOutlet.name}${note ? `: ${note}` : ""}`,
+        status: "CONFIRMED",
+      },
+    });
+
+    return { updatedFrom, updatedTo };
+  });
+
+  revalidatePath("/dashboard/products");
+  revalidatePath("/pos");
+  return {
+    success: true,
+    transferRefCode,
+    fromOutletName: fromOutlet.name,
+    toOutletName: toOutlet.name,
+    qty,
+  };
+}
+

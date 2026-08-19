@@ -16,7 +16,7 @@ export default async function PosPage() {
   const shiftData = await getCurrentShiftData();
   const targetOutletId = user.outletId || shiftData?.currentOutletId || shiftData?.outlets?.[0]?.id;
 
-  const [productsData, tenant, cafeTables] = await Promise.all([
+  const [productsData, tenant, cafeTables, staffList] = await Promise.all([
     getProductsData(targetOutletId),
     user.tenantId
       ? prisma.tenant.findUnique({
@@ -39,6 +39,30 @@ export default async function PosPage() {
             ...(targetOutletId ? { outletId: targetOutletId } : {}),
           },
           orderBy: { tableNumber: "asc" },
+        })
+      : [],
+    user.tenantId
+      ? prisma.user.findMany({
+          where: {
+            tenantId: user.tenantId,
+            isActive: true,
+            isCommissionActive: true, // Hanya staf yang diaktifkan skema komisinya yang muncul di POS
+            ...(targetOutletId
+              ? {
+                  OR: [{ outletId: targetOutletId }, { outletId: null }],
+                }
+              : {}),
+          } as any,
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            position: true,
+            role: true,
+            commissionPercent: true,
+            commissionFlat: true,
+            outletId: true,
+          },
         })
       : [],
   ]);
@@ -68,6 +92,7 @@ export default async function PosPage() {
       initialProducts={productsData.products}
       categories={productsData.categories}
       cafeTables={cafeTables}
+      staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
       tenantInfo={{
         businessName: tenant?.businessName || "POS Universal",

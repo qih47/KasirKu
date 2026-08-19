@@ -12,22 +12,23 @@ import {
   DollarSign,
 } from "lucide-react";
 
-export function RetailReportView() {
+export function RetailReportView({ data }: { data?: any }) {
   const kpi = {
     basketSize: "4.8 Pcs / Trx",
     avgScanSpeed: "1.4 Menit",
-    totalStockValuation: "Rp 48.250.000",
+    totalStockValuation: data?.totalStockValuation || "Rp 48.250.000",
+    totalStockUnits: data?.totalStockUnits || 120,
     shiftDiscrepancy: "Rp 0 (Match)",
   };
 
-  const fastMovingSku = [
+  const fastMovingSku = data?.fastMovingSku && data.fastMovingSku.length > 0 ? data.fastMovingSku : [
     { sku: "8992753011", name: "Sania Minyak Goreng 2L", salesQty: 184, turnover: "2.4 Hari" },
     { sku: "8991002301", name: "Indomie Goreng Spesial (Dus)", salesQty: 142, turnover: "3.1 Hari" },
     { sku: "8998866102", name: "Ultra Milk Cokelat 1L", salesQty: 96, turnover: "4.0 Hari" },
     { sku: "8997001409", name: "Chitato Sapi Panggang 68g", salesQty: 88, turnover: "4.5 Hari" },
   ];
 
-  const deadStockSku = [
+  const deadStockSku = data?.deadStockSku && data.deadStockSku.length > 0 ? data.deadStockSku : [
     { sku: "8990012991", name: "Kopi Sachet Premium Jar 200g", stockQty: 24, lastSold: "> 35 Hari Lalu", val: "Rp 840.000" },
     { sku: "8993344119", name: "Sabun Mandi Import Lavender", stockQty: 18, lastSold: "> 42 Hari Lalu", val: "Rp 450.000" },
   ];
@@ -90,7 +91,7 @@ export function RetailReportView() {
           <div className="text-xl sm:text-2xl font-black text-indigo-600">
             {kpi.totalStockValuation}
           </div>
-          <p className="text-[10px] text-slate-500">Total aset barang siap jual</p>
+          <p className="text-[10px] text-slate-500">{kpi.totalStockUnits} unit total stok fisik</p>
         </div>
 
         <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
@@ -112,7 +113,7 @@ export function RetailReportView() {
             <div>
               <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-500" />
-                Top 4 Fast-Moving SKU (Paling Cepat Laku)
+                Top Fast-Moving SKU (Paling Cepat Laku)
               </h4>
               <p className="text-xs text-slate-400">
                 Produk dengan perputaran paling cepat yang wajib dijaga stoknya.
@@ -121,7 +122,7 @@ export function RetailReportView() {
           </div>
 
           <div className="space-y-2.5">
-            {fastMovingSku.map((item, idx) => (
+            {fastMovingSku.map((item: any, idx: number) => (
               <div
                 key={idx}
                 className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex items-center justify-between"
@@ -131,7 +132,7 @@ export function RetailReportView() {
                     {item.name}
                   </span>
                   <span className="font-mono text-[9.5px] text-slate-400">
-                    SKU: {item.sku} • Habis dlm {item.turnover}
+                    SKU: {item.sku} • Stok: {item.stockQty ?? 0}
                   </span>
                 </div>
                 <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200/50">
@@ -151,13 +152,13 @@ export function RetailReportView() {
                 Dead-Stock Alert (Barang Mengendap &gt; 30 Hari)
               </h4>
               <p className="text-xs text-slate-400">
-                Produk yang tidak terjual dalam 30 hari terakhir. Disarankan buat promo diskon.
+                Produk yang belum terjual dalam periode ini. Disarankan buat promo diskon.
               </p>
             </div>
           </div>
 
           <div className="space-y-2.5">
-            {deadStockSku.map((item, idx) => (
+            {deadStockSku.map((item: any, idx: number) => (
               <div
                 key={idx}
                 className="p-3.5 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between"
@@ -167,7 +168,7 @@ export function RetailReportView() {
                     {item.name}
                   </span>
                   <span className="text-[10px] text-amber-600 font-bold">
-                    ⚠️ Sisa Stok: {item.stockQty} Pcs ({item.lastSold})
+                    ⚠️ Sisa Stok: {item.stockQty} Pcs ({item.lastSold || "Belum Terjual"})
                   </span>
                 </div>
                 <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-mono">
@@ -183,7 +184,7 @@ export function RetailReportView() {
               Persentase Margin Keuntungan per Kategori
             </h5>
             <div className="grid grid-cols-2 gap-2">
-              {categoryMargin.map((c, idx) => (
+              {categoryMargin.map((c: any, idx: number) => (
                 <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 text-[11px]">
                   <span className="text-slate-500 block truncate">{c.name}</span>
                   <strong className="text-emerald-600 font-black">+{c.margin}% Margin</strong>

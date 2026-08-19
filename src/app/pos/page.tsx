@@ -13,9 +13,11 @@ export default async function PosPage() {
   }
 
   const user = session.user as any;
-  const [shiftData, productsData, tenant, cafeTables] = await Promise.all([
-    getCurrentShiftData(),
-    getProductsData(),
+  const shiftData = await getCurrentShiftData();
+  const targetOutletId = user.outletId || shiftData?.currentOutletId || shiftData?.outlets?.[0]?.id;
+
+  const [productsData, tenant, cafeTables] = await Promise.all([
+    getProductsData(targetOutletId),
     user.tenantId
       ? prisma.tenant.findUnique({
           where: { id: user.tenantId },
@@ -32,7 +34,10 @@ export default async function PosPage() {
       : null,
     user.tenantId
       ? prisma.cafeTable.findMany({
-          where: { tenantId: user.tenantId },
+          where: {
+            tenantId: user.tenantId,
+            ...(targetOutletId ? { outletId: targetOutletId } : {}),
+          },
           orderBy: { tableNumber: "asc" },
         })
       : [],
@@ -72,5 +77,3 @@ export default async function PosPage() {
     />
   );
 }
-
-

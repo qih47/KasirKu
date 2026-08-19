@@ -15,29 +15,78 @@ async function requireTenantUser() {
   return session.user as any;
 }
 
-export async function getProductsData() {
+export async function getProductsData(explicitOutletId?: string) {
   const user = await requireTenantUser();
+  const targetOutletId = explicitOutletId || user.outletId;
 
-  const products = await prisma.product.findMany({
-    where: { tenantId: user.tenantId },
-    orderBy: { createdAt: "desc" },
-    include: { outlet: true },
+  const [products, outlets] = await Promise.all([
+    prisma.product.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        outlet: true,
+        outletStocks: {
+          include: {
+            outlet: true,
+            movements: {
+              take: 5,
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
+      },
+    }),
+    prisma.outlet.findMany({
+      where: { tenantId: user.tenantId, isActive: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  // Jika diakses oleh kasir spesifik atau outlet terpilih, transform stok & harga efektif
+  const formattedProducts = products.map((p) => {
+    const specificStock = targetOutletId
+      ? p.outletStocks.find((s) => s.outletId === targetOutletId)
+      : null;
+
+    const effectiveStockQty =
+      p.type === "JASA"
+        ? null
+        : specificStock
+        ? specificStock.stockQty
+        : p.stockQty ?? 0;
+
+    const effectivePrice = specificStock?.priceOverride
+      ? Number(specificStock.priceOverride)
+      : Number(p.price);
+
+    const isAvailableInOutlet = specificStock ? specificStock.isAvailable : p.isActive;
+
+    return {
+      ...p,
+      price: Number(p.price),
+      effectivePrice,
+      effectiveStockQty,
+      isAvailableInOutlet,
+      stockQty: effectiveStockQty,
+    };
   });
 
-  const totalItems = products.length;
-  const totalBarang = products.filter((p) => p.type === "BARANG").length;
-  const totalJasa = products.filter((p) => p.type === "JASA").length;
-  const lowStockCount = products.filter(
-    (p) => p.type === "BARANG" && (p.stockQty ?? 0) <= 5
+  const totalItems = formattedProducts.length;
+  const totalBarang = formattedProducts.filter((p) => p.type === "BARANG").length;
+  const totalJasa = formattedProducts.filter((p) => p.type === "JASA").length;
+  const lowStockCount = formattedProducts.filter(
+    (p) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= 5
   ).length;
 
   const categories = Array.from(
-    new Set(products.map((p) => p.category).filter(Boolean) as string[])
+    new Set(formattedProducts.map((p) => p.category).filter(Boolean) as string[])
   );
 
   return {
-    products,
+    products: JSON.parse(JSON.stringify(formattedProducts)),
+    outlets: JSON.parse(JSON.stringify(outlets)),
     categories,
+    selectedOutletId: targetOutletId || null,
     metrics: {
       totalItems,
       totalBarang,
@@ -55,10 +104,11 @@ export async function createProductAction(data: {
   barcode?: string;
   category?: string;
   stockQty?: number | null;
+  outletId?: string | null;
   attributes?: Record<string, any>;
 }) {
   const user = await requireTenantUser();
-  const { name, type, price, imageUrl, barcode, category, stockQty, attributes } = data;
+  const { name, type, price, imageUrl, barcode, category, stockQty, outletId, attributes } = data;
 
   if (!name || price === undefined || price < 0) {
     throw new Error("Nama dan harga produk wajib diisi dengan benar.");
@@ -70,7 +120,7 @@ export async function createProductAction(data: {
   const product = await prisma.product.create({
     data: {
       tenantId: user.tenantId,
-      outletId: user.outletId || null,
+      outletId: outletId !== undefined ? outletId : (user.outletId || null),
       name: name.trim(),
       type,
       price,
@@ -82,6 +132,35 @@ export async function createProductAction(data: {
       isActive: true,
     },
   });
+
+  // Otomatis buatkan record OutletStock & StockMovement di semua outlet aktif tenant
+  const activeOutlets = await prisma.outlet.findMany({
+    where: { tenantId: user.tenantId, isActive: true },
+  });
+
+  for (const outlet of activeOutlets) {
+    const newStock = await prisma.outletStock.create({
+      data: {
+        outletId: outlet.id,
+        productId: product.id,
+        stockQty: finalStock ?? 0,
+        isAvailable: true,
+        priceOverride: null,
+      },
+    });
+
+    if (type === "BARANG" && (finalStock ?? 0) > 0) {
+      await prisma.stockMovement.create({
+        data: {
+          outletStockId: newStock.id,
+          type: "IN",
+          qty: finalStock ?? 0,
+          note: "Stok awal produk baru",
+          status: "CONFIRMED",
+        },
+      });
+    }
+  }
 
   revalidatePath("/dashboard/products");
   revalidatePath("/pos");
@@ -128,6 +207,193 @@ export async function updateProductAction(
   revalidatePath("/dashboard/products");
   revalidatePath("/pos");
   return { success: true, product: updated };
+}
+
+export async function getProductStockDetailsAction(productId: string) {
+  const user = await requireTenantUser();
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: {
+      outletStocks: {
+        include: {
+          outlet: true,
+          movements: {
+            orderBy: { createdAt: "desc" },
+            take: 30,
+          },
+        },
+      },
+    },
+  });
+
+  if (!product || product.tenantId !== user.tenantId) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  return JSON.parse(JSON.stringify(product));
+}
+
+export async function updateOutletStockAction(data: {
+  outletId: string;
+  productId: string;
+  mode: "ADD" | "SUBTRACT" | "SET";
+  qty: number;
+  note?: string;
+}) {
+  const user = await requireTenantUser();
+  const { outletId, productId, mode, qty, note } = data;
+
+  if (qty < 0) {
+    throw new Error("Jumlah stok tidak boleh bernilai negatif.");
+  }
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product || product.tenantId !== user.tenantId) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  const existingStock = await prisma.outletStock.findUnique({
+    where: {
+      outletId_productId: {
+        outletId,
+        productId,
+      },
+    },
+  });
+
+  const currentQty = existingStock ? existingStock.stockQty : (product.stockQty ?? 0);
+  let newQty = currentQty;
+  let movementType: "IN" | "OUT" | "ADJUSTMENT" = "ADJUSTMENT";
+  let movementQty = qty;
+
+  if (mode === "ADD") {
+    newQty = currentQty + qty;
+    movementType = "IN";
+  } else if (mode === "SUBTRACT") {
+    if (currentQty < qty) {
+      throw new Error(`Stok saat ini (${currentQty}) tidak mencukupi untuk pengurangan ${qty}.`);
+    }
+    newQty = currentQty - qty;
+    movementType = "OUT";
+  } else if (mode === "SET") {
+    newQty = qty;
+    movementType = "ADJUSTMENT";
+    movementQty = Math.abs(qty - currentQty);
+  }
+
+  const outletStock = await prisma.outletStock.upsert({
+    where: {
+      outletId_productId: {
+        outletId,
+        productId,
+      },
+    },
+    create: {
+      outletId,
+      productId,
+      stockQty: Math.max(0, newQty),
+      isAvailable: true,
+    },
+    update: {
+      stockQty: Math.max(0, newQty),
+    },
+  });
+
+  // Catat riwayat pergerakan ke tabel ledger
+  await prisma.stockMovement.create({
+    data: {
+      outletStockId: outletStock.id,
+      type: movementType,
+      qty: movementQty,
+      performedById: user.id || null,
+      note:
+        note ||
+        (mode === "ADD"
+          ? "Penambahan Stok (Restock)"
+          : mode === "SUBTRACT"
+          ? "Pengurangan Stok"
+          : "Stok Opname / Penyesuaian Fisik"),
+      status: "CONFIRMED",
+    },
+  });
+
+  revalidatePath("/dashboard/products");
+  revalidatePath("/pos");
+  return { success: true, outletStock, newQty };
+}
+
+export async function toggleProductOutletAvailabilityAction(data: {
+  outletId: string;
+  productId: string;
+  isAvailable: boolean;
+}) {
+  const user = await requireTenantUser();
+  const { outletId, productId, isAvailable } = data;
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product || product.tenantId !== user.tenantId) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  const updated = await prisma.outletStock.upsert({
+    where: {
+      outletId_productId: {
+        outletId,
+        productId,
+      },
+    },
+    create: {
+      outletId,
+      productId,
+      stockQty: product.stockQty ?? 0,
+      isAvailable,
+    },
+    update: {
+      isAvailable,
+    },
+  });
+
+  revalidatePath("/dashboard/products");
+  revalidatePath("/pos");
+  return { success: true, outletStock: updated };
+}
+
+export async function updateProductOutletPriceAction(data: {
+  outletId: string;
+  productId: string;
+  priceOverride: number | null;
+}) {
+  const user = await requireTenantUser();
+  const { outletId, productId, priceOverride } = data;
+
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product || product.tenantId !== user.tenantId) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  const updated = await prisma.outletStock.upsert({
+    where: {
+      outletId_productId: {
+        outletId,
+        productId,
+      },
+    },
+    create: {
+      outletId,
+      productId,
+      stockQty: product.stockQty ?? 0,
+      priceOverride: priceOverride !== null && priceOverride >= 0 ? priceOverride : null,
+      isAvailable: true,
+    },
+    update: {
+      priceOverride: priceOverride !== null && priceOverride >= 0 ? priceOverride : null,
+    },
+  });
+
+  revalidatePath("/dashboard/products");
+  revalidatePath("/pos");
+  return { success: true, outletStock: updated };
 }
 
 export async function toggleProductStatusAction(id: string) {

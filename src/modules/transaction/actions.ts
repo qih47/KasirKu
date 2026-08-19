@@ -92,18 +92,48 @@ export async function createTransactionAction(data: {
         throw new Error(`Produk "${item.name}" tidak ditemukan.`);
       }
 
-      // Kurangi stok jika produk bertipe BARANG
+      // Kurangi stok di OutletStock & catat pergerakan StockMovement jika bertipe BARANG
+      let targetOutletStock = null;
       if (product.type === "BARANG") {
-        const currentStock = product.stockQty ?? 0;
+        targetOutletStock = await tx.outletStock.findUnique({
+          where: {
+            outletId_productId: {
+              outletId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        const currentStock = targetOutletStock
+          ? targetOutletStock.stockQty
+          : (product.stockQty ?? 0);
+
         if (currentStock < item.qty) {
           throw new Error(
-            `Stok untuk "${product.name}" tidak mencukupi (Tersisa ${currentStock}, diminta ${item.qty}).`
+            `Stok untuk "${product.name}" di cabang ini tidak mencukupi (Tersisa ${currentStock}, diminta ${item.qty}).`
           );
         }
 
+        if (targetOutletStock) {
+          await tx.outletStock.update({
+            where: { id: targetOutletStock.id },
+            data: { stockQty: currentStock - item.qty },
+          });
+        } else {
+          targetOutletStock = await tx.outletStock.create({
+            data: {
+              outletId,
+              productId: item.productId,
+              stockQty: Math.max(0, currentStock - item.qty),
+              isAvailable: true,
+            },
+          });
+        }
+
+        // Update legacy product stockQty juga untuk sinkronisasi
         await tx.product.update({
           where: { id: item.productId },
-          data: { stockQty: currentStock - item.qty },
+          data: { stockQty: Math.max(0, (product.stockQty ?? 0) - item.qty) },
         });
       }
 
@@ -117,6 +147,21 @@ export async function createTransactionAction(data: {
           subtotal: item.qty * item.price,
         },
       });
+
+      // Catat baris ledger StockMovement (type: OUT)
+      if (product.type === "BARANG" && targetOutletStock) {
+        await tx.stockMovement.create({
+          data: {
+            outletStockId: targetOutletStock.id,
+            type: "OUT",
+            qty: item.qty,
+            referenceId: trxItem.id,
+            performedById: user.id || null,
+            note: `Penjualan Kasir POS #${transactionNumber}`,
+            status: "CONFIRMED",
+          },
+        });
+      }
 
       // Hitung komisi jika item memiliki penugasan staff / kapster / terapis
       if (item.staffId) {

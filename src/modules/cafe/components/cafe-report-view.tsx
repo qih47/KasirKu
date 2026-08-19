@@ -13,17 +13,17 @@ import {
   Flame,
 } from "lucide-react";
 
-export function CafeReportView() {
+export function CafeReportView({ data }: { data?: any }) {
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
 
-  // Mocked rich analytical metrics for F&B
   const kpi = {
     avgTableDuration: "48 Menit",
-    avgTicketPerTable: "Rp 88.500",
+    avgTicketPerTable: data?.avgTicketPerTable || "Rp 88.500",
     dineInRatio: 76,
     takeAwayRatio: 24,
     kotWastePercent: "0.6%",
-    totalTablesServed: 184,
+    totalTablesServed: data?.totalTables || 184,
+    tableOccupancyPercent: data?.tableOccupancyPercent !== undefined ? `${data.tableOccupancyPercent}%` : "38%",
   };
 
   const hourlyOccupancy = [
@@ -37,7 +37,7 @@ export function CafeReportView() {
     { hour: "22:00", rate: 40 },
   ];
 
-  const categoryBreakdown = [
+  const categoryBreakdown = data?.categoryBreakdown && data.categoryBreakdown.length > 0 ? data.categoryBreakdown : [
     { name: "Signature Coffee", amount: 4850000, percent: 45, color: "bg-amber-500" },
     { name: "Non-Coffee & Tea", amount: 2150000, percent: 20, color: "bg-emerald-500" },
     { name: "Main Course / Meals", amount: 2380000, percent: 22, color: "bg-indigo-500" },
@@ -73,80 +73,80 @@ export function CafeReportView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-500">Filter Zona:</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-500">Filter Area:</span>
           <select
             value={selectedZone}
             onChange={(e) => setSelectedZone(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 font-bold text-xs focus:outline-none"
+            className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none"
           >
             <option value="ALL">Semua Area Meja</option>
             <option value="INDOOR">Indoor AC</option>
-            <option value="OUTDOOR">Outdoor Garden</option>
+            <option value="OUTDOOR">Outdoor Smoking</option>
             <option value="VIP">VIP Room</option>
           </select>
         </div>
       </div>
 
-      {/* 1. KPI Cards */}
+      {/* 4 Specialized F&B KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            Avg Waktu Meja (Turnover)
+        <div className="p-5 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Okupansi Meja Aktif
           </span>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-baseline gap-1.5">
-            {kpi.avgTableDuration}
-            <span className="text-[10px] font-bold text-emerald-600">Optimal</span>
-          </div>
-          <p className="text-[10px] text-slate-500">Waktu rata-rata per sesi billing tamu</p>
+          <p className="text-2xl font-black text-amber-500">
+            {kpi.tableOccupancyPercent}
+          </p>
+          <p className="text-[11px] text-slate-500 font-medium">
+            {kpi.totalTablesServed} total meja terdaftar
+          </p>
         </div>
 
-        <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            Rata-rata Belanja / Meja
+        <div className="p-5 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Rata-rata Tagihan Meja
           </span>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+          <p className="text-2xl font-black text-indigo-500">
             {kpi.avgTicketPerTable}
-          </div>
-          <p className="text-[10px] text-slate-500">{kpi.totalTablesServed} meja terlayani</p>
+          </p>
+          <p className="text-[11px] text-slate-500 font-medium">
+            Rata-rata pengeluaran per nota
+          </p>
         </div>
 
-        <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            Dine-In vs Take-Away
+        <div className="p-5 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Rasio Dine-in vs Takeaway
           </span>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-baseline gap-1">
-            {kpi.dineInRatio}% <span className="text-xs text-slate-400 font-medium">/ {kpi.takeAwayRatio}%</span>
-          </div>
-          <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden flex mt-1">
-            <div className="bg-amber-500 h-full" style={{ width: `${kpi.dineInRatio}%` }} />
-            <div className="bg-indigo-500 h-full" style={{ width: `${kpi.takeAwayRatio}%` }} />
-          </div>
+          <p className="text-2xl font-black text-emerald-500">
+            {kpi.dineInRatio}% <span className="text-xs text-slate-400 font-normal">/ {kpi.takeAwayRatio}%</span>
+          </p>
+          <p className="text-[11px] text-slate-500 font-medium">Makan di Tempat vs Dibungkus</p>
         </div>
 
-        <div className="p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            Kitchen Void / Waste Rate
+        <div className="p-5 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Durasi Rata-rata Tamu
           </span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600">
-            {kpi.kotWastePercent}
-          </div>
-          <p className="text-[10px] text-slate-500">Tingkat pembatalan tiket dapur</p>
+          <p className="text-2xl font-black text-pink-500">
+            {kpi.avgTableDuration}
+          </p>
+          <p className="text-[11px] text-slate-500 font-medium">Sejak open table hingga bayar</p>
         </div>
       </div>
 
-      {/* 2. Charts Section: Okupansi Meja per Jam + Kategori Sales */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Hourly Table Occupancy Bar Chart */}
-        <div className="lg:col-span-2 p-6 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
+      {/* 2-Column Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Table Occupancy Heatmap Bar */}
+        <div className="p-6 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
-                Grafik Okupansi &amp; Jam Sibuk Meja (Hourly Heatmap)
+                Kepadatan Okupansi Meja (Hourly)
               </h4>
               <p className="text-xs text-slate-400">
-                Tingkat keterisian meja dari jam operasional cafe (persentase meja penuh).
+                Pola jam sibuk makan siang (Lunch) dan makan malam (Dinner).
               </p>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60">
@@ -156,7 +156,7 @@ export function CafeReportView() {
 
           {/* SVG Bar Visual */}
           <div className="h-44 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-100 dark:border-slate-800">
-            {hourlyOccupancy.map((item, idx) => (
+            {hourlyOccupancy.map((item: any, idx: number) => (
               <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
                 <span className="text-[9px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition">
                   {item.rate}%
@@ -192,19 +192,22 @@ export function CafeReportView() {
           </div>
 
           <div className="space-y-3 pt-1">
-            {categoryBreakdown.map((cat, idx) => (
+            {categoryBreakdown.map((cat: any, idx: number) => (
               <div key={idx} className="space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${cat.color}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full ${cat.color || "bg-indigo-500"}`} />
                     {cat.name}
                   </span>
                   <span className="font-mono text-slate-900 dark:text-white">
-                    Rp {cat.amount.toLocaleString("id-ID")} ({cat.percent}%)
+                    Rp {Number(cat.amount).toLocaleString("id-ID")} ({cat.percent}%)
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className={`${cat.color} h-full rounded-full`} style={{ width: `${cat.percent}%` }} />
+                  <div
+                    className={`h-full ${cat.color || "bg-indigo-500"} rounded-full`}
+                    style={{ width: `${Math.min(100, cat.percent)}%` }}
+                  />
                 </div>
               </div>
             ))}
@@ -212,41 +215,37 @@ export function CafeReportView() {
         </div>
       </div>
 
-      {/* 3. Top Modifiers & Add-ons Leaderboard */}
+      {/* Kitchen Modifiers & Custom Notes Breakdown */}
       <div className="p-6 rounded-3xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <Flame className="w-4 h-4 text-orange-500" />
-              Leaderboard Modifiers &amp; Add-on Minuman Terfavorit
+              Preferensi &amp; Varian Modifikasi Terpopuler (Kitchen Add-ons)
             </h4>
             <p className="text-xs text-slate-400">
-              Pilihan kustomisasi rasa yang paling sering dipilih pelanggan dan pendapatan ekstra yang dihasilkan.
+              Data preferensi racikan pelanggan (level gula, jenis susu nabati, extra shot).
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {topModifiers.map((mod, idx) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {topModifiers.map((mod: any, idx: number) => (
             <div
               key={idx}
-              className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex items-center justify-between"
+              className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between"
             >
-              <div className="space-y-0.5">
-                <span className="font-bold text-xs text-slate-900 dark:text-slate-100 block">
-                  #{idx + 1} {mod.name}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  Dipesan <strong className="text-slate-700 dark:text-slate-300">{mod.count}x</strong> sesi
-                </span>
+              <div>
+                <p className="font-bold text-xs text-slate-800 dark:text-slate-100">{mod.name}</p>
+                <span className="text-[11px] text-slate-400">{mod.count}x dipesan</span>
               </div>
               {mod.revenue > 0 ? (
-                <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200/50">
+                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
                   +Rp {mod.revenue.toLocaleString("id-ID")}
                 </span>
               ) : (
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded">
-                  Free Req
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-500">
+                  Gratis / Free
                 </span>
               )}
             </div>

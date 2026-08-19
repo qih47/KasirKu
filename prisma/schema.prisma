@@ -230,6 +230,7 @@ model Outlet {
 
   users         User[]
   products      Product[]
+  outletStocks  OutletStock[]
   transactions  Transaction[]
   shifts        Shift[]
   bookings      Booking[]
@@ -342,11 +343,48 @@ model Product {
 
   transactionItems TransactionItem[]
   bookings         Booking[]
+  outletStocks     OutletStock[]
 
   @@index([tenantId])
   @@index([outletId])
   @@index([barcode])
   @@map("products")
+}
+
+model OutletStock {
+  id            String   @id @default(uuid())
+  outletId      String
+  outlet        Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockQty      Int      @default(0)          // snapshot angka stok saat ini di outlet ini
+  priceOverride Decimal? @db.Decimal(12, 2)   // null = pakai Product.price
+  isAvailable   Boolean  @default(true)       // status aktif produk di outlet ini
+  updatedAt     DateTime @updatedAt
+
+  movements StockMovement[]
+
+  @@unique([outletId, productId])
+  @@index([outletId])
+  @@index([productId])
+  @@map("outlet_stocks")
+}
+
+model StockMovement {
+  id             String      @id @default(uuid())
+  outletStockId  String
+  outletStock    OutletStock @relation(fields: [outletStockId], references: [id], onDelete: Cascade)
+  type           String      // "IN" | "OUT" | "ADJUSTMENT" | "TRANSFER_OUT" | "TRANSFER_IN"
+  qty            Int         // selalu positif — arah ditentukan oleh `type`
+  note           String?
+  referenceId    String?     // transactionItemId, atau transferId jika ada di masa depan
+  performedById  String?     // userId yang melakukan perubahan
+  status         String      @default("CONFIRMED") // "CONFIRMED" | "PENDING" (untuk transfer)
+  createdAt      DateTime    @default(now())
+
+  @@index([outletStockId])
+  @@index([type])
+  @@map("stock_movements")
 }
 
 model Shift {

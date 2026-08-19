@@ -12,23 +12,23 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export function BarberReportView() {
+export function BarberReportView({ data }: { data?: any }) {
   const [selectedCapster, setSelectedCapster] = useState<string>("ALL");
 
   const kpi = {
-    totalHeadsCut: 142,
+    totalHeadsCut: data?.totalHeadsCut || 142,
     avgServiceDuration: "38 Menit",
-    totalCommissionReady: "Rp 3.420.000",
+    totalCommissionReady: data?.totalCommissionReady || "Rp 3.420.000",
     retailCrossSellRate: "34%",
   };
 
-  const capsterPerformance = [
+  const capsterPerformance = data?.capsterPerformance && data.capsterPerformance.length > 0 ? data.capsterPerformance : [
     { name: "Hendra (Senior)", cuts: 54, revenue: 3510000, commission: 1228500, rating: "4.9" },
     { name: "Dimas Prasetyo", cuts: 46, revenue: 2760000, commission: 966000, rating: "4.8" },
     { name: "Rizky Firmansyah", cuts: 42, revenue: 2310000, commission: 808500, rating: "4.7" },
   ];
 
-  const serviceVsProduct = [
+  const serviceVsProduct = data?.serviceVsProduct && data.serviceVsProduct.length > 0 ? data.serviceVsProduct : [
     { name: "Jasa Treatment & Potong Rambut", amount: 8580000, percent: 78, color: "bg-cyan-500" },
     { name: "Produk Retail (Pomade & Tonic)", amount: 2420000, percent: 22, color: "bg-amber-500" },
   ];
@@ -120,7 +120,7 @@ export function BarberReportView() {
           </div>
 
           <div className="space-y-3">
-            {capsterPerformance.map((c, idx) => (
+            {capsterPerformance.map((c: any, idx: number) => (
               <div
                 key={idx}
                 className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-2.5"
@@ -135,17 +135,17 @@ export function BarberReportView() {
                         {c.name}
                       </strong>
                       <span className="text-[10px] text-slate-400">
-                        {c.cuts} Pelanggan • Rating ⭐ {c.rating}
+                        {c.cuts} Pelanggan • Rating ⭐ {c.rating || "4.9"}
                       </span>
                     </div>
                   </div>
 
                   <div className="text-right">
                     <span className="text-xs font-black text-emerald-600 block">
-                      Komisi: Rp {c.commission.toLocaleString("id-ID")}
+                      Komisi: Rp {Number(c.commission || 0).toLocaleString("id-ID")}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      Omzet: Rp {c.revenue.toLocaleString("id-ID")}
+                      Omzet: Rp {Number(c.revenue || 0).toLocaleString("id-ID")}
                     </span>
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export function BarberReportView() {
                 <div className="w-full bg-slate-200/60 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                   <div
                     className="bg-cyan-500 h-full rounded-full"
-                    style={{ width: `${(c.cuts / 54) * 100}%` }}
+                    style={{ width: `${Math.min(100, (c.cuts / 50) * 100)}%` }}
                   />
                 </div>
               </div>
@@ -170,7 +170,7 @@ export function BarberReportView() {
               Utilisasi Kursi Cukur
             </h4>
             <div className="space-y-2.5">
-              {chairBusyness.map((ch, idx) => (
+              {chairBusyness.map((ch: any, idx: number) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-slate-700 dark:text-slate-300">{ch.chair}</span>
@@ -190,14 +190,14 @@ export function BarberReportView() {
               Jasa vs Produk Retail
             </h4>
             <div className="space-y-2">
-              {serviceVsProduct.map((sp, idx) => (
+              {serviceVsProduct.map((sp: any, idx: number) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-slate-700 dark:text-slate-300">{sp.name}</span>
                     <span className="font-mono text-slate-900 dark:text-white">{sp.percent}%</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className={`${sp.color} h-full rounded-full`} style={{ width: `${sp.percent}%` }} />
+                    <div className={`${sp.color || "bg-cyan-500"} h-full rounded-full`} style={{ width: `${sp.percent}%` }} />
                   </div>
                 </div>
               ))}

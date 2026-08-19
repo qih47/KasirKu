@@ -328,11 +328,11 @@ export function ReportsClient({
           )}
         </div>
 
-        {/* Conditional Tab Rendering */}
-        {activeReportTab === "CAFE" && <CafeReportView />}
-        {activeReportTab === "BARBERSHOP" && <BarberReportView />}
-        {activeReportTab === "LAUNDRY" && <LaundryReportView />}
-        {activeReportTab === "RETAIL" && <RetailReportView />}
+        {/* Conditional Tab Rendering with Real Multi-Vertical Data */}
+        {activeReportTab === "CAFE" && <CafeReportView data={data.cafeAnalytics} />}
+        {activeReportTab === "BARBERSHOP" && <BarberReportView data={data.barberAnalytics} />}
+        {activeReportTab === "LAUNDRY" && <LaundryReportView data={data.laundryAnalytics} />}
+        {activeReportTab === "RETAIL" && <RetailReportView data={data.retailAnalytics} />}
 
         {activeReportTab === "CORE" && (
           <div className="space-y-6">

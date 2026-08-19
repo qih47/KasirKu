@@ -7,6 +7,7 @@ import {
   updateProductAction,
   toggleProductStatusAction,
   deleteProductAction,
+  getProductsData,
   ProductType,
 } from "@/modules/product/actions";
 import {
@@ -26,8 +27,10 @@ import {
   AlertTriangle,
   Layers,
   FileSpreadsheet,
+  SlidersHorizontal,
 } from "lucide-react";
 import { ImportProductModal } from "@/components/products/import-product-modal";
+import { StockManagementModal } from "@/components/products/stock-management-modal";
 import { useTranslation } from "@/lib/i18n/language-context";
 
 export function ProductClient({
@@ -36,6 +39,8 @@ export function ProductClient({
   initialData: {
     products: any[];
     categories: string[];
+    outlets?: any[];
+    selectedOutletId?: string | null;
     metrics: {
       totalItems: number;
       totalBarang: number;
@@ -54,6 +59,16 @@ export function ProductClient({
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
+  const [stockModalProductId, setStockModalProductId] = useState<string | null>(null);
+
+  const refreshProducts = async () => {
+    try {
+      const refreshed = await getProductsData(data.selectedOutletId || undefined);
+      setData(refreshed);
+    } catch (err) {
+      console.error("Error refreshing products:", err);
+    }
+  };
 
   // Form State
   const [name, setName] = useState("");
@@ -463,20 +478,54 @@ export function ProductClient({
                           {tr("Tidak terbatas")}
                         </span>
                       ) : (
-                        <span
-                          className={`inline-flex items-center gap-1 font-semibold ${
-                            isLowStock
-                              ? "text-amber-600 dark:text-amber-400"
-                              : "text-slate-700 dark:text-slate-300"
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => setStockModalProductId(p.id)}
+                          className="text-left group/stock p-1 -m-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition cursor-pointer"
+                          title="Klik untuk Kelola Stok & Riwayat Mutasi"
                         >
-                          {p.stockQty ?? 0} {tr("unit")}
-                          {isLowStock && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold">
-                              {tr("Menipis")}
-                            </span>
-                          )}
-                        </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`inline-flex items-center gap-1 font-semibold ${
+                                  isLowStock
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-slate-700 dark:text-slate-300"
+                                }`}
+                              >
+                                {p.stockQty ?? 0} {tr("unit")}
+                                {isLowStock && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-600 font-bold">
+                                    {tr("Menipis")}
+                                  </span>
+                                )}
+                              </span>
+                              <SlidersHorizontal className="w-3 h-3 text-slate-400 opacity-0 group-hover/stock:opacity-100 transition-opacity text-indigo-500" />
+                            </div>
+                            {/* Multi-outlet breakdown badges if > 1 outlet */}
+                            {p.outletStocks && p.outletStocks.length > 1 && (
+                              <div className="flex flex-wrap gap-1 mt-0.5 max-w-[220px]">
+                                {p.outletStocks.map((os: any) => (
+                                  <span
+                                    key={os.id}
+                                    className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium"
+                                  >
+                                    {os.outlet?.name || "Cabang"}:{" "}
+                                    <b
+                                      className={
+                                        os.stockQty <= 5
+                                          ? "text-amber-600 font-bold"
+                                          : "text-slate-800 dark:text-slate-200"
+                                      }
+                                    >
+                                      {os.stockQty}
+                                    </b>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </button>
                       )}
                     </td>
 
@@ -504,6 +553,15 @@ export function ProductClient({
                         <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />
                       ) : (
                         <div className="flex items-center justify-end gap-1.5">
+                          {p.type === "BARANG" && (
+                            <button
+                              onClick={() => setStockModalProductId(p.id)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition"
+                              title={tr("Kelola Stok & Kartu Mutasi")}
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEditModal(p)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
@@ -745,6 +803,16 @@ export function ProductClient({
         onClose={() => setShowImportModal(false)}
         onSuccess={() => window.location.reload()}
       />
+
+      {/* Multi-Outlet Stock & Mutation Ledger Modal */}
+      {stockModalProductId && (
+        <StockManagementModal
+          productId={stockModalProductId}
+          isOpen={Boolean(stockModalProductId)}
+          onClose={() => setStockModalProductId(null)}
+          onStockUpdated={refreshProducts}
+        />
+      )}
     </div>
   );
 }

@@ -59,6 +59,10 @@ export async function getBarbershopQueueData(explicitOutletId?: string) {
       where: {
         tenantId: user.tenantId,
         isActive: true,
+        OR: [
+          { outletId: targetOutletId },
+          { outletId: null },
+        ],
       },
       orderBy: { name: "asc" },
     }),

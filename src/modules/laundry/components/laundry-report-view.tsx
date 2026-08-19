@@ -12,12 +12,13 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-export function LaundryReportView() {
+export function LaundryReportView({ data }: { data?: any }) {
   const kpi = {
-    totalWeightKg: "324.50 Kg",
-    avgWeightPerOrder: "4.2 Kg",
-    onTimeSlaPercent: "96.4%",
-    pendingRackPickup: "4 Nota",
+    totalWeightKg: data?.totalWeightKg || "324.50 Kg",
+    totalSatuanPcs: data?.totalSatuanPcs || "39 Pcs",
+    avgWeightPerOrder: data?.avgWeightPerOrder || "4.2 Kg",
+    onTimeSlaPercent: data?.onTimeSlaPercent || "96.4%",
+    pendingRackPickup: data?.pendingPickup || "4 Nota",
   };
 
   const dailyWeightTrend = [
@@ -26,14 +27,13 @@ export function LaundryReportView() {
     { day: "Rab", kg: 45.5 },
     { day: "Kam", kg: 39.0 },
     { day: "Jum", kg: 52.0 },
-    { day: "Sab", kg: 61.5 }, // Peak Weekend
+    { day: "Sab", kg: 61.5 },
     { day: "Min", kg: 46.0 },
   ];
 
   const packageBreakdown = [
-    { name: "Cuci Kering Lipat Reguler", percent: 62, count: "201 Kg", color: "bg-purple-500" },
-    { name: "Cuci Setrika Express (1 Hari)", percent: 26, count: "84 Kg", color: "bg-indigo-500" },
-    { name: "Dry Clean Satuan (Jas, Gaun)", percent: 12, count: "39 Pcs", color: "bg-pink-500" },
+    { name: "Cuci Kiloan", percent: data?.kiloanOrders ? Math.round((data.kiloanOrders / (data.kiloanOrders + (data.satuanOrders || 0) || 1)) * 100) : 62, count: data?.totalWeightKg || "201 Kg", color: "bg-purple-500" },
+    { name: "Cuci Satuan / Dry Clean", percent: data?.satuanOrders ? Math.round((data.satuanOrders / ((data.kiloanOrders || 0) + data.satuanOrders || 1)) * 100) : 38, count: data?.totalSatuanPcs || "39 Pcs", color: "bg-indigo-500" },
   ];
 
   const fragranceDistribution = [
@@ -127,7 +127,7 @@ export function LaundryReportView() {
           </div>
 
           <div className="h-44 flex items-end justify-between gap-3 pt-4 px-2 border-b border-slate-100 dark:border-slate-800">
-            {dailyWeightTrend.map((item, idx) => (
+            {dailyWeightTrend.map((item: any, idx: number) => (
               <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
                 <span className="text-[9px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition">
                   {item.kg}k
@@ -152,14 +152,14 @@ export function LaundryReportView() {
               Komposisi Paket Cucian
             </h4>
             <div className="space-y-2">
-              {packageBreakdown.map((pkg, idx) => (
+              {packageBreakdown.map((pkg: any, idx: number) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-slate-700 dark:text-slate-300">{pkg.name}</span>
                     <span className="font-mono text-slate-900 dark:text-white">{pkg.percent}%</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className={`${pkg.color} h-full rounded-full`} style={{ width: `${pkg.percent}%` }} />
+                    <div className={`${pkg.color || "bg-purple-500"} h-full rounded-full`} style={{ width: `${pkg.percent}%` }} />
                   </div>
                 </div>
               ))}
@@ -172,7 +172,7 @@ export function LaundryReportView() {
               Distribusi Aroma Parfum Terfavorit
             </h4>
             <div className="space-y-2">
-              {fragranceDistribution.map((f, idx) => (
+              {fragranceDistribution.map((f: any, idx: number) => (
                 <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800">
                   <span className="font-bold text-slate-800 dark:text-slate-200">
                     🌸 {f.name}

@@ -77,7 +77,7 @@ export async function createCashierAction(data: {
         include: { licenseTier: true },
       },
       users: {
-        where: { role: "KASIR" },
+        where: { role: "KASIR", outletId },
       },
     },
   });
@@ -88,7 +88,7 @@ export async function createCashierAction(data: {
 
   if (kasirLimit !== null && currentCount >= kasirLimit) {
     throw new Error(
-      `Kuota kasir penuh (Maks. ${kasirLimit} kasir pada ${
+      `Kuota kasir untuk cabang ini sudah penuh (Maks. ${kasirLimit} kasir per cabang pada ${
         activeSub?.licenseTier?.name || "Lisensi Basic"
       }). Silakan upgrade lisensi Anda.`
     );

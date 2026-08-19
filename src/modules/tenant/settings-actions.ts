@@ -25,14 +25,16 @@ import {
 
 export type { ReceiptConfig, BusinessVertical };
 
-export async function getTenantSettingsData() {
+export async function getTenantSettingsData(explicitOutletId?: string) {
   const user = await requireOwner();
 
   const [tenant, activeSub, allThemes] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: user.tenantId },
       include: {
-        outlets: { take: 1 },
+        outlets: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     }),
     prisma.tenantSubscription.findFirst({
@@ -164,6 +166,11 @@ export async function getTenantSettingsData() {
     ) ||
     savedConfig.hasReceiptProPlugin === true;
 
+  const outlets = tenant.outlets || [];
+  const selectedOutlet = explicitOutletId
+    ? outlets.find((o) => o.id === explicitOutletId) || outlets[0] || null
+    : outlets[0] || null;
+
   return JSON.parse(
     JSON.stringify({
       tenantId: tenant.id,
@@ -176,7 +183,9 @@ export async function getTenantSettingsData() {
       tierName: activeSub?.licenseTier?.name || (isTrial ? "Trial 30 Hari" : "Lisensi Aktif"),
       canCustomBrand: true,
       hasReceiptProPlugin,
-      primaryOutlet: tenant.outlets[0] || null,
+      outlets,
+      selectedOutlet,
+      primaryOutlet: outlets[0] || null,
       ownedUiThemes,
       ownedPosLayouts,
       ownedReceiptThemes,
@@ -187,13 +196,13 @@ export async function getTenantSettingsData() {
   );
 }
 
-
 export async function updateTenantBrandingAction(data: {
   businessName: string;
   logoUrl?: string | null;
   receiptConfig?: Partial<ReceiptConfig>;
   phone?: string;
   address?: string;
+  outletId?: string;
   activeUiThemeId?: string;
   activePosLayout?: string;
   activeReceiptTemplate?: string;
@@ -217,6 +226,7 @@ export async function updateTenantBrandingAction(data: {
     receiptConfig,
     phone,
     address,
+    outletId,
     activeUiThemeId,
     activePosLayout,
     activeReceiptTemplate,
@@ -247,21 +257,28 @@ export async function updateTenantBrandingAction(data: {
     },
   });
 
-  // Update alamat outlet utama jika ada
-  const firstOutlet = await prisma.outlet.findFirst({
-    where: { tenantId: user.tenantId },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (firstOutlet) {
-    await prisma.outlet.update({
-      where: { id: firstOutlet.id },
-      data: {
-        address: address?.trim() !== undefined ? address.trim() : firstOutlet.address,
-      },
+  // Update alamat outlet target jika ada
+  let targetOutlet = null;
+  if (outletId) {
+    targetOutlet = await prisma.outlet.findFirst({
+      where: { id: outletId, tenantId: user.tenantId },
+    });
+  }
+  if (!targetOutlet) {
+    targetOutlet = await prisma.outlet.findFirst({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: "asc" },
     });
   }
 
+  if (targetOutlet && address !== undefined) {
+    await prisma.outlet.update({
+      where: { id: targetOutlet.id },
+      data: {
+        address: address.trim() || null,
+      },
+    });
+  }
 
   // Jika activeUiThemeId diubah, perbarui subscription theme
   if (activeUiThemeId && activeSub) {
@@ -291,4 +308,3 @@ export async function updateTenantBrandingAction(data: {
   revalidatePath("/pos");
   return { success: true };
 }
-

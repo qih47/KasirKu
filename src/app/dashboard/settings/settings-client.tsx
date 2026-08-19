@@ -48,6 +48,8 @@ interface SettingsClientProps {
     tierName: string;
     canCustomBrand: boolean;
     hasReceiptProPlugin: boolean;
+    outlets?: any[];
+    selectedOutlet?: any;
     primaryOutlet?: any;
     ownedUiThemes: { id: string; code: string; name: string; priceMonthly: number }[];
     ownedPosLayouts: { id: string; name: string; vertical: string }[];
@@ -61,13 +63,40 @@ interface SettingsClientProps {
 export function SettingsClient({ initialData }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<"BRANDING" | "THEMES" | "RECEIPT">("BRANDING");
 
+  const outlets = initialData.outlets || [];
+  const [selectedOutletId, setSelectedOutletId] = useState(
+    initialData.selectedOutlet?.id || outlets[0]?.id || ""
+  );
+
+  // Outlet Address map for switching between outlets
+  const [outletAddresses, setOutletAddresses] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    outlets.forEach((o) => {
+      map[o.id] = o.address || "";
+    });
+    return map;
+  });
+
   // Form State
   const [businessName, setBusinessName] = useState(initialData.businessName || "");
   const [logoUrl, setLogoUrl] = useState(initialData.logoUrl || "");
   const [logoMode, setLogoMode] = useState<"UPLOAD" | "LINK">("UPLOAD");
 
   const [phone, setPhone] = useState(initialData.primaryOutlet?.phone || initialData.receiptConfig?.phone || "");
-  const [address, setAddress] = useState(initialData.primaryOutlet?.address || "");
+  const [address, setAddress] = useState(
+    initialData.selectedOutlet?.address || initialData.primaryOutlet?.address || ""
+  );
+
+  const handleOutletChange = (newOutletId: string) => {
+    // Save current address to map before switching
+    setOutletAddresses((prev) => ({
+      ...prev,
+      [selectedOutletId]: address,
+    }));
+    setSelectedOutletId(newOutletId);
+    const target = outlets.find((o) => o.id === newOutletId);
+    setAddress(outletAddresses[newOutletId] ?? target?.address ?? "");
+  };
 
   // Theme Selectors State (Only Owned)
   const [activeUiThemeId, setActiveUiThemeId] = useState(initialData.activeUiThemeId || initialData.ownedUiThemes?.[0]?.id || "");
@@ -159,6 +188,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
         logoUrl: logoUrl.trim() || null,
         phone: phone.trim(),
         address: address.trim(),
+        outletId: selectedOutletId || undefined,
         activeUiThemeId: activeUiThemeId || undefined,
         activePosLayout,
         activeReceiptTemplate,
@@ -468,6 +498,46 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 </p>
               </div>
 
+              {/* Outlet Selector for Multi-Outlet Tenants */}
+              {outlets.length > 1 && (
+                <div
+                  className="space-y-1.5 p-3.5 rounded-2xl border transition-all"
+                  style={{
+                    backgroundColor: "var(--theme-inner-bg, #f8fafc)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <Store className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Pilih Cabang Outlet yang Dikelola</span>
+                    </label>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600">
+                      {outlets.length} Cabang Terdaftar
+                    </span>
+                  </div>
+                  <select
+                    value={selectedOutletId}
+                    onChange={(e) => handleOutletChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition cursor-pointer"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                  >
+                    {outlets.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} {o.address ? `— ${o.address}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    Pilih cabang outlet untuk mengelola alamat operasional khusus cabang tersebut.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
@@ -491,7 +561,12 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                     <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Alamat Outlet Utama</span>
+                    <span>
+                      Alamat Cabang:{" "}
+                      <span className="text-indigo-600 font-extrabold">
+                        {outlets.find((o) => o.id === selectedOutletId)?.name || "Utama"}
+                      </span>
+                    </span>
                   </label>
                   <input
                     type="text"

@@ -7,8 +7,11 @@ import {
   updatePayrollCutoffAction,
   savePayrollSnapshotAction,
   toggleLockPayrollPeriodAction,
+  getPayrollHistoryAction,
+  unlockPayrollPeriodAction,
   PayrollStaffRecord,
 } from "@/modules/payroll/payroll-actions";
+import { exportPayrollToExcel } from "@/lib/payroll-export";
 import {
   DollarSign,
   Calendar,
@@ -33,6 +36,9 @@ import {
   Lock,
   Unlock,
   Sparkles,
+  FileSpreadsheet,
+  History,
+  SendHorizonal,
 } from "lucide-react";
 
 export function PayrollClient({
@@ -67,6 +73,14 @@ export function PayrollClient({
   const [savingCutoff, setSavingCutoff] = useState(false);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [lockingPeriod, setLockingPeriod] = useState(false);
+
+  // Tab: "PAYROLL" | "HISTORY"
+  const [activeTab, setActiveTab] = useState<"PAYROLL" | "HISTORY">("PAYROLL");
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [unlockingPeriod, setUnlockingPeriod] = useState<string | null>(null);
+  const [broadcastingWA, setBroadcastingWA] = useState(false);
+  const [broadcastProgress, setBroadcastProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Local adjustments for allowance / deductions per staff
   const [adjustments, setAdjustments] = useState<
@@ -323,6 +337,94 @@ export function PayrollClient({
     window.print();
   };
 
+  // ── Export Excel ─────────────────────────────────────────────────────────
+  const handleExportExcel = () => {
+    const exportRows = data.records.map((r) => ({
+      name: r.name,
+      position: r.position,
+      outletName: r.outletName,
+      salaryType: r.salaryType,
+      baseSalaryEarned: getStaffBaseSalary(r),
+      overtimePay: getStaffOvertimePay(r),
+      totalCommissions: r.totalCommissions,
+      totalFixedAllowances: r.totalFixedAllowances || 0,
+      customBonus: adjustments[r.staffId]?.allowances || 0,
+      deductions: adjustments[r.staffId]?.deductions || 0,
+      takeHomePay: getStaffNetSalary(r),
+      isProrated: r.isProrated,
+      prorateNote: r.prorateNote,
+    }));
+    exportPayrollToExcel(exportRows, data.periodLabel, data.businessName, data.selectedMonth);
+    toastSuccess("File Excel rekap gaji berhasil diunduh!");
+  };
+
+  // ── Broadcast WhatsApp ke semua karyawan ─────────────────────────────────
+  const handleBroadcastAll = async () => {
+    const eligible = data.records.filter((r) => r.phone);
+    if (eligible.length === 0) {
+      toastError("Tidak ada karyawan dengan nomor WhatsApp yang terdaftar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Kirim slip gaji ke ${eligible.length} karyawan via WhatsApp?\nBrowser akan membuka ${eligible.length} tab secara berurutan dengan jeda 900ms.\n\nLanjutkan?`
+    );
+    if (!confirmed) return;
+
+    setBroadcastingWA(true);
+    setBroadcastProgress({ current: 0, total: eligible.length });
+
+    for (let i = 0; i < eligible.length; i++) {
+      setBroadcastProgress({ current: i + 1, total: eligible.length });
+      handleSendWhatsApp(eligible[i]);
+      if (i < eligible.length - 1) {
+        await new Promise((res) => setTimeout(res, 900));
+      }
+    }
+
+    setBroadcastingWA(false);
+    setBroadcastProgress(null);
+    toastSuccess(`Slip gaji telah dikirim ke ${eligible.length} karyawan!`);
+  };
+
+  // ── Fetch History ─────────────────────────────────────────────────────────
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const result = await getPayrollHistoryAction();
+      setHistoryData(result);
+    } catch (err: any) {
+      toastError(err.message || "Gagal memuat riwayat penggajian.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleSwitchTab = (tab: "PAYROLL" | "HISTORY") => {
+    setActiveTab(tab);
+    if (tab === "HISTORY" && historyData.length === 0) {
+      fetchHistory();
+    }
+  };
+
+  const handleUnlockHistory = async (periodMonth: string) => {
+    const confirmed = window.confirm(
+      `Buka kunci periode ${periodMonth} untuk koreksi?\nData gaji periode ini akan kembali ke status DRAFT dan bisa diedit kembali.`
+    );
+    if (!confirmed) return;
+
+    setUnlockingPeriod(periodMonth);
+    try {
+      await unlockPayrollPeriodAction(periodMonth);
+      toastSuccess(`Periode ${periodMonth} berhasil dibuka kembali (DRAFT).`);
+      await fetchHistory();
+    } catch (err: any) {
+      toastError(err.message || "Gagal membuka kunci periode.");
+    } finally {
+      setUnlockingPeriod(null);
+    }
+  };
+
   const handleSendWhatsApp = (record: PayrollStaffRecord) => {
     if (!record.phone) {
       toastError("Nomor WhatsApp karyawan belum terdaftar.");
@@ -440,7 +542,145 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
         </div>
       </div>
 
+      {/* ── Tab Switcher: Payroll Aktif / Riwayat Gaji ────────────────────── */}
+      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl w-fit border border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => handleSwitchTab("PAYROLL")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === "PAYROLL"
+              ? "bg-white dark:bg-slate-800 text-emerald-600 shadow-xs"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <DollarSign className="w-3.5 h-3.5" />
+          Penggajian Aktif
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSwitchTab("HISTORY")}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === "HISTORY"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-xs"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          Riwayat Gaji
+        </button>
+      </div>
+
+      {/* ── HISTORY TAB PANEL ─────────────────────────────────────────────── */}
+      {activeTab === "HISTORY" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <History className="w-4 h-4 text-indigo-600" />
+              Riwayat Penggajian Tersimpan
+            </h2>
+            <button
+              type="button"
+              onClick={fetchHistory}
+              disabled={historyLoading}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold hover:bg-slate-200 transition cursor-pointer flex items-center gap-1.5"
+            >
+              {historyLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <History className="w-3.5 h-3.5" />}
+              Refresh
+            </button>
+          </div>
+
+          {historyLoading ? (
+            <div className="flex items-center justify-center gap-3 py-16 text-slate-400">
+              <Loader2 className="w-7 h-7 animate-spin text-indigo-600" />
+              <span className="text-sm font-semibold">Memuat riwayat...</span>
+            </div>
+          ) : historyData.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 font-medium text-sm bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+              Belum ada periode gaji yang tersimpan.<br />
+              <span className="text-xs">Simpan data penggajian dari tab &ldquo;Penggajian Aktif&rdquo; terlebih dahulu.</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {historyData.map((h: any) => (
+                <div
+                  key={h.periodMonth}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-3 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Periode</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                        {new Date(h.periodMonth + "-01").toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+                      </p>
+                    </div>
+                    {h.isLocked ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-600 border border-amber-200 dark:border-amber-800">
+                        <Lock className="w-3 h-3" /> FINAL
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        <FileText className="w-3 h-3" /> DRAFT
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-2.5">
+                      <p className="text-slate-400 font-medium">Karyawan</p>
+                      <p className="text-slate-900 dark:text-white font-black text-sm mt-0.5">{h.totalStaff} Orang</p>
+                    </div>
+                    <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl p-2.5">
+                      <p className="text-emerald-600 font-medium">Total Gaji</p>
+                      <p className="text-emerald-700 dark:text-emerald-400 font-black text-sm mt-0.5">
+                        Rp {h.totalTakeHomePay.toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                  </div>
+
+                  {h.lockedAt && (
+                    <p className="text-[10px] text-slate-400 italic">
+                      Dikunci: {new Date(h.lockedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMonth(h.periodMonth);
+                        handleSwitchTab("PAYROLL");
+                        fetchPayroll(h.periodMonth, outletId);
+                      }}
+                      className="flex-1 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 hover:bg-indigo-100 transition cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Lihat Detail
+                    </button>
+                    {h.isLocked && (
+                      <button
+                        type="button"
+                        disabled={unlockingPeriod === h.periodMonth}
+                        onClick={() => handleUnlockHistory(h.periodMonth)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 hover:bg-amber-50 hover:text-amber-600 transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {unlockingPeriod === h.periodMonth ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                        Buka Kunci
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PAYROLL AKTIF (kondisional hanya tampil di tab PAYROLL) ──────── */}
+      {activeTab === "PAYROLL" && (
+      <>
+
       {/* Cut-off Info & Payday Cycle Configuration Banner (Fully Theme Responsive) */}
+
       <div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl border shadow-xs animate-fadeIn"
         style={{
@@ -608,7 +848,7 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
             ) : (
               <Save className="w-3.5 h-3.5" />
             )}
-            <span>Simpan Perubahan</span>
+            <span>Simpan</span>
           </button>
 
           {/* Tombol Kunci / Buka Kunci */}
@@ -632,7 +872,40 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
             ) : (
               <>
                 <Lock className="w-3.5 h-3.5" />
-                <span>Kunci Penggajian</span>
+                <span>Kunci</span>
+              </>
+            )}
+          </button>
+
+          {/* Tombol Export Excel */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={data.records.length === 0}
+            className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Download rekap gaji periode ini ke Excel"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Excel</span>
+          </button>
+
+          {/* Tombol Kirim Semua WhatsApp */}
+          <button
+            type="button"
+            onClick={handleBroadcastAll}
+            disabled={broadcastingWA || data.records.filter((r) => r.phone).length === 0}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title={`Kirim slip gaji ke ${data.records.filter((r) => r.phone).length} karyawan via WhatsApp`}
+          >
+            {broadcastingWA ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>{broadcastProgress ? `${broadcastProgress.current}/${broadcastProgress.total}` : "..."}</span>
+              </>
+            ) : (
+              <>
+                <SendHorizonal className="w-3.5 h-3.5" />
+                <span>Kirim Semua WA</span>
               </>
             )}
           </button>
@@ -1247,6 +1520,10 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
           </div>
         </div>
       )}
+
+      </>
+      )}
+
     </div>
   );
 }

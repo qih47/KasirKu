@@ -411,3 +411,71 @@ export async function getPayrollData(params?: {
     })
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getPayrollHistoryAction — Ambil semua periode yang sudah pernah disimpan
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getPayrollHistoryAction() {
+  const user = await requireOwner();
+
+  const rows = await (prisma as any).payrollRecord.findMany({
+    where: { tenantId: user.tenantId },
+    orderBy: { periodMonth: "desc" },
+  });
+
+  // Kelompokkan per periodMonth
+  const grouped: Record<
+    string,
+    {
+      periodMonth: string;
+      totalStaff: number;
+      totalTakeHomePay: number;
+      isLocked: boolean;
+      lockedAt: string | null;
+    }
+  > = {};
+
+  for (const r of rows) {
+    if (!grouped[r.periodMonth]) {
+      grouped[r.periodMonth] = {
+        periodMonth: r.periodMonth,
+        totalStaff: 0,
+        totalTakeHomePay: 0,
+        isLocked: false,
+        lockedAt: null,
+      };
+    }
+    grouped[r.periodMonth].totalStaff += 1;
+    grouped[r.periodMonth].totalTakeHomePay += Number(r.takeHomePay || 0);
+    // Anggap locked jika SEMUA record di bulan tersebut locked
+    if (r.isLocked) {
+      grouped[r.periodMonth].isLocked = true;
+      grouped[r.periodMonth].lockedAt = r.lockedAt
+        ? r.lockedAt.toISOString()
+        : null;
+    }
+  }
+
+  return JSON.parse(JSON.stringify(Object.values(grouped)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// unlockPayrollPeriodAction — Buka kunci 1 periode dari riwayat (untuk koreksi)
+// ─────────────────────────────────────────────────────────────────────────────
+export async function unlockPayrollPeriodAction(periodMonth: string) {
+  const user = await requireOwner();
+
+  await (prisma as any).payrollRecord.updateMany({
+    where: {
+      tenantId: user.tenantId,
+      periodMonth,
+    },
+    data: {
+      isLocked: false,
+      lockedAt: null,
+    },
+  });
+
+  revalidatePath("/dashboard/payroll");
+  return { success: true };
+}

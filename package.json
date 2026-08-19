@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "setup": "npm install && npm run db:setup",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "ts-node prisma/seed.ts"
+    "db:seed": "ts-node prisma/seed.ts",
+    "db:setup": "prisma generate && prisma db push && npm run db:seed",
+    "db:reset": "prisma db push --force-reset && npm run db:seed"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

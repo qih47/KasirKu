@@ -112,6 +112,19 @@ export function TenantTableClient({
     return matchStatus && matchSearch;
   });
 
+  const formatDurationBadge = (sub: any) => {
+    if (!sub) return null;
+    const key = sub.durationKey;
+    const months = sub.durationMonths || (sub.billingCycle === "ANNUAL" ? 12 : 1);
+    if (key === "1M" || months === 1) return "1 Bulan";
+    if (key === "3M" || months === 3) return "3 Bulan";
+    if (key === "6M" || months === 6) return "6 Bulan";
+    if (key === "1Y" || months === 12) return "1 Tahun";
+    if (key === "2Y" || months === 24) return "2 Tahun";
+    if (key === "3Y" || months === 36) return "3 Tahun";
+    return `${months} Bulan`;
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "ACTIVE":
@@ -214,9 +227,16 @@ export function TenantTableClient({
                       </td>
 
                       <td className="py-4 px-4">
-                        <span className="font-medium text-slate-200">
-                          {activeSub?.licenseTier?.name || "Lisensi Basic"}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-slate-200">
+                            {activeSub?.licenseTier?.name || "Lisensi Basic"}
+                          </span>
+                          {activeSub && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold">
+                              {formatDurationBadge(activeSub)}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-500 mt-0.5">
                           {t.outlets?.length || 1} Cabang/Outlet
                         </div>

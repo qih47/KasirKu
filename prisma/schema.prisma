@@ -173,6 +173,17 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+
 // ============================================================
 // TENANT LAYER
 // ============================================================
@@ -259,10 +270,13 @@ model TenantSubscription {
   licenseTierId      String
   licenseTier        LicenseTier  @relation(fields: [licenseTierId], references: [id])
   billingCycle       BillingCycle
+  durationMonths     Int?         @default(1)
+  durationKey        String?      @default("1M")
   currentPeriodStart DateTime
   currentPeriodEnd   DateTime
   isActive           Boolean      @default(true)
   createdAt          DateTime     @default(now())
+
 
   plugins TenantPlugin[]
   theme   TenantTheme?

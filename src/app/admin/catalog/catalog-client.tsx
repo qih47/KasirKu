@@ -11,6 +11,12 @@ import { createThemeAction } from "@/modules/superadmin/theme-actions";
 import { importPluginPackageAction } from "@/modules/superadmin/plugin-package-actions";
 import { validatePluginPackage } from "@/types/plugin-package";
 import {
+  DEFAULT_DURATION_SETTINGS,
+  DurationSettingItem,
+  calculateDurationPrice,
+} from "@/types/subscription-duration";
+import { updateSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
+import {
   Tags,
   CheckCircle2,
   Loader2,
@@ -38,6 +44,8 @@ import {
   AlertCircle,
   FileCode,
   Box,
+  Clock,
+  Percent,
 } from "lucide-react";
 
 
@@ -45,19 +53,28 @@ export function CatalogClient({
   initialLicenses,
   initialPlugins,
   initialThemes,
+  initialDurationSettings,
 }: {
   initialLicenses: any[];
   initialPlugins: any[];
   initialThemes: any[];
+  initialDurationSettings?: DurationSettingItem[];
 }) {
   const searchParams = useSearchParams();
   const defaultTab = (searchParams.get("tab") as any) || "LICENSES";
-  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS">(defaultTab);
+  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "DURATIONS">(defaultTab);
 
 
   const [licenses, setLicenses] = useState(initialLicenses);
   const [plugins, setPlugins] = useState(initialPlugins);
   const [themes, setThemes] = useState(initialThemes);
+  const [durationSettings, setDurationSettings] = useState<DurationSettingItem[]>(
+    initialDurationSettings && initialDurationSettings.length > 0
+      ? initialDurationSettings
+      : DEFAULT_DURATION_SETTINGS
+  );
+  const [durationLoading, setDurationLoading] = useState(false);
+
 
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -252,6 +269,23 @@ export function CatalogClient({
     }
   };
 
+  // Duration Discount Settings Handler
+  const handleSaveDurationSettings = async () => {
+    setDurationLoading(true);
+    try {
+      const res = await updateSubscriptionDurationSettingsAction(durationSettings);
+      if (res.success) {
+        setDurationSettings(res.settings);
+        setSuccessMsg(res.message);
+        setTimeout(() => setSuccessMsg(null), 4000);
+      }
+    } catch (err: any) {
+      alert(err.message || "Gagal menyimpan pengaturan diskon durasi.");
+    } finally {
+      setDurationLoading(false);
+    }
+  };
+
   // Theme Handlers
   const handleThemeChange = (id: string, field: string, value: any) => {
     setThemes((prev) =>
@@ -403,6 +437,18 @@ export function CatalogClient({
           >
             <Printer className="w-4 h-4" />
             <span>Studio &amp; Template Struk</span>
+          </button>
+
+          <button
+            onClick={() => setTab("DURATIONS")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              tab === "DURATIONS"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Diskon Durasi Langganan ⚙️</span>
           </button>
         </div>
       </div>
@@ -1242,6 +1288,203 @@ export function CatalogClient({
           )}
         </div>
       )}
+
+      {/* ======================================================== */}
+      {/* 6. PENGATURAN DISKON DURASI LANGGANAN (1 BLN - 3 THN) */}
+      {/* ======================================================== */}
+      {tab === "DURATIONS" && (
+        <div className="space-y-6">
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 text-xs text-slate-300 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="p-1.5 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <Percent className="w-4 h-4" />
+                </span>
+                <p className="font-bold text-white text-sm">Pengaturan Diskon Durasi Berlangganan (Dinamis)</p>
+              </div>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Tentukan persentase potongan harga untuk langganan <strong>1 Bulan, 3 Bulan, 6 Bulan, 1 Tahun, 2 Tahun, dan 3 Tahun</strong>.
+                Perubahan ini langsung otomatis ter-update di <strong>Landing Page</strong> dan <strong>Dashboard Langganan Toko</strong>.
+              </p>
+            </div>
+            <button
+              onClick={handleSaveDurationSettings}
+              disabled={durationLoading}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50 flex-shrink-0"
+            >
+              {durationLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Menyimpan ke DB...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Perubahan Diskon</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Cards for each duration */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {durationSettings.map((dur, idx) => (
+              <div
+                key={dur.key}
+                className={`p-5 rounded-2xl border transition flex flex-col justify-between ${
+                  dur.isActive
+                    ? "bg-slate-900/90 border-slate-800 shadow-sm hover:border-slate-700"
+                    : "bg-slate-950/60 border-slate-900 opacity-60"
+                }`}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-xl bg-indigo-500/15 text-indigo-400 font-black text-xs flex items-center justify-center font-mono">
+                        {dur.key}
+                      </span>
+                      <div>
+                        <h4 className="font-extrabold text-white text-sm">{dur.label}</h4>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          Durasi {dur.months} Bulan ({dur.months * 30} Hari)
+                        </span>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dur.isActive}
+                        onChange={(e) => {
+                          const updated = [...durationSettings];
+                          updated[idx].isActive = e.target.checked;
+                          setDurationSettings(updated);
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                      Potongan Diskon (%)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={dur.discountPercent}
+                        onChange={(e) => {
+                          const val = Math.max(0, Math.min(99, Number(e.target.value) || 0));
+                          const updated = [...durationSettings];
+                          updated[idx].discountPercent = val;
+                          updated[idx].badgeText = val > 0 ? `Hemat ${val}%` : "Standar";
+                          setDurationSettings(updated);
+                        }}
+                        className="w-full pl-3 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-black text-sm focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-500">%</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span>Badge Promo:</span>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 font-bold border border-indigo-500/30 text-[10px]">
+                      {dur.discountPercent > 0 ? `Hemat ${dur.discountPercent}%` : "Harga Normal"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* SIMULASI LIVE KALKULATOR HARGA */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-indigo-400" />
+                  Simulasi Live Perhitungan Harga per Durasi
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Tabel berikut mengkalkulasi secara instan harga lisensi dan plugin sesuai persentase diskon yang diatur di atas.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 bg-slate-950/60">
+                    <th className="py-3 px-4">Durasi</th>
+                    <th className="py-3 px-4">Diskon %</th>
+                    <th className="py-3 px-4">Lisensi Basic (Rp 150rb/bln)</th>
+                    <th className="py-3 px-4">Lisensi Pro (Rp 500rb/bln)</th>
+                    <th className="py-3 px-4">Modul Cafe (Rp 100rb/bln)</th>
+                    <th className="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {durationSettings.map((dur) => {
+                    const basicCalc = calculateDurationPrice(150000, dur);
+                    const proCalc = calculateDurationPrice(500000, dur);
+                    const cafeCalc = calculateDurationPrice(100000, dur);
+
+                    return (
+                      <tr key={dur.key} className="hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 font-bold text-white">
+                          <span className="text-indigo-400 font-mono mr-1.5">{dur.key}</span>
+                          {dur.label}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-emerald-400">
+                          {dur.discountPercent > 0 ? `${dur.discountPercent}%` : "0% (Normal)"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-white">
+                            Rp {basicCalc.totalPrice.toLocaleString("id-ID")}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            (Rp {basicCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {basicCalc.savedAmount.toLocaleString("id-ID")})
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-white">
+                            Rp {proCalc.totalPrice.toLocaleString("id-ID")}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            (Rp {proCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {proCalc.savedAmount.toLocaleString("id-ID")})
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-white">
+                            Rp {cafeCalc.totalPrice.toLocaleString("id-ID")}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            (Rp {cafeCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {cafeCalc.savedAmount.toLocaleString("id-ID")})
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {dur.isActive ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold border border-slate-700">
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
 {/* MODAL: Import Plugin / Theme Package JSON */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-fadeIn">

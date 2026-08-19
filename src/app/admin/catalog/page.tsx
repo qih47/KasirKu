@@ -1,9 +1,13 @@
 import { getCatalogPricingData } from "@/modules/superadmin/actions";
+import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
 import { CatalogClient } from "./catalog-client";
 import { Tags } from "lucide-react";
 
 export default async function AdminCatalogPage() {
-  const { licenseTiers, plugins, themes } = await getCatalogPricingData();
+  const [{ licenseTiers, plugins, themes }, durationSettings] = await Promise.all([
+    getCatalogPricingData(),
+    getSubscriptionDurationSettingsAction(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -16,7 +20,7 @@ export default async function AdminCatalogPage() {
           Katalog Lisensi, Plugin, Tema &amp; Struk
         </h1>
         <p className="text-xs text-slate-400">
-          Ubah harga live, terbitkan preset tema UI baru, serta kelola template struk &amp; tata letak POS secara terpusat.
+          Ubah harga live, terbitkan preset tema UI baru, serta kelola diskon durasi langganan (1 Bulan s/d 3 Tahun).
         </p>
       </div>
 
@@ -24,7 +28,9 @@ export default async function AdminCatalogPage() {
         initialLicenses={licenseTiers}
         initialPlugins={plugins}
         initialThemes={themes}
+        initialDurationSettings={durationSettings}
       />
     </div>
   );
 }
+

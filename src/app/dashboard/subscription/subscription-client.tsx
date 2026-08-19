@@ -23,6 +23,12 @@ import {
 } from "lucide-react";
 import { upgradeSubscriptionAction } from "@/modules/subscription/actions";
 
+import {
+  DEFAULT_DURATION_SETTINGS,
+  DurationSettingItem,
+  calculateDurationPrice,
+} from "@/types/subscription-duration";
+
 interface SubscriptionClientProps {
   initialData?: any;
   data?: any;
@@ -31,12 +37,13 @@ interface SubscriptionClientProps {
 export function SubscriptionClient({ initialData, data: propData }: SubscriptionClientProps) {
   const data = initialData || propData || {
     tenant: { status: "TRIAL", daysRemaining: 30 },
-    activeSubscription: { billingCycle: "MONTHLY" },
+    activeSubscription: { billingCycle: "MONTHLY", durationKey: "1M", durationMonths: 1 },
     currentTier: { name: "Lisensi Basic" },
     activePluginIds: [],
     activePlugins: [],
     availableTiers: [],
     availablePlugins: [],
+    durationSettings: DEFAULT_DURATION_SETTINGS,
     quota: {
       outletsUsed: 1,
       outletLimit: 1,
@@ -49,9 +56,21 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const initialActivePluginIds: string[] = data.activePluginIds || [];
   const isTrial = data.tenant?.status === "TRIAL";
 
-  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">(
-    data.activeSubscription?.billingCycle || "MONTHLY"
-  );
+  const durationSettings: DurationSettingItem[] =
+    data.durationSettings && data.durationSettings.length > 0
+      ? data.durationSettings
+      : DEFAULT_DURATION_SETTINGS;
+  const activeDurations = durationSettings.filter((d) => d.isActive);
+
+  const initialDurationKey =
+    data.currentDurationKey ||
+    (data.activeSubscription as any)?.durationKey ||
+    (data.activeSubscription?.billingCycle === "ANNUAL" ? "1Y" : "1M");
+
+  const [selectedDurationKey, setSelectedDurationKey] = useState<string>(initialDurationKey);
+  const selectedDuration =
+    activeDurations.find((d) => d.key === selectedDurationKey) || activeDurations[0] || DEFAULT_DURATION_SETTINGS[0];
+
   const [selectedTierId, setSelectedTierId] = useState<string>(currentTierId);
   const [selectedPluginIds, setSelectedPluginIds] = useState<string[]>(initialActivePluginIds);
 
@@ -60,7 +79,6 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const [error, setError] = useState<string | null>(null);
   const [expandedTier, setExpandedTier] = useState<string | null>(null);
 
-  const isAnnual = billingCycle === "ANNUAL";
   const availableTiers = data.availableTiers || [];
   const availablePlugins = data.availablePlugins || [];
 
@@ -73,59 +91,53 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
     );
   };
 
-  // Kalkulasi Biaya Upgrade & Tambahan (Delta Pricing & Prorated 11 Bulan)
-  const currentBillingCycle = data.activeSubscription?.billingCycle || "MONTHLY";
-  const isCycleChanged = billingCycle !== currentBillingCycle;
-  const isOngoingMonthlyActive = currentBillingCycle === "MONTHLY" && !isTrial && !data.tenant?.isExpired;
+  // Kalkulasi Biaya Upgrade & Tambahan (Delta Pricing & Prorated untuk durasi fleksibel)
+  const isDurationChanged = selectedDurationKey !== initialDurationKey;
+  const isOngoingMonthlyActive = initialDurationKey === "1M" && !isTrial && !data.tenant?.isExpired;
   const selectedTier = availableTiers.find((t: any) => t.id === selectedTierId);
   const isTierChanged = selectedTierId !== currentTierId;
 
-  // Biaya tier tahunan prorata jika sedang berjalan bulanan (11 bulan = harga tahunan dikurangi 1 bulan yang sudah dibayar)
+  // Biaya tier prorata jika berpindah dari 1 bulan berjalan ke durasi yang lebih panjang
   let tierCostToday = 0;
   if (selectedTier) {
-    if (isAnnual) {
-      if (!isTierChanged && isOngoingMonthlyActive) {
-        // Konversi tier yang sama dari bulanan aktif -> Prorata 11 bulan (potong 1 bulan yang sudah dibayar)
-        tierCostToday = Math.max(0, Number(selectedTier.priceAnnual) - Number(selectedTier.priceMonthly));
-      } else if (isTierChanged || isTrial || data.tenant?.isExpired) {
-        // Paket baru / dari trial / masa expired -> bayar 12 bulan penuh
-        tierCostToday = Number(selectedTier.priceAnnual);
-      } else {
-        tierCostToday = 0;
-      }
+    const monthlyPrice = Number(selectedTier.priceMonthly);
+    const tierCalc = calculateDurationPrice(monthlyPrice, selectedDuration);
+
+    if (isTierChanged || isTrial || data.tenant?.isExpired) {
+      // Paket baru / dari trial / masa expired -> bayar durasi baru penuh
+      tierCostToday = tierCalc.totalPrice;
+    } else if (isDurationChanged && isOngoingMonthlyActive) {
+      // Konversi paket yang sama dari 1 bulan aktif -> Prorata (potong 1 bulan yang sudah dibayar)
+      tierCostToday = Math.max(0, tierCalc.totalPrice - monthlyPrice);
+    } else if (isDurationChanged) {
+      tierCostToday = tierCalc.totalPrice;
     } else {
-      // Bulanan
-      tierCostToday = isTierChanged || isTrial || data.tenant?.isExpired ? Number(selectedTier.priceMonthly) : 0;
+      tierCostToday = 0; // Paket dan durasi sama serta aktif
     }
   }
 
-  // Rincian Plugin: Modul yang sudah dimiliki vs Modul Baru (Prorata 11 Bulan untuk modul bulanan aktif)
+  // Rincian Plugin: Modul yang sudah dimiliki vs Modul Baru (Prorata jika konversi durasi)
   const pluginItemsCalculation = availablePlugins.map((plugin: any) => {
     const isSelected = selectedPluginIds.includes(plugin.id);
     const wasAlreadyActive = initialActivePluginIds.includes(plugin.id);
-    const price = isAnnual ? Number(plugin.priceAnnual) : Number(plugin.priceMonthly);
+    const monthlyPrice = Number(plugin.priceMonthly);
+    const pluginCalc = calculateDurationPrice(monthlyPrice, selectedDuration);
 
     let costToday = 0;
-    let isProrated11Months = false;
+    let isProrated1Month = false;
 
     if (isSelected) {
-      if (isAnnual) {
-        if (wasAlreadyActive && isOngoingMonthlyActive) {
-          // Modul aktif bulanan dikonversi ke tahunan -> Prorata 11 bulan
-          costToday = Math.max(0, Number(plugin.priceAnnual) - Number(plugin.priceMonthly));
-          isProrated11Months = true;
-        } else if (!wasAlreadyActive || isTrial || data.tenant?.isExpired) {
-          costToday = Number(plugin.priceAnnual);
-        } else {
-          costToday = 0;
-        }
+      if (!wasAlreadyActive || isTrial || data.tenant?.isExpired) {
+        // Plugin baru -> Bayar penuh sesuai durasi terpilih
+        costToday = pluginCalc.totalPrice;
+      } else if (isDurationChanged && isOngoingMonthlyActive) {
+        // Modul aktif 1 bulan dikonversi ke durasi lebih panjang -> Prorata (potong 1 bulan)
+        costToday = Math.max(0, pluginCalc.totalPrice - monthlyPrice);
+        isProrated1Month = true;
+      } else if (isDurationChanged) {
+        costToday = pluginCalc.totalPrice;
       } else {
-        // Bulanan
-        if (wasAlreadyActive && !isTrial && !data.tenant?.isExpired) {
-          costToday = 0; // Sudah aktif
-        } else {
-          costToday = Number(plugin.priceMonthly);
-        }
+        costToday = 0; // Sudah aktif
       }
     }
 
@@ -133,41 +145,36 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       plugin,
       isSelected,
       wasAlreadyActive,
-      price,
+      calc: pluginCalc,
       costToday,
-      isProrated11Months,
+      isProrated1Month,
     };
   });
 
-  const pluginsCostToday = pluginItemsCalculation.reduce((sum: number, item: any) => sum + item.costToday, 0);
-  const totalPayToday = tierCostToday + pluginsCostToday;
+  const pluginsTotalCostToday = pluginItemsCalculation.reduce(
+    (acc: number, curr: any) => acc + curr.costToday,
+    0
+  );
 
-  // Cek apakah ada perubahan dari kondisi saat ini
-  const hasTierChange = selectedTierId !== currentTierId;
-  const hasPluginChange =
-    selectedPluginIds.length !== initialActivePluginIds.length ||
-    selectedPluginIds.some((id) => !initialActivePluginIds.includes(id)) ||
-    initialActivePluginIds.some((id) => !selectedPluginIds.includes(id));
+  const grandTotalToday = tierCostToday + pluginsTotalCostToday;
 
-  const hasAnyChange = hasTierChange || hasPluginChange || isCycleChanged || isTrial;
-
-
-
-  // Handle Save Subscription Changes
-  const handleSave = async () => {
-    setError(null);
+  const handleUpgrade = async () => {
     setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
 
     try {
       const res = await upgradeSubscriptionAction({
         licenseTierId: selectedTierId,
-        billingCycle,
+        durationKey: selectedDuration.key,
+        durationMonths: selectedDuration.months,
+        billingCycle: selectedDuration.months >= 12 ? "ANNUAL" : "MONTHLY",
         selectedPluginIds,
       });
 
       if (res.success) {
         setSuccessMsg(
-          "Paket lisensi & modul bisnis berhasil diperbarui! Fitur tambahan langsung aktif."
+          `Paket lisensi & modul bisnis berhasil diperbarui untuk durasi ${selectedDuration.label}! Fitur tambahan langsung aktif.`
         );
         setTimeout(() => setSuccessMsg(null), 4000);
       }
@@ -177,6 +184,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       setLoading(false);
     }
   };
+
 
   const getPluginIcon = (code: string) => {
     switch (code.toLowerCase()) {
@@ -192,6 +200,19 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
         return <Layers className="w-5 h-5 text-indigo-500" />;
     }
   };
+
+  // Cek apakah ada perubahan dari kondisi saat ini
+  const hasTierChange = selectedTierId !== currentTierId;
+  const hasPluginChange =
+    selectedPluginIds.length !== initialActivePluginIds.length ||
+    selectedPluginIds.some((id) => !initialActivePluginIds.includes(id)) ||
+    initialActivePluginIds.some((id) => !selectedPluginIds.includes(id));
+
+  const hasAnyChange = hasTierChange || hasPluginChange || isDurationChanged || isTrial;
+
+  const currentDurationLabel =
+    durationSettings.find((d) => d.key === initialDurationKey)?.label ||
+    (initialDurationKey === "1Y" ? "1 Tahun" : "1 Bulan");
 
   return (
     <div className="space-y-8 text-left max-w-7xl mx-auto pb-16 font-sans">
@@ -218,20 +239,25 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 Paket Lisensi Aktif:{" "}
-                <strong style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                  {data.currentTier?.name || "Lisensi Basic"}
+                <strong className="text-indigo-600 ml-1">
+                  {data.currentTier?.name || "Trial"}
                 </strong>
               </span>
 
               {isTrial ? (
-                <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 text-xs font-bold flex items-center gap-1">
+                <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 text-xs font-bold flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
-                  Trial 30 Hari ({data.tenant?.daysRemaining ?? 30} Hari Tersisa)
+                  Masa Uji Coba (Sisa {data.tenant?.daysRemaining ?? 30} Hari)
+                </span>
+              ) : data.tenant?.isExpired ? (
+                <span className="px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-600 text-xs font-bold flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Masa Berlangganan Berakhir
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-600 text-xs font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Langganan Aktif ({currentBillingCycle === "ANNUAL" ? "Tahunan" : "Bulanan"})
+                  Langganan Aktif ({currentDurationLabel})
                 </span>
               )}
 
@@ -242,7 +268,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             </h1>
 
             <p className="text-xs sm:text-sm max-w-2xl font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-              Upgrade paket untuk menambah kuota cabang dan kasir, atau tambahkan modul vertikal baru untuk memperluas operasional bisnis Anda tanpa mereset modul yang sudah aktif.
+              Pilih durasi langganan fleksibel (1 Bulan s/d 3 Tahun). Nikmati potongan diskon semakin hemat untuk durasi lebih panjang tanpa mereset modul yang sudah Anda miliki.
             </p>
           </div>
 
@@ -297,40 +323,41 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
         </div>
       )}
 
-      {/* 2. Billing Cycle Switcher */}
+      {/* 2. Multi-Duration Switcher (1 Bulan s/d 3 Tahun) */}
       <div className="flex flex-col items-center justify-center space-y-2 pt-1">
         <div
-          className="flex items-center gap-1.5 p-1 rounded-2xl border shadow-sm"
+          className="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-2xl border shadow-sm max-w-full"
           style={{
             backgroundColor: "var(--theme-inner-bg, #f1f5f9)",
             borderColor: "var(--theme-card-border, #e2e8f0)",
           }}
         >
-          <button
-            type="button"
-            onClick={() => setBillingCycle("MONTHLY")}
-            className="px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm"
-            style={{
-              backgroundColor: billingCycle === "MONTHLY" ? "var(--theme-card-bg, #ffffff)" : "transparent",
-              color: billingCycle === "MONTHLY" ? "var(--theme-primary, #4f46e5)" : "var(--theme-text-secondary, #64748b)",
-            }}
-          >
-            Tagihan Bulanan
-          </button>
-          <button
-            type="button"
-            onClick={() => setBillingCycle("ANNUAL")}
-            className="px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-            style={{
-              backgroundColor: billingCycle === "ANNUAL" ? "var(--theme-card-bg, #ffffff)" : "transparent",
-              color: billingCycle === "ANNUAL" ? "var(--theme-primary, #4f46e5)" : "var(--theme-text-secondary, #64748b)",
-            }}
-          >
-            <span>Tagihan Tahunan</span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-black">
-              Hemat 17%
-            </span>
-          </button>
+          {activeDurations.map((dur) => {
+            const isSelected = selectedDurationKey === dur.key;
+            return (
+              <button
+                key={dur.key}
+                type="button"
+                onClick={() => setSelectedDurationKey(dur.key)}
+                className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                style={{
+                  backgroundColor: isSelected ? "var(--theme-card-bg, #ffffff)" : "transparent",
+                  color: isSelected ? "var(--theme-primary, #4f46e5)" : "var(--theme-text-secondary, #64748b)",
+                }}
+              >
+                <span>{dur.label}</span>
+                {dur.discountPercent > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      isSelected ? "bg-indigo-600 text-white" : "bg-emerald-500 text-white"
+                    }`}
+                  >
+                    Hemat {dur.discountPercent}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -342,17 +369,19 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             1. Pilihan Paket Lisensi (Kapasitas &amp; Cabang)
           </h3>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Pilih paket yang Anda inginkan. Paket yang saat ini sudah Anda miliki ditandai dan tidak akan dikenakan biaya ganda.
+            Pilih paket yang Anda inginkan untuk durasi {selectedDuration.label}. Paket yang saat ini sudah Anda miliki ditandai dan tidak akan dikenakan biaya ganda.
           </p>
         </div>
 
         <div className={`grid grid-cols-1 md:grid-cols-3 gap-5 ${expandedTier === null ? 'items-stretch' : 'items-start'}`}>
           {availableTiers.map((tier: any) => {
             const isSelected = selectedTierId === tier.id;
-            const isCurrentActive = tier.id === currentTierId && !isTrial && !isCycleChanged;
-            const isCurrentTierOnNewCycle = tier.id === currentTierId && !isTrial && isCycleChanged;
-            const price = isAnnual ? Number(tier.priceAnnual) : Number(tier.priceMonthly);
-            const thisTierProratedCost = Math.max(0, Number(tier.priceAnnual) - Number(tier.priceMonthly));
+            const isCurrentActive = tier.id === currentTierId && !isTrial && !isDurationChanged;
+            const isCurrentTierOnNewDuration = tier.id === currentTierId && !isTrial && isDurationChanged;
+            
+            const monthlyBase = Number(tier.priceMonthly);
+            const tierCalc = calculateDurationPrice(monthlyBase, selectedDuration);
+            const thisTierProratedCost = Math.max(0, tierCalc.totalPrice - monthlyBase);
             const isPopularPro = tier.code?.toLowerCase() === "pro";
 
             return (
@@ -387,10 +416,10 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                       <Check className="w-3 h-3" /> Paket Anda Saat Ini
                     </span>
                   </div>
-                ) : isCurrentTierOnNewCycle ? (
+                ) : isCurrentTierOnNewDuration ? (
                   <div className="absolute top-4 right-4">
                     <span className="px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 text-[10px] font-extrabold flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> Ganti ke Tahunan
+                      <Sparkles className="w-3 h-3" /> Ganti ke {selectedDuration.label}
                     </span>
                   </div>
                 ) : isSelected ? (
@@ -406,25 +435,26 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     <span className="text-xs font-black uppercase tracking-wider block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
                       {tier.name}
                     </span>
-                    <p className="text-[11px] text-slate-500 mt-0.5 font-medium line-clamp-2">
-                      {tier.code === "basic"
-                        ? "Solusi ideal untuk 1 outlet usaha yang ingin serba otomatis."
-                        : tier.code === "pro"
-                        ? "Terbaik untuk usaha multi-cabang & tim kasir bertumbuh."
-                        : "Skala franchise, enterprise, dan korporasi multi-gudang."}
-                    </p>
                   </div>
 
                   <div className="min-h-[4.5rem] flex flex-col justify-center">
                     <div className="text-2xl sm:text-3xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      {price === 0 && tier.code === "enterprise"
+                      {monthlyBase === 0 && tier.code === "enterprise"
                         ? "Hubungi Sales"
-                        : `Rp ${price.toLocaleString("id-ID")}`}
+                        : `Rp ${tierCalc.totalPrice.toLocaleString("id-ID")}`}
                     </div>
-                    {price > 0 ? (
-                      <span className="text-[11px] font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                        /{isAnnual ? "tahun (hemat 17%)" : "bulan"}
-                      </span>
+                    {monthlyBase > 0 ? (
+                      <div className="mt-1">
+                        {selectedDuration.months > 1 ? (
+                          <span className="text-[11px] font-semibold text-emerald-600 block">
+                            setara Rp {tierCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {tierCalc.savedAmount.toLocaleString("id-ID")} ({selectedDuration.discountPercent}%)
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                            /bulan
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[11px] font-medium text-transparent select-none">
                         /bulan
@@ -438,247 +468,18 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                       Benefit &amp; Fitur Termasuk:
                     </span>
                     <ul className="text-xs space-y-2 font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                      {tier.code === "basic" && (
-                        <>
-                          <li className="flex items-start gap-2">
+                       <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>1 Cabang Outlet</strong> Utama
-                            </span>
+                            <span>{tier.code === 'basic' ? '1 Cabang Outlet' : tier.code === 'pro' ? 'Hingga 10 Cabang' : 'Unlimited Cabang'}</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>5 Akun Kasir</strong> per Outlet
-                            </span>
+                            <span>{tier.code === 'basic' ? '5 Akun Kasir' : 'Unlimited Akun Kasir'}</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Kasir POS Cepat &amp; Multi-Metode Bayar (QRIS, Tunai, Kartu)</span>
+                            <span>Manajemen Stok & Penjualan Lengkap</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Manajemen Produk &amp; Kategori Tanpa Batas</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Manajemen Stok Produk &amp; Peringatan Stok Menipis</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
-                          </li>
-                          
-                          {expandedTier === tier.id && (
-                            <>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
-                              </li>
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tier.code === "pro" && (
-                        <>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>Hingga 10 Cabang Outlet</strong> Aktif
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>Unlimited Akun Kasir</strong> per Outlet
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              Hak Akses Role Admin Cabang Terisolasi
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              Laporan Konsolidasi Seluruh Cabang
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Laporan Komparatif Laba Rugi Antar-Cabang</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Monitoring Stok &amp; Mutasi Multi-Outlet</span>
-                          </li>
-
-                          {expandedTier === tier.id && (
-                            <>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Penjualan per Kasir &amp; Audit Transaksi</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Export Laporan Lengkap ke Excel / CSV / PDF</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kustomisasi Layout POS &amp; Tema Dashboard</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kasir POS Cepat &amp; Multi-Metode Bayar (QRIS, Tunai, Kartu)</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Manajemen Produk &amp; Kategori Tanpa Batas</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Manajemen Stok Produk &amp; Peringatan Stok Menipis</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
-                              </li>
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tier.code === "enterprise" && (
-                        <>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>Unlimited Cabang Outlet</strong> &amp; Gudang Pusat
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              <strong>Unlimited Akun Kasir</strong> &amp; Role Kustom
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              Akses Open API Sistem POS &amp; Webhook Realtime
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              Integrasi Sistem ERP / Akuntansi Perusahaan
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Manajemen Multi-Gudang &amp; Distribusi Terpusat</span>
-                          </li>
-
-                          {expandedTier === tier.id && (
-                            <>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Akses Bebas Semua Koleksi Tema &amp; Struk Premium</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Dedicated Database Instance &amp; Backup Prioritas</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Dedicated Account Manager &amp; SLA 99.9% Uptime</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Prioritas Training On-Site &amp; CS Support 24/7</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Hak Akses Role Admin Cabang Terisolasi</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Konsolidasi Seluruh Cabang</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Komparatif Laba Rugi Antar-Cabang</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Monitoring Stok &amp; Mutasi Multi-Outlet</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Penjualan per Kasir &amp; Audit Transaksi</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Export Laporan Lengkap ke Excel / CSV / PDF</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kustomisasi Layout POS &amp; Tema Dashboard</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kasir POS Cepat &amp; Multi-Metode Bayar (QRIS, Tunai, Kartu)</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Manajemen Produk &amp; Kategori Tanpa Batas</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Manajemen Stok Produk &amp; Peringatan Stok Menipis</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Pencatatan Harga Pokok Penjualan (HPP / Modal)</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Buka / Tutup Shift Kasir &amp; Rekap Kas Harian</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Laporan Penjualan &amp; Laba Rugi Outlet</span>
-                              </li>
-                              <li className="flex items-start gap-2 animate-fadeIn">
-                                <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                                <span>Kustomisasi Logo &amp; Cetak Struk Kasir Termal</span>
-                              </li>
-                            </>
-                          )}
-                        </>
-                      )}
                     </ul>
                     <button
                       type="button"
@@ -700,15 +501,15 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     <span className="text-xs font-bold text-emerald-600 block text-center py-1">
                       Sudah Aktif (Rp 0)
                     </span>
-                  ) : isCurrentTierOnNewCycle ? (
+                  ) : isCurrentTierOnNewDuration ? (
                     <span className="text-xs font-bold text-indigo-600 block text-center py-1">
-                      Ganti ke Tahunan (Prorata 11 Bln): Rp {thisTierProratedCost.toLocaleString("id-ID")}
+                      Ganti ke {selectedDuration.label} (Prorata): Rp {thisTierProratedCost.toLocaleString("id-ID")}
                     </span>
                   ) : isSelected ? (
                     <span className="text-xs font-bold text-indigo-600 block text-center py-1">
-                      {price === 0
+                      {monthlyBase === 0
                         ? "Pilih Lisensi Enterprise"
-                        : `🚀 Upgrade ke Paket Ini (+Rp ${price.toLocaleString("id-ID")})`}
+                        : `🚀 Upgrade ke Paket Ini (+Rp ${tierCalc.totalPrice.toLocaleString("id-ID")})`}
                     </span>
                   ) : (
                     <span className="text-xs font-bold text-slate-400 block text-center py-1 group-hover:text-indigo-600">
@@ -730,7 +531,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             2. Modul Vertikal Bisnis (Bisa Multi-Vertikal)
           </h3>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Modul yang sudah Anda miliki tetap aktif. Anda bisa menambah modul vertikal lain (misal: Cafe + Barbershop) sebagai ekspansi bisnis.
+            Modul yang sudah Anda miliki tetap aktif. Anda bisa menambah modul vertikal lain (misal: Cafe + Barbershop) untuk durasi {selectedDuration.label}.
           </p>
         </div>
 
@@ -738,10 +539,12 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
           {availablePlugins.map((plugin: any) => {
             const isSelected = selectedPluginIds.includes(plugin.id);
             const wasAlreadyActive = initialActivePluginIds.includes(plugin.id);
-            const isPluginActiveOnThisCycle = wasAlreadyActive && !isTrial && !isCycleChanged;
-            const price = isAnnual ? Number(plugin.priceAnnual) : Number(plugin.priceMonthly);
-            const isPluginProrated = isAnnual && wasAlreadyActive && isOngoingMonthlyActive;
-            const itemProratedCost = Math.max(0, Number(plugin.priceAnnual) - Number(plugin.priceMonthly));
+            const isPluginActiveOnThisDuration = wasAlreadyActive && !isTrial && !isDurationChanged;
+            
+            const monthlyBase = Number(plugin.priceMonthly);
+            const pluginCalc = calculateDurationPrice(monthlyBase, selectedDuration);
+            const isPluginProrated = isDurationChanged && wasAlreadyActive && isOngoingMonthlyActive;
+            const itemProratedCost = Math.max(0, pluginCalc.totalPrice - monthlyBase);
 
             return (
               <div
@@ -758,7 +561,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 }}
               >
                 {/* Badge Status */}
-                {isPluginActiveOnThisCycle ? (
+                {isPluginActiveOnThisDuration ? (
                   <div className="absolute top-4 right-4">
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
                       <Check className="w-3 h-3" /> Dimiliki
@@ -767,7 +570,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 ) : isSelected ? (
                   <div className="absolute top-4 right-4" style={{ color: "var(--theme-primary, #4f46e5)" }}>
                     <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1">
-                      <Plus className="w-3 h-3" /> {wasAlreadyActive ? "Ganti Tahunan" : "Tambahan Baru"}
+                      <Plus className="w-3 h-3" /> {wasAlreadyActive ? `Ganti ${selectedDuration.label}` : "Tambahan Baru"}
                     </span>
                   </div>
                 ) : null}
@@ -787,28 +590,23 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     <h4 className="font-bold text-sm" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
                       {plugin.name}
                     </h4>
-                    <p className="text-[11px] line-clamp-2 mt-0.5 font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                      {plugin.description}
-                    </p>
                   </div>
                 </div>
 
                 <div className="pt-3 border-t mt-4 flex items-baseline justify-between" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                  {isPluginActiveOnThisCycle ? (
+                  {isPluginActiveOnThisDuration ? (
                     <span className="text-xs font-bold text-emerald-600">
                       Aktif (Rp 0)
                     </span>
                   ) : (
                     <span className="text-xs font-black text-indigo-600">
                       {isPluginProrated
-                        ? `Rp ${itemProratedCost.toLocaleString("id-ID")} (Prorata 11 Bln)`
-                        : isAnnual
-                        ? `Rp ${price.toLocaleString("id-ID")}`
-                        : `+Rp ${price.toLocaleString("id-ID")}`}
+                        ? `Rp ${itemProratedCost.toLocaleString("id-ID")} (Prorata)`
+                        : `+Rp ${pluginCalc.totalPrice.toLocaleString("id-ID")}`}
                     </span>
                   )}
                   <span className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                    /{isAnnual ? "thn" : "bln"}
+                    /{selectedDuration.months > 1 ? selectedDuration.label : "bln"}
                   </span>
                 </div>
               </div>
@@ -827,10 +625,10 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       >
         <div className="border-b pb-4 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
           <h3 className="font-black text-base" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-            Rincian Tagihan Pembayaran Hari Ini
+            Rincian Tagihan Pembayaran Hari Ini (Durasi: {selectedDuration.label})
           </h3>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Hanya menghitung biaya paket upgrade atau modul tambahan baru yang Anda pilih.
+            Hanya menghitung biaya paket upgrade, perpanjangan durasi, atau modul tambahan baru yang Anda pilih.
           </p>
         </div>
 
@@ -846,11 +644,11 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 </p>
                 <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
                   {isTierChanged
-                    ? `Upgrade ke ${selectedTier?.name || "Paket Baru"} (Bayar Penuh)`
-                    : isAnnual && isOngoingMonthlyActive
-                    ? "Konversi ke Tahunan (Prorata 11 Bulan karena 1 Bulan Sudah Dibayar)"
-                    : isCycleChanged
-                    ? `Konversi ke Siklus ${isAnnual ? "Tahunan (Hemat 17%)" : "Bulanan"}`
+                    ? `Upgrade ke ${selectedTier?.name || "Paket Baru"} (Durasi ${selectedDuration.label})`
+                    : isDurationChanged && isOngoingMonthlyActive
+                    ? `Konversi ke ${selectedDuration.label} (Prorata dipotong 1 bulan berjalan)`
+                    : isDurationChanged
+                    ? `Perpanjang ke Durasi ${selectedDuration.label}`
                     : !isTrial
                     ? "Paket yang sedang aktif saat ini"
                     : "Aktivasi Paket Baru"}
@@ -860,7 +658,6 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             <span className="font-black" style={{ color: tierCostToday === 0 ? "#10b981" : "var(--theme-text-primary, #0f172a)" }}>
               {tierCostToday === 0 ? "Rp 0 (Sudah Aktif)" : `Rp ${tierCostToday.toLocaleString("id-ID")}`}
             </span>
-
           </div>
 
           {/* Plugin Items */}
@@ -873,10 +670,10 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     Modul Vertikal: {item.plugin.name}
                   </p>
                   <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                    {item.isProrated11Months
-                      ? "Konversi ke Tahunan (Prorata 11 Bulan karena 1 Bulan Sudah Dibayar)"
-                      : isCycleChanged
-                      ? `Konversi ke Tagihan ${isAnnual ? "Tahunan (1 Tahun Penuh)" : "Bulanan"}`
+                    {item.isProrated1Month
+                      ? `Konversi ke ${selectedDuration.label} (Prorata dipotong 1 bulan berjalan)`
+                      : isDurationChanged
+                      ? `Konversi ke Durasi ${selectedDuration.label}`
                       : item.wasAlreadyActive && !isTrial
                       ? "Modul yang sudah Anda miliki"
                       : "Modul Tambahan Baru"}
@@ -888,30 +685,28 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
               </span>
             </div>
           ))}
-
-
         </div>
 
         {/* Total & Action */}
         <div className="pt-4 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
           <div>
             <span className="text-xs font-black uppercase tracking-wider block" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-              Total Pembayaran Sekarang
+              Total Pembayaran Hari Ini
             </span>
             <div className="text-3xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-              Rp {totalPayToday.toLocaleString("id-ID")}
+              Rp {grandTotalToday.toLocaleString("id-ID")}
               <span className="text-xs font-medium ml-1" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                /{isAnnual ? "tahun" : "bulan"}
+                / {selectedDuration.label}
               </span>
             </div>
             <p className="text-xs mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-              {selectedPluginIds.length} Modul Vertikal akan aktif pada akun Anda.
+              {selectedPluginIds.length} Modul Vertikal akan aktif untuk akun Anda.
             </p>
           </div>
 
           <button
-            onClick={handleSave}
-            disabled={loading || (!hasAnyChange && totalPayToday === 0)}
+            onClick={handleUpgrade}
+            disabled={loading || (!hasAnyChange && grandTotalToday === 0)}
             className="w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-extrabold text-xs shadow-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
           >
@@ -920,17 +715,17 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Memproses Perubahan...</span>
               </>
-            ) : !hasAnyChange && totalPayToday === 0 ? (
+            ) : !hasAnyChange && grandTotalToday === 0 ? (
               <>
                 <Check className="w-4 h-4" />
-                <span>Paket &amp; Modul Sudah Sesuai</span>
+                <span>Paket &amp; Durasi Sudah Sesuai</span>
               </>
             ) : (
               <>
                 <CreditCard className="w-4 h-4" />
                 <span>
-                  {totalPayToday > 0
-                    ? `Bayar & Aktifkan Perubahan (Rp ${totalPayToday.toLocaleString("id-ID")})`
+                  {grandTotalToday > 0
+                    ? `Bayar & Aktifkan Paket ${selectedDuration.label} (Rp ${grandTotalToday.toLocaleString("id-ID")})`
                     : "Simpan & Terapkan Perubahan"}
                 </span>
               </>

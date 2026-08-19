@@ -26,20 +26,35 @@ import {
   Play,
 } from "lucide-react";
 
+import {
+  DEFAULT_DURATION_SETTINGS,
+  DurationSettingItem,
+  calculateDurationPrice,
+} from "@/types/subscription-duration";
+
 export function LandingClient({
   tiers = [],
   plugins = [],
   themes = [],
+  durationSettings = DEFAULT_DURATION_SETTINGS,
 }: {
   tiers: any[];
   plugins: any[];
   themes: any[];
+  durationSettings?: DurationSettingItem[];
 }) {
   const [isDark, setIsDark] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
+  const activeDurations = durationSettings.filter((d) => d.isActive);
+  const [selectedDurationKey, setSelectedDurationKey] = useState<string>(
+    activeDurations.find((d) => d.key === "1Y")?.key || activeDurations[0]?.key || "1M"
+  );
+  const activeDuration =
+    activeDurations.find((d) => d.key === selectedDurationKey) || activeDurations[0] || DEFAULT_DURATION_SETTINGS[0];
+
   const [activeVerticalTab, setActiveVerticalTab] = useState<"cafe" | "barbershop" | "retail" | "laundry">("cafe");
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<string | null>(null);
+
 
   // ── Theme Tokens ──────────────────────────────────
   const t = {
@@ -642,270 +657,281 @@ export function LandingClient({
             Mulai dengan Trial Gratis 30 Hari. Pilih paket yang sesuai saat Anda sudah siap berlangganan.
           </p>
 
+          {/* Multi-Duration Pill Selector (1 Bulan s/d 3 Tahun) */}
           <div
-            className="inline-flex items-center gap-2 p-1.5 rounded-2xl border mt-4"
+            className="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-2xl border mt-4 max-w-full"
             style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
           >
-            {[
-              { key: "MONTHLY", label: "Tagihan Bulanan" },
-              { key: "ANNUAL", label: "Tagihan Tahunan", badge: "Hemat 17%" },
-            ].map(({ key, label, badge }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setBillingCycle(key as any)}
-                className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-                style={{
-                  backgroundColor: billingCycle === key ? "#4F46E5" : "transparent",
-                  color: billingCycle === key ? "#FFFFFF" : t.textSub,
-                }}
+            {activeDurations.map((dur) => {
+              const isSelected = selectedDurationKey === dur.key;
+              return (
+                <button
+                  key={dur.key}
+                  type="button"
+                  onClick={() => setSelectedDurationKey(dur.key)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  style={{
+                    backgroundColor: isSelected ? "#4F46E5" : "transparent",
+                    color: isSelected ? "#FFFFFF" : t.textSub,
+                  }}
+                >
+                  <span>{dur.label}</span>
+                  {dur.discountPercent > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        isSelected ? "bg-white/20 text-white" : "bg-emerald-500 text-white"
+                      }`}
+                    >
+                      Hemat {dur.discountPercent}%
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {(() => {
+          const starterCalc = calculateDurationPrice(150000, activeDuration);
+          const proCalc = calculateDurationPrice(500000, activeDuration);
+
+          return (
+            <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${expandedFaqIndex === null ? 'items-stretch' : 'items-start'}`}>
+              {/* Starter / Basic */}
+              <div
+                className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
+                style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
               >
-                <span>{label}</span>
-                {badge && (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-black">
-                    {badge}
+                <div className="space-y-4">
+                  <span
+                    className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+                    style={{ backgroundColor: t.bgCard2, color: t.textSub }}
+                  >
+                    Paket Starter (Basic)
                   </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+                  <div className="min-h-[4rem]">
+                    <h3 className="text-2xl font-black" style={{ color: t.text }}>Starter Basic</h3>
+                    <p className="text-xs mt-1" style={{ color: t.textSub }}>Ideal untuk outlet tunggal atau usaha rintisan mandiri.</p>
+                  </div>
+                  <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
+                    <span className="text-3xl sm:text-4xl font-black" style={{ color: t.text }}>
+                      Rp {starterCalc.totalPrice.toLocaleString("id-ID")}
+                    </span>
+                    <div className="mt-1">
+                      {activeDuration.months > 1 ? (
+                        <span className="text-[11px] font-semibold text-emerald-500 block">
+                          setara Rp {starterCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {starterCalc.savedAmount.toLocaleString("id-ID")} ({activeDuration.discountPercent}%)
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium" style={{ color: t.textMuted }}>
+                          /bulan
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
+                    {[
+                      "1 Cabang Outlet Utama",
+                      "5 Akun Kasir per Outlet",
+                      "Kasir POS Cepat & Multi-Metode Bayar (QRIS, Tunai, Kartu)",
+                      "Manajemen Produk & Kategori Tanpa Batas",
+                      "Manajemen Stok Produk & Peringatan Stok Menipis",
+                      "Pencatatan Harga Pokok Penjualan (HPP / Modal)",
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+     
+                    {expandedFaqIndex === "starter" && [
+                      "Buka / Tutup Shift Kasir & Rekap Kas Harian",
+                      "Laporan Penjualan & Laba Rugi Outlet",
+                      "Kustomisasi Logo & Cetak Struk Kasir Termal"
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2 animate-fadeIn">
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedFaqIndex(expandedFaqIndex === "starter" ? null : "starter")}
+                    className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
+                  >
+                    {expandedFaqIndex === "starter" ? (
+                      <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
+                    ) : (
+                      <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
+                    )}
+                  </button>
+                </div>
+                <Link
+                  href="/register"
+                  className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border mt-4"
+                  style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
+                >
+                  Coba Starter Gratis
+                </Link>
+              </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${expandedFaqIndex === null ? 'items-stretch' : 'items-start'}`}>
-          {/* Starter */}
-          <div
-            className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
-            style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
-          >
-            <div className="space-y-4">
-              <span
-                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
-                style={{ backgroundColor: t.bgCard2, color: t.textSub }}
+              {/* Pro (Popular) */}
+              <div
+                className="p-7 sm:p-8 rounded-[2.2rem] shadow-2xl flex flex-col justify-between space-y-6 relative border-2"
+                style={{ backgroundColor: t.bgCard, borderColor: "#4F46E5" }}
               >
-                Paket Starter
-              </span>
-              <div className="min-h-[4rem]">
-                <h3 className="text-2xl font-black" style={{ color: t.text }}>Starter</h3>
-                <p className="text-xs mt-1" style={{ color: t.textSub }}>Ideal untuk outlet tunggal atau usaha rintisan yang baru memulai.</p>
+                <div
+                  className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-white text-[10px] font-black uppercase tracking-wider shadow-md"
+                  style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
+                >
+                  ⭐ Paling Diminati Bisnis Berkembang
+                </div>
+                <div className="space-y-4 pt-2">
+                  <span
+                    className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
+                    style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
+                  >
+                    Paket Pro Multi-Cabang
+                  </span>
+                  <div className="min-h-[4rem]">
+                    <h3 className="text-2xl font-black" style={{ color: t.text }}>Professional</h3>
+                    <p className="text-xs mt-1" style={{ color: t.textSub }}>Untuk bisnis yang berkembang dan memiliki banyak cabang.</p>
+                  </div>
+                  <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
+                    <span className="text-3xl sm:text-4xl font-black" style={{ color: t.text }}>
+                      Rp {proCalc.totalPrice.toLocaleString("id-ID")}
+                    </span>
+                    <div className="mt-1">
+                      {activeDuration.months > 1 ? (
+                        <span className="text-[11px] font-semibold text-emerald-500 block">
+                          setara Rp {proCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {proCalc.savedAmount.toLocaleString("id-ID")} ({activeDuration.discountPercent}%)
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium" style={{ color: t.textMuted }}>
+                          /bulan
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="space-y-2.5 text-xs pt-2">
+                    {[
+                      "Hingga 10 Cabang Outlet Aktif",
+                      "Unlimited Akun Kasir per Outlet",
+                      "Hak Akses Role Admin Cabang Terisolasi",
+                      "Laporan Konsolidasi Seluruh Cabang",
+                      "Laporan Komparatif Laba Rugi Antar-Cabang",
+                      "Monitoring Stok & Mutasi Multi-Outlet",
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2 font-bold" style={{ color: t.text }}>
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                    
+                    {expandedFaqIndex === "pro" && [
+                      "Laporan Penjualan per Kasir & Audit Transaksi",
+                      "Export Laporan Lengkap ke Excel / CSV / PDF",
+                      "Kustomisasi Layout POS & Tema Dashboard",
+                      "Kasir POS Cepat & Multi-Metode Bayar (QRIS, Tunai, Kartu)",
+                      "Manajemen Produk & Kategori Tanpa Batas",
+                      "Manajemen Stok Produk & Peringatan Stok Menipis",
+                      "Pencatatan Harga Pokok Penjualan (HPP / Modal)",
+                      "Buka / Tutup Shift Kasir & Rekap Kas Harian",
+                      "Laporan Penjualan & Laba Rugi Outlet",
+                      "Kustomisasi Logo & Cetak Struk Kasir Termal"
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2 font-medium animate-fadeIn" style={{ color: t.textSub }}>
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedFaqIndex(expandedFaqIndex === "pro" ? null : "pro")}
+                    className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
+                  >
+                    {expandedFaqIndex === "pro" ? (
+                      <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
+                    ) : (
+                      <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
+                    )}
+                  </button>
+                </div>
+                <Link
+                  href="/register"
+                  className="w-full py-4 rounded-xl text-white font-extrabold text-xs shadow-xl text-center block mt-4"
+                  style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
+                >
+                  Mulai Berlangganan Pro
+                </Link>
               </div>
-              <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
-                <span className="text-3xl font-black" style={{ color: t.text }}>
-                  Rp {billingCycle === "ANNUAL" ? "124.500" : "150.000"}
-                </span>
-                <span className="text-xs font-medium" style={{ color: t.textMuted }}>/bulan</span>
-              </div>
-              <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
-                {[
-                  "1 Cabang Outlet Utama",
-                  "5 Akun Kasir per Outlet",
-                  "Kasir POS Cepat & Multi-Metode Bayar (QRIS, Tunai, Kartu)",
-                  "Manajemen Produk & Kategori Tanpa Batas",
-                  "Manajemen Stok Produk & Peringatan Stok Menipis",
-                  "Pencatatan Harga Pokok Penjualan (HPP / Modal)",
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
- 
-                {expandedFaqIndex === "starter" && [
-                  "Buka / Tutup Shift Kasir & Rekap Kas Harian",
-                  "Laporan Penjualan & Laba Rugi Outlet",
-                  "Kustomisasi Logo & Cetak Struk Kasir Termal"
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2 animate-fadeIn">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => setExpandedFaqIndex(expandedFaqIndex === "starter" ? null : "starter")}
-                className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
-              >
-                {expandedFaqIndex === "starter" ? (
-                  <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
-                ) : (
-                  <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
-                )}
-              </button>
-            </div>
-            <Link
-              href="/register"
-              className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border mt-4"
-              style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
-            >
-              Coba Starter Gratis
-            </Link>
-          </div>
 
-          {/* Pro (Popular) */}
-          <div
-            className="p-7 sm:p-8 rounded-[2.2rem] shadow-2xl flex flex-col justify-between space-y-6 relative border-2"
-            style={{ backgroundColor: t.bgCard, borderColor: "#4F46E5" }}
-          >
-            <div
-              className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-white text-[10px] font-black uppercase tracking-wider shadow-md"
-              style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
-            >
-              Paling Diminati Bisnis Berkembang
+              {/* Enterprise */}
+              <div
+                className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
+                style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
+              >
+                <div className="space-y-4">
+                  <span
+                    className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+                    style={{ backgroundColor: t.bgCard2, color: t.textSub }}
+                  >
+                    Paket Korporasi & Franchise
+                  </span>
+                  <div className="min-h-[4rem]">
+                    <h3 className="text-2xl font-black" style={{ color: t.text }}>Enterprise</h3>
+                    <p className="text-xs mt-1" style={{ color: t.textSub }}>Solusi khusus skala korporasi dengan ratusan cabang.</p>
+                  </div>
+                  <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
+                    <span className="text-3xl sm:text-4xl font-black" style={{ color: t.text }}>
+                      Kustom
+                    </span>
+                    <span className="text-[11px] font-medium mt-1" style={{ color: t.textMuted }}>
+                      Sesuai kebutuhan cabang &amp; dedicated resource
+                    </span>
+                  </div>
+                  <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
+                    {[
+                      "Unlimited Cabang Outlet & Gudang Pusat",
+                      "Unlimited Akun Kasir & Role Kustom",
+                      "Akses Open API Sistem POS & Webhook Realtime",
+                      "Integrasi Sistem ERP / Akuntansi Perusahaan",
+                      "Laporan Konsolidasi Holding & Multi-Entitas",
+                      "Manajemen Multi-Gudang & Distribusi Terpusat",
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2 font-bold" style={{ color: t.text }}>
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedFaqIndex(expandedFaqIndex === "enterprise" ? null : "enterprise")}
+                    className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
+                  >
+                    {expandedFaqIndex === "enterprise" ? (
+                      <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
+                    ) : (
+                      <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
+                    )}
+                  </button>
+                </div>
+                <Link
+                  href="/register"
+                  className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border mt-4"
+                  style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
+                >
+                  Konsultasi Enterprise
+                </Link>
+              </div>
             </div>
-            <div className="space-y-4 pt-2">
-              <span
-                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border"
-                style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
-              >
-                Paket Pro Multi-Cabang
-              </span>
-              <div className="min-h-[4rem]">
-                <h3 className="text-2xl font-black" style={{ color: t.text }}>Professional</h3>
-                <p className="text-xs mt-1" style={{ color: t.textSub }}>Untuk bisnis yang berkembang dan memiliki banyak cabang.</p>
-              </div>
-              <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
-                <span className="text-4xl font-black" style={{ color: t.text }}>
-                  Rp {billingCycle === "ANNUAL" ? "415.000" : "500.000"}
-                </span>
-                <span className="text-xs font-medium" style={{ color: t.textMuted }}>/bulan</span>
-              </div>
-              <ul className="space-y-2.5 text-xs pt-2">
-                {[
-                  "Hingga 10 Cabang Outlet Aktif",
-                  "Unlimited Akun Kasir per Outlet",
-                  "Hak Akses Role Admin Cabang Terisolasi",
-                  "Laporan Konsolidasi Seluruh Cabang",
-                  "Laporan Komparatif Laba Rugi Antar-Cabang",
-                  "Monitoring Stok & Mutasi Multi-Outlet",
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2 font-bold" style={{ color: t.text }}>
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-                
-                {expandedFaqIndex === "pro" && [
-                  "Laporan Penjualan per Kasir & Audit Transaksi",
-                  "Export Laporan Lengkap ke Excel / CSV / PDF",
-                  "Kustomisasi Layout POS & Tema Dashboard",
-                  "Kasir POS Cepat & Multi-Metode Bayar (QRIS, Tunai, Kartu)",
-                  "Manajemen Produk & Kategori Tanpa Batas",
-                  "Manajemen Stok Produk & Peringatan Stok Menipis",
-                  "Pencatatan Harga Pokok Penjualan (HPP / Modal)",
-                  "Buka / Tutup Shift Kasir & Rekap Kas Harian",
-                  "Laporan Penjualan & Laba Rugi Outlet",
-                  "Kustomisasi Logo & Cetak Struk Kasir Termal"
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2 font-medium animate-fadeIn" style={{ color: t.textSub }}>
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => setExpandedFaqIndex(expandedFaqIndex === "pro" ? null : "pro")}
-                className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
-              >
-                {expandedFaqIndex === "pro" ? (
-                  <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
-                ) : (
-                  <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
-                )}
-              </button>
-            </div>
-            <Link
-              href="/register"
-              className="w-full py-4 rounded-xl text-white font-black text-xs shadow-xl transition text-center block mt-4"
-              style={{ background: "linear-gradient(to right, #4F46E5, #7C3AED)" }}
-            >
-              Mulai Trial Paket Pro Gratis
-            </Link>
-          </div>
-
-          {/* Enterprise */}
-          <div
-            className="p-7 sm:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between space-y-6 border"
-            style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft }}
-          >
-            <div className="space-y-4">
-              <span
-                className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider"
-                style={{ backgroundColor: t.bgCard2, color: t.textSub }}
-              >
-                Paket Enterprise
-              </span>
-              <div className="min-h-[4rem]">
-                <h3 className="text-2xl font-black" style={{ color: t.text }}>Enterprise</h3>
-                <p className="text-xs mt-1" style={{ color: t.textSub }}>Solusi custom untuk jaringan waralaba besar & korporasi.</p>
-              </div>
-              <div className="pt-2 min-h-[4.5rem] flex flex-col justify-center">
-                <span className="text-3xl font-black" style={{ color: t.text }}>Hubungi Tim</span>
-                <span className="text-xs font-medium" style={{ color: t.textMuted }}> / Custom Quote</span>
-              </div>
-              <ul className="space-y-2.5 text-xs pt-2" style={{ color: t.textSub }}>
-                {[
-                  "Unlimited Cabang Outlet & Gudang Pusat",
-                  "Unlimited Akun Kasir & Role Kustom",
-                  "Akses Open API Sistem POS & Webhook Realtime",
-                  "Integrasi Sistem ERP / Akuntansi Perusahaan",
-                  "Laporan Konsolidasi Holding & Multi-Entitas",
-                  "Manajemen Multi-Gudang & Distribusi Terpusat",
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2 font-bold" style={{ color: t.text }}>
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-
-                {expandedFaqIndex === "enterprise" && [
-                  "Akses Bebas Semua Koleksi Tema & Struk Premium",
-                  "Dedicated Database Instance & Backup Prioritas",
-                  "Dedicated Account Manager & SLA 99.9% Uptime",
-                  "Prioritas Training On-Site & CS Support 24/7",
-                  "Hak Akses Role Admin Cabang Terisolasi",
-                  "Laporan Konsolidasi Seluruh Cabang",
-                  "Laporan Komparatif Laba Rugi Antar-Cabang",
-                  "Monitoring Stok & Mutasi Multi-Outlet",
-                  "Laporan Penjualan per Kasir & Audit Transaksi",
-                  "Export Laporan Lengkap ke Excel / CSV / PDF",
-                  "Kustomisasi Layout POS & Tema Dashboard",
-                  "Kasir POS Cepat & Multi-Metode Bayar (QRIS, Tunai, Kartu)",
-                  "Manajemen Produk & Kategori Tanpa Batas",
-                  "Manajemen Stok Produk & Peringatan Stok Menipis",
-                  "Pencatatan Harga Pokok Penjualan (HPP / Modal)",
-                  "Buka / Tutup Shift Kasir & Rekap Kas Harian",
-                  "Laporan Penjualan & Laba Rugi Outlet",
-                  "Kustomisasi Logo & Cetak Struk Kasir Termal"
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-2 animate-fadeIn" style={{ color: t.textSub }}>
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => setExpandedFaqIndex(expandedFaqIndex === "enterprise" ? null : "enterprise")}
-                className="text-xs font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition"
-              >
-                {expandedFaqIndex === "enterprise" ? (
-                  <>Tutup Detail <ChevronUp className="w-3 h-3" /></>
-                ) : (
-                  <>Lihat Detail Paket <ChevronDown className="w-3 h-3" /></>
-                )}
-              </button>
-            </div>
-            <Link
-              href="/register"
-              className="w-full py-3.5 rounded-xl font-bold text-xs transition text-center block border mt-4"
-              style={{ backgroundColor: t.bgCard2, color: t.text, borderColor: t.borderSoft }}
-            >
-              Konsultasi Enterprise
-            </Link>
-          </div>
-        </div>
+          );
+        })()}
       </section>
+
 
       {/* ── FAQ ── */}
       <section id="faq" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-8">

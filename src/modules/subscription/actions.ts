@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { addMonths, addYears, differenceInDays } from "date-fns";
 import { revalidatePath } from "next/cache";
 
+import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
+
 export type BillingCycle = "MONTHLY" | "ANNUAL";
 
 async function requireOwner() {
@@ -88,6 +90,11 @@ export async function getSubscriptionData() {
 
   const activePlugins = availablePlugins.filter((p) => activePluginIds.includes(p.id));
 
+  // Ambil pengaturan diskon durasi dinamis dari database (PlatformSetting)
+  const durationSettings = await getSubscriptionDurationSettingsAction();
+
+  const currentDurationKey = (activeSub as any)?.durationKey || (activeSub?.billingCycle === "ANNUAL" ? "1Y" : "1M");
+
   return JSON.parse(
     JSON.stringify({
       tenant: {
@@ -100,6 +107,8 @@ export async function getSubscriptionData() {
       },
       activeSubscription: activeSub,
       currentTier,
+      currentDurationKey,
+      durationSettings,
       activePlugins,
       activePluginIds,
       availableTiers,
@@ -112,16 +121,20 @@ export async function getSubscriptionData() {
       },
     })
   );
-
 }
 
 export async function upgradeSubscriptionAction(data: {
   licenseTierId: string;
-  billingCycle: BillingCycle;
+  billingCycle?: BillingCycle;
+  durationKey?: string;
+  durationMonths?: number;
   selectedPluginIds: string[];
 }) {
   const user = await requireOwner();
-  const { licenseTierId, billingCycle, selectedPluginIds } = data;
+  const { licenseTierId, selectedPluginIds } = data;
+  const durationMonths = Number(data.durationMonths) || (data.billingCycle === "ANNUAL" ? 12 : 1);
+  const durationKey = data.durationKey || (durationMonths >= 12 ? (durationMonths === 12 ? "1Y" : durationMonths === 24 ? "2Y" : "3Y") : durationMonths === 6 ? "6M" : durationMonths === 3 ? "3M" : "1M");
+  const billingCycle: BillingCycle = durationMonths >= 12 ? "ANNUAL" : "MONTHLY";
 
   const targetTier = await prisma.licenseTier.findUnique({
     where: { id: licenseTierId },
@@ -130,8 +143,7 @@ export async function upgradeSubscriptionAction(data: {
   if (!targetTier) throw new Error("Lisensi tidak ditemukan.");
 
   const now = new Date();
-  const periodEnd =
-    billingCycle === "ANNUAL" ? addYears(now, 1) : addMonths(now, 1);
+  const periodEnd = addMonths(now, durationMonths);
 
   await prisma.$transaction(async (tx: any) => {
     // 1. Nonaktifkan subscription lama
@@ -140,12 +152,14 @@ export async function upgradeSubscriptionAction(data: {
       data: { isActive: false },
     });
 
-    // 2. Buat subscription baru yang aktif
+    // 2. Buat subscription baru yang aktif dengan durasi fleksibel
     const newSub = await tx.tenantSubscription.create({
       data: {
         tenantId: user.tenantId,
         licenseTierId,
         billingCycle,
+        durationMonths,
+        durationKey,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         isActive: true,
@@ -163,7 +177,7 @@ export async function upgradeSubscriptionAction(data: {
       });
     }
 
-    // 4. Ubah status Tenant menjadi ACTIVE (Lunas/Langganan Aktif)
+    // 4. Ubah status Tenant menjadi ACTIVE
     await tx.tenant.update({
       where: { id: user.tenantId },
       data: {
@@ -175,5 +189,9 @@ export async function upgradeSubscriptionAction(data: {
 
   revalidatePath("/dashboard/subscription");
   revalidatePath("/dashboard");
+  revalidatePath("/pos");
+  revalidatePath("/admin/tenants");
+
   return { success: true };
 }
+

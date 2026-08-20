@@ -402,12 +402,12 @@ export async function getPayrollData(params?: {
     const takeHomePay = Math.max(
       0,
       baseSalaryEarned +
-        totalCommissions +
-        totalFixedAllowances +
-        overtimePay +
-        customBonus -
-        deductions -
-        advanceDeduction
+      totalCommissions +
+      totalFixedAllowances +
+      overtimePay +
+      customBonus -
+      deductions -
+      advanceDeduction
     );
 
     return {
@@ -474,7 +474,7 @@ export async function getPayrollData(params?: {
   });
 
   const totalPayrollExpenditure = records.reduce((sum, r) => sum + r.takeHomePay, 0);
-  const totalBaseSalarySum = records.reduce((sum, r) => sum + (r.isProrated && r.salaryType === 'MONTHLY' ? Math.round((r.workUnits/26)*r.baseSalary) : (r.salaryType === 'DAILY' || r.salaryType === 'PER_SHIFT' ? r.workUnits * r.baseSalary : r.baseSalary)), 0);
+  const totalBaseSalarySum = records.reduce((sum, r) => sum + (r.isProrated && r.salaryType === 'MONTHLY' ? Math.round((r.workUnits / 26) * r.baseSalary) : (r.salaryType === 'DAILY' || r.salaryType === 'PER_SHIFT' ? r.workUnits * r.baseSalary : r.baseSalary)), 0);
   const totalCommissionsSum = records.reduce((sum, r) => sum + r.totalCommissions, 0);
 
   return JSON.parse(
@@ -489,7 +489,7 @@ export async function getPayrollData(params?: {
       hasSavedSnapshots: savedSnapshots.length > 0,
       records,
       outlets: tenant?.outlets || [],
-      businessName: tenant?.businessName || "Toko Saya",
+      businessName: tenant?.businessName || "Bisnis Saya",
       summary: {
         totalStaffCount: records.length,
         totalPayrollExpenditure,

@@ -78,7 +78,7 @@ export async function getSubscriptionData() {
         const code = p.code.toLowerCase();
         if (nameLower.includes("cafe") || nameLower.includes("kopi") || nameLower.includes("coffee")) return code.includes("cafe");
         if (nameLower.includes("barber") || nameLower.includes("potong")) return code.includes("barber");
-        if (nameLower.includes("retail") || nameLower.includes("mart") || nameLower.includes("toko")) return code.includes("retail");
+        if (nameLower.includes("retail") || nameLower.includes("mart") || nameLower.includes("Bisnis")) return code.includes("retail");
         if (nameLower.includes("laundry") || nameLower.includes("cuci")) return code.includes("laundry");
         return false;
       }) || availablePlugins[0];

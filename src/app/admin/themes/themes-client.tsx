@@ -89,7 +89,7 @@ export function AdminThemesClient({
             Katalog & Penjualan Tema UI SaaS
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Buat preset tema & layout dinamis baru. Setiap tema yang dibuat otomatis masuk ke katalog marketplace toko untuk dibeli dan diterapkan.
+            Buat preset tema & layout dinamis baru. Setiap tema yang dibuat otomatis masuk ke katalog marketplace Bisnis untuk dibeli dan diterapkan.
           </p>
         </div>
 
@@ -169,7 +169,7 @@ export function AdminThemesClient({
               </div>
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-                <span>Aktif di toko:</span>
+                <span>Aktif di Bisnis:</span>
                 <span className="font-bold text-slate-700 dark:text-slate-300">
                   {theme._count?.tenantThemes || 0} Tenant
                 </span>

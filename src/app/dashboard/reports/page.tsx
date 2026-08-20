@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSalesReportData } from "@/modules/transaction/report-actions";
 import { getFeatureEntitlementsMatrix } from "@/modules/features/feature-actions";
@@ -7,8 +8,12 @@ import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions);
-  const user = session?.user as any;
-  const targetTenantId = user?.tenantId;
+  if (!session || !(session.user as any)?.tenantId) {
+    redirect("/login");
+  }
+
+  const user = session.user as any;
+  const targetTenantId = user.tenantId;
 
   const [data, tenant, featureMatrix] = await Promise.all([
     getSalesReportData({ period: "LAST_7_DAYS" }),

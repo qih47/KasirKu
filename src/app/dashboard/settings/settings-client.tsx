@@ -370,423 +370,419 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
       {activeTab === "BRANDING" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div
-            className="lg:col-span-2 p-6 sm:p-7 border shadow-sm space-y-6"
-            style={{
-              backgroundColor: "var(--theme-card-bg, #ffffff)",
-              borderColor: "var(--theme-card-border, #e2e8f0)",
-              borderRadius: "var(--theme-radius, 1.5rem)",
-            }}
-          >
-            <div className="border-b pb-3 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-              <h2 className="text-base font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                <Store className="w-4 h-4" style={{ color: "var(--theme-primary, #4f46e5)" }} />
-                Identitas Bisnis &amp; Kontak
-              </h2>
-              <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                Informasi ini otomatis tampil pada navbar dashboard, layar kasir POS, dan kop cetak struk.
-              </p>
-            </div>
-
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                  Nama Bisnis <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Contoh: Kopi Senja Nusantara"
-                  className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
-                  style={{
-                    backgroundColor: "var(--theme-input-bg, #ffffff)",
-                    borderColor: "var(--theme-card-border, #e2e8f0)",
-                    color: "var(--theme-text-primary, #0f172a)",
-                  }}
-                  required
-                />
-              </div>
-
-              {/* Dual Logo Option: File Upload vs URL Link */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                    <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Logo Bisnis</span>
-                  </label>
-
-                  {/* Mode Switcher */}
-                  <div
-                    className="flex items-center gap-1 p-0.5 border rounded-lg"
-                    style={{
-                      backgroundColor: "var(--theme-inner-bg, #f1f5f9)",
-                      borderColor: "var(--theme-card-border, #e2e8f0)",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setLogoMode("UPLOAD")}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-1 ${
-                        logoMode === "UPLOAD"
-                          ? "bg-white text-indigo-600 shadow-sm"
-                          : "text-slate-500 hover:text-slate-900"
-                      }`}
-                    >
-                      <Upload className="w-3 h-3" />
-                      <span>Upload File</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLogoMode("LINK")}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-1 ${
-                        logoMode === "LINK"
-                          ? "bg-white text-indigo-600 shadow-sm"
-                          : "text-slate-500 hover:text-slate-900"
-                      }`}
-                    >
-                      <Link2 className="w-3 h-3" />
-                      <span>Link URL</span>
-                    </button>
-                  </div>
-                </div>
-
-                {logoMode === "UPLOAD" ? (
-                  <div className="space-y-2">
-                    <label
-                      className="flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-2xl cursor-pointer hover:border-indigo-500 transition group"
-                      style={{
-                        backgroundColor: "var(--theme-inner-bg, #f8fafc)",
-                        borderColor: "var(--theme-card-border, #e2e8f0)",
-                      }}
-                    >
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg, image/webp, image/svg+xml"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                        <Upload className="w-5 h-5" />
-                      </div>
-                      <p className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                        Klik untuk Pilih Logo dari Perangkat
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                        Format PNG, JPG, WebP, SVG (Otomatis Dioptimasi)
-                      </p>
-                    </label>
-
-                    {logoUrl && (
-                      <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <img src={logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover border" />
-                          <span className="text-[11px] font-bold truncate" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                            Logo Berhasil Dipasang
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setLogoUrl("")}
-                          className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hapus Logo</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={logoUrl}
-                        onChange={(e) => setLogoUrl(e.target.value)}
-                        placeholder="https://domain.com/logo-toko.png"
-                        className="flex-1 px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
-                        style={{
-                          backgroundColor: "var(--theme-input-bg, #ffffff)",
-                          borderColor: "var(--theme-card-border, #e2e8f0)",
-                          color: "var(--theme-text-primary, #0f172a)",
-                        }}
-                      />
-                      {logoUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setLogoUrl("")}
-                          className="px-3 py-2 rounded-xl text-xs font-bold border hover:bg-rose-500/10 text-rose-500 transition"
-                          style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}
-                        >
-                          Hapus
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                  💡 Logo persegi 1:1 otomatis sinkron ke pojok kiri atas Dashboard, kasir POS, dan kop struk.
+            <div
+              className="lg:col-span-2 p-6 sm:p-7 border shadow-sm space-y-6"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <div className="border-b pb-3 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <h2 className="text-base font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                  <Store className="w-4 h-4" style={{ color: "var(--theme-primary, #4f46e5)" }} />
+                  Identitas Bisnis &amp; Kontak
+                </h2>
+                <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  Informasi ini otomatis tampil pada navbar dashboard, layar kasir POS, dan kop cetak struk.
                 </p>
               </div>
 
-              {/* Outlet Selector for Multi-Outlet Tenants */}
-              {outlets.length > 1 && (
-                <div
-                  className="space-y-1.5 p-3.5 rounded-2xl border transition-all"
-                  style={{
-                    backgroundColor: "var(--theme-inner-bg, #f8fafc)",
-                    borderColor: "var(--theme-card-border, #e2e8f0)",
-                  }}
-                >
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Nama Bisnis <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Contoh: Kopi Senja Nusantara"
+                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                    required
+                  />
+                </div>
+
+                {/* Dual Logo Option: File Upload vs URL Link */}
+                <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      <Store className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Pilih Cabang Outlet yang Dikelola</span>
+                      <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Logo Bisnis</span>
                     </label>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600">
-                      {outlets.length} Cabang Terdaftar
-                    </span>
+
+                    {/* Mode Switcher */}
+                    <div
+                      className="flex items-center gap-1 p-0.5 border rounded-lg"
+                      style={{
+                        backgroundColor: "var(--theme-inner-bg, #f1f5f9)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setLogoMode("UPLOAD")}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-1 ${logoMode === "UPLOAD"
+                            ? "bg-white text-indigo-600 shadow-sm"
+                            : "text-slate-500 hover:text-slate-900"
+                          }`}
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>Upload File</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLogoMode("LINK")}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-1 ${logoMode === "LINK"
+                            ? "bg-white text-indigo-600 shadow-sm"
+                            : "text-slate-500 hover:text-slate-900"
+                          }`}
+                      >
+                        <Link2 className="w-3 h-3" />
+                        <span>Link URL</span>
+                      </button>
+                    </div>
                   </div>
-                  <select
-                    value={selectedOutletId}
-                    onChange={(e) => handleOutletChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition cursor-pointer"
-                    style={{
-                      backgroundColor: "var(--theme-input-bg, #ffffff)",
-                      borderColor: "var(--theme-card-border, #e2e8f0)",
-                      color: "var(--theme-text-primary, #0f172a)",
-                    }}
-                  >
-                    {outlets.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name} {o.address ? `— ${o.address}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                    Pilih cabang outlet untuk mengelola alamat operasional khusus cabang tersebut.
+
+                  {logoMode === "UPLOAD" ? (
+                    <div className="space-y-2">
+                      <label
+                        className="flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-2xl cursor-pointer hover:border-indigo-500 transition group"
+                        style={{
+                          backgroundColor: "var(--theme-inner-bg, #f8fafc)",
+                          borderColor: "var(--theme-card-border, #e2e8f0)",
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                          Klik untuk Pilih Logo dari Perangkat
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                          Format PNG, JPG, WebP, SVG (Otomatis Dioptimasi)
+                        </p>
+                      </label>
+
+                      {logoUrl && (
+                        <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img src={logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover border" />
+                            <span className="text-[11px] font-bold truncate" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                              Logo Berhasil Dipasang
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setLogoUrl("")}
+                            className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus Logo</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={logoUrl}
+                          onChange={(e) => setLogoUrl(e.target.value)}
+                          placeholder="https://domain.com/logo-Bisnis.png"
+                          className="flex-1 px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
+                          style={{
+                            backgroundColor: "var(--theme-input-bg, #ffffff)",
+                            borderColor: "var(--theme-card-border, #e2e8f0)",
+                            color: "var(--theme-text-primary, #0f172a)",
+                          }}
+                        />
+                        {logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setLogoUrl("")}
+                            className="px-3 py-2 rounded-xl text-xs font-bold border hover:bg-rose-500/10 text-rose-500 transition"
+                            style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    💡 Logo persegi 1:1 otomatis sinkron ke pojok kiri atas Dashboard, kasir POS, dan kop struk.
                   </p>
                 </div>
-              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                    <Phone className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>No. WhatsApp / Telepon</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0812-3456-7890"
-                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
+                {/* Outlet Selector for Multi-Outlet Tenants */}
+                {outlets.length > 1 && (
+                  <div
+                    className="space-y-1.5 p-3.5 rounded-2xl border transition-all"
                     style={{
-                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      backgroundColor: "var(--theme-inner-bg, #f8fafc)",
                       borderColor: "var(--theme-card-border, #e2e8f0)",
-                      color: "var(--theme-text-primary, #0f172a)",
                     }}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                    <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>
-                      Alamat Cabang:{" "}
-                      <span className="text-indigo-600 font-extrabold">
-                        {outlets.find((o) => o.id === selectedOutletId)?.name || "Utama"}
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        <Store className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Pilih Cabang Outlet yang Dikelola</span>
+                      </label>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600">
+                        {outlets.length} Cabang Terdaftar
                       </span>
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Jl. Sudirman No. 45, Jakarta Selatan"
-                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
-                    style={{
-                      backgroundColor: "var(--theme-input-bg, #ffffff)",
-                      borderColor: "var(--theme-card-border, #e2e8f0)",
-                      color: "var(--theme-text-primary, #0f172a)",
+                    </div>
+                    <select
+                      value={selectedOutletId}
+                      onChange={(e) => handleOutletChange(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition cursor-pointer"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    >
+                      {outlets.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name} {o.address ? `— ${o.address}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Pilih cabang outlet untuk mengelola alamat operasional khusus cabang tersebut.
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <Phone className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>No. WhatsApp / Telepon</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="0812-3456-7890"
+                      className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>
+                        Alamat Cabang:{" "}
+                        <span className="text-indigo-600 font-extrabold">
+                          {outlets.find((o) => o.id === selectedOutletId)?.name || "Utama"}
+                        </span>
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Jl. Sudirman No. 45, Jakarta Selatan"
+                      className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t flex justify-end" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                    style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Simpan Perubahan Profil</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Preview Card Branding */}
+            <div
+              className="p-6 border shadow-sm space-y-4 flex flex-col items-center justify-center text-center"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <span className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Pratinjau Logo &amp; Header
+              </span>
+
+              <div
+                className="w-24 h-24 rounded-3xl border-2 border-dashed flex items-center justify-center overflow-hidden shadow-inner p-1 transition-all"
+                style={{
+                  borderColor: "var(--theme-card-border, #e2e8f0)",
+                  backgroundColor: "var(--theme-inner-bg, #f8fafc)",
+                }}
+              >
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Preview Logo"
+                    className="w-full h-full object-cover rounded-2xl"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
                     }}
                   />
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-slate-400">
+                    <ImageIcon className="w-8 h-8 opacity-40" />
+                    <span className="text-[9px] font-bold">Belum Ada Logo</span>
+                  </div>
+                )}
               </div>
 
-              <div className="pt-4 border-t flex justify-end" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>Simpan Perubahan Profil</span>
-                </button>
+              <div className="space-y-1">
+                <h3 className="font-black text-base" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                  {businessName || "Nama Bisnis Anda"}
+                </h3>
+                <p className="text-xs font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  {address || "Alamat Outlet"}
+                </p>
+                <p className="text-[11px] font-mono" style={{ color: "var(--theme-primary, #4f46e5)" }}>
+                  {phone || "08xx-xxxx-xxxx"}
+                </p>
               </div>
-            </form>
+
+              <div
+                className="w-full p-3 rounded-2xl border text-[11px] space-y-1 text-left"
+                style={{
+                  backgroundColor: "var(--theme-inner-bg, #f8fafc)",
+                  borderColor: "var(--theme-card-border, #e2e8f0)",
+                  color: "var(--theme-text-secondary, #64748b)",
+                }}
+              >
+                <p className="font-bold flex items-center gap-1 text-emerald-500">
+                  <Check className="w-3.5 h-3.5" /> Sinkronisasi Otomatis:
+                </p>
+                <p>&bull; Logo pojok kiri atas Dashboard</p>
+                <p>&bull; Header layar kasir POS</p>
+                <p>&bull; Kop atas struk belanja pelanggan</p>
+              </div>
+            </div>
           </div>
 
-          {/* Preview Card Branding */}
+          {/* Card Pengaturan Mode Shift Kasir */}
           <div
-            className="p-6 border shadow-sm space-y-4 flex flex-col items-center justify-center text-center"
+            className="p-6 border shadow-sm space-y-4"
             style={{
               backgroundColor: "var(--theme-card-bg, #ffffff)",
               borderColor: "var(--theme-card-border, #e2e8f0)",
               borderRadius: "var(--theme-radius, 1.5rem)",
             }}
           >
-            <span className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-              Pratinjau Logo &amp; Header
-            </span>
-
-            <div
-              className="w-24 h-24 rounded-3xl border-2 border-dashed flex items-center justify-center overflow-hidden shadow-inner p-1 transition-all"
-              style={{
-                borderColor: "var(--theme-card-border, #e2e8f0)",
-                backgroundColor: "var(--theme-inner-bg, #f8fafc)",
-              }}
-            >
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt="Preview Logo"
-                  className="w-full h-full object-cover rounded-2xl"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-slate-400">
-                  <ImageIcon className="w-8 h-8 opacity-40" />
-                  <span className="text-[9px] font-bold">Belum Ada Logo</span>
-                </div>
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  <span>Pengaturan Mode Shift &amp; Buka Kasir</span>
+                </h2>
+                <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  Tentukan alur kasir saat membuka aplikasi POS: apakah langsung melayani transaksi atau wajib menghitung modal kas laci terlebih dahulu.
+                </p>
+              </div>
+              {savingShiftMode && (
+                <span className="flex items-center gap-1 text-[11px] font-bold text-indigo-600">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                </span>
               )}
             </div>
 
-            <div className="space-y-1">
-              <h3 className="font-black text-base" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                {businessName || "Nama Bisnis Anda"}
-              </h3>
-              <p className="text-xs font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                {address || "Alamat Outlet"}
-              </p>
-              <p className="text-[11px] font-mono" style={{ color: "var(--theme-primary, #4f46e5)" }}>
-                {phone || "08xx-xxxx-xxxx"}
-              </p>
-            </div>
-
-            <div
-              className="w-full p-3 rounded-2xl border text-[11px] space-y-1 text-left"
-              style={{
-                backgroundColor: "var(--theme-inner-bg, #f8fafc)",
-                borderColor: "var(--theme-card-border, #e2e8f0)",
-                color: "var(--theme-text-secondary, #64748b)",
-              }}
-            >
-              <p className="font-bold flex items-center gap-1 text-emerald-500">
-                <Check className="w-3.5 h-3.5" /> Sinkronisasi Otomatis:
-              </p>
-              <p>&bull; Logo pojok kiri atas Dashboard</p>
-              <p>&bull; Header layar kasir POS</p>
-              <p>&bull; Kop atas struk belanja pelanggan</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card Pengaturan Mode Shift Kasir */}
-        <div
-          className="p-6 border shadow-sm space-y-4"
-          style={{
-            backgroundColor: "var(--theme-card-bg, #ffffff)",
-            borderColor: "var(--theme-card-border, #e2e8f0)",
-            borderRadius: "var(--theme-radius, 1.5rem)",
-          }}
-        >
-          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-            <div className="space-y-0.5">
-              <h2 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                <Clock className="w-4 h-4 text-indigo-600" />
-                <span>Pengaturan Mode Shift &amp; Buka Kasir</span>
-              </h2>
-              <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                Tentukan alur kasir saat membuka aplikasi POS: apakah langsung melayani transaksi atau wajib menghitung modal kas laci terlebih dahulu.
-              </p>
-            </div>
-            {savingShiftMode && (
-              <span className="flex items-center gap-1 text-[11px] font-bold text-indigo-600">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Mode Cepat (Fast POS) */}
-            <div
-              onClick={() => !savingShiftMode && handleShiftModeChange("FAST")}
-              className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
-                shiftMode === "FAST"
-                  ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
-                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
-                    <Zap className="w-4 h-4" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Mode Cepat (Fast POS) */}
+              <div
+                onClick={() => !savingShiftMode && handleShiftModeChange("FAST")}
+                className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${shiftMode === "FAST"
+                    ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
+                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        ⚡ Mode Cepat (Fast POS)
+                      </h3>
+                      <span className="text-[10px] font-bold text-emerald-600">Rekomendasi Solo Owner / Cepat</span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      ⚡ Mode Cepat (Fast POS)
-                    </h3>
-                    <span className="text-[10px] font-bold text-emerald-600">Rekomendasi Solo Owner / Cepat</span>
-                  </div>
+                  {shiftMode === "FAST" && (
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
+                      ✓
+                    </span>
+                  )}
                 </div>
-                {shiftMode === "FAST" && (
-                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
-                    ✓
-                  </span>
-                )}
+                <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  Kasir langsung masuk ke katalog menu dan siap transaksi. Shift aktif dibuat otomatis di background (modal Rp 0). Kasir tetap bisa melihat rekap kas kapan saja.
+                </p>
               </div>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                Kasir langsung masuk ke katalog menu dan siap transaksi. Shift aktif dibuat otomatis di background (modal Rp 0). Kasir tetap bisa melihat rekap kas kapan saja.
-              </p>
-            </div>
 
-            {/* Mode Ketat (Strict Shift) */}
-            <div
-              onClick={() => !savingShiftMode && handleShiftModeChange("STRICT")}
-              className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${
-                shiftMode === "STRICT"
-                  ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
-                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
-                    <ShieldCheck className="w-4 h-4" />
+              {/* Mode Ketat (Strict Shift) */}
+              <div
+                onClick={() => !savingShiftMode && handleShiftModeChange("STRICT")}
+                className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${shiftMode === "STRICT"
+                    ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
+                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        🔒 Mode Ketat (Strict Shift)
+                      </h3>
+                      <span className="text-[10px] font-bold text-rose-600">Kontrol Laci Kasir Ketat</span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      🔒 Mode Ketat (Strict Shift)
-                    </h3>
-                    <span className="text-[10px] font-bold text-rose-600">Kontrol Laci Kasir Ketat</span>
-                  </div>
+                  {shiftMode === "STRICT" && (
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
+                      ✓
+                    </span>
+                  )}
                 </div>
-                {shiftMode === "STRICT" && (
-                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
-                    ✓
-                  </span>
-                )}
+                <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  Kasir wajib memasukkan uang modal awal kembalian sebelum bisa melayani transaksi. Selisih uang fisik vs catatan sistem akan dihitung saat tutup shift.
+                </p>
               </div>
-              <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                Kasir wajib memasukkan uang modal awal kembalian sebelum bisa melayani transaksi. Selisih uang fisik vs catatan sistem akan dihitung saat tutup shift.
-              </p>
             </div>
           </div>
-        </div>
         </div>
       )}
 
@@ -1235,9 +1231,8 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      initialData.hasReceiptProPlugin ? "bg-purple-500/10 text-purple-600" : "bg-amber-500/10 text-amber-600"
-                    }`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${initialData.hasReceiptProPlugin ? "bg-purple-500/10 text-purple-600" : "bg-amber-500/10 text-amber-600"
+                      }`}
                   >
                     {initialData.hasReceiptProPlugin ? <Sparkles className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                   </div>
@@ -1416,7 +1411,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                                 type="text"
                                 value={socialInstagram}
                                 onChange={(e) => setSocialInstagram(e.target.value)}
-                                placeholder="@tokokita"
+                                placeholder="@Bisniskita"
                                 className="w-full px-2.5 py-1.5 rounded-lg border text-xs"
                               />
                             </div>
@@ -1426,7 +1421,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                                 type="text"
                                 value={socialTiktok}
                                 onChange={(e) => setSocialTiktok(e.target.value)}
-                                placeholder="@tokokita_official"
+                                placeholder="@Bisniskita_official"
                                 className="w-full px-2.5 py-1.5 rounded-lg border text-xs"
                               />
                             </div>
@@ -1436,7 +1431,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                                 type="text"
                                 value={socialWebsite}
                                 onChange={(e) => setSocialWebsite(e.target.value)}
-                                placeholder="tokokita.com"
+                                placeholder="Bisniskita.com"
                                 className="w-full px-2.5 py-1.5 rounded-lg border text-xs"
                               />
                             </div>
@@ -1562,9 +1557,8 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
             {/* Thermal Simulation Surface */}
             <div
-              className={`bg-[#FFFDF9] border border-dashed border-stone-300 rounded-3xl p-6 font-mono text-stone-900 shadow-2xl space-y-3 select-none transition-all ${
-                receiptConfig.fontScale === "COMPACT" ? "text-[10px]" : receiptConfig.fontScale === "SPACIOUS" ? "text-sm" : "text-xs"
-              } ${receiptConfig.paperSize === "80mm" ? "max-w-full" : "max-w-[360px] mx-auto"}`}
+              className={`bg-[#FFFDF9] border border-dashed border-stone-300 rounded-3xl p-6 font-mono text-stone-900 shadow-2xl space-y-3 select-none transition-all ${receiptConfig.fontScale === "COMPACT" ? "text-[10px]" : receiptConfig.fontScale === "SPACIOUS" ? "text-sm" : "text-xs"
+                } ${receiptConfig.paperSize === "80mm" ? "max-w-full" : "max-w-[360px] mx-auto"}`}
             >
               {/* Logo & Kop Header */}
               <div className="text-center space-y-1">

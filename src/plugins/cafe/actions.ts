@@ -10,14 +10,14 @@ import { revalidatePath } from "next/cache";
 async function requireTenantCafeUser() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
   const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "cafe");
   if (!isPluginActive) {
     throw new Error(
-      "Akses ditolak: Modul Cafe & F&B belum diaktifkan pada langganan toko Anda."
+      "Akses ditolak: Modul Cafe & F&B belum diaktifkan pada langganan Bisnis Anda."
     );
   }
 
@@ -25,15 +25,40 @@ async function requireTenantCafeUser() {
 }
 
 export async function getCafeTablesData(explicitOutletId?: string) {
-  const user = await requireTenantCafeUser();
-  const outletId = explicitOutletId || user.outletId;
+  const session = await getServerSession(authOptions);
+  if (!session || !(session.user as any)?.tenantId) {
+    return {
+      tables: [],
+      availableCount: 0,
+      occupiedCount: 0,
+      reservedCount: 0,
+      currentOutletId: "",
+      tenantId: "",
+      businessName: "Cafe & Resto",
+      logoUrl: null,
+      outletName: "Outlet Utama",
+      outlets: [],
+      userRole: "KASIR",
+    };
+  }
 
-  let targetOutletId = outletId;
-  if (!targetOutletId) {
-    const firstOutlet = await prisma.outlet.findFirst({
-      where: { tenantId: user.tenantId, isActive: true },
-    });
-    targetOutletId = firstOutlet?.id;
+  const user = session.user as any;
+
+  // Ambil semua outlet aktif untuk tenant ini
+  const allOutlets = await prisma.outlet.findMany({
+    where: { tenantId: user.tenantId, isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, address: true },
+  });
+
+  // Tentukan target outlet:
+  let targetOutletId = explicitOutletId;
+  if (!targetOutletId || !allOutlets.some((o) => o.id === targetOutletId)) {
+    if (user.outletId && allOutlets.some((o) => o.id === user.outletId)) {
+      targetOutletId = user.outletId;
+    } else {
+      targetOutletId = allOutlets[0]?.id;
+    }
   }
 
   if (!targetOutletId) throw new Error("Outlet tidak ditemukan.");
@@ -73,6 +98,17 @@ export async function getCafeTablesData(explicitOutletId?: string) {
     });
   }
 
+  const [tenant, currentOutlet] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { id: true, businessName: true, logoUrl: true },
+    }),
+    prisma.outlet.findUnique({
+      where: { id: targetOutletId },
+      select: { id: true, name: true, address: true },
+    }),
+  ]);
+
   const availableCount = tables.filter((t) => t.status === "AVAILABLE").length;
   const occupiedCount = tables.filter((t) => t.status === "OCCUPIED").length;
   const reservedCount = tables.filter((t) => t.status === "RESERVED").length;
@@ -83,6 +119,13 @@ export async function getCafeTablesData(explicitOutletId?: string) {
     occupiedCount,
     reservedCount,
     currentOutletId: targetOutletId,
+    tenantId: user.tenantId,
+    businessName: tenant?.businessName || "Cafe & Resto",
+    logoUrl: tenant?.logoUrl || null,
+    outletName: currentOutlet?.name || "Outlet Utama",
+    outletAddress: currentOutlet?.address || null,
+    outlets: allOutlets,
+    userRole: user.role,
   };
 }
 

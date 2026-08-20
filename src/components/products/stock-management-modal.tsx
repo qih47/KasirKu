@@ -225,7 +225,7 @@ export function StockManagementModal({
       toastSuccess(
         val !== null
           ? `Harga khusus Rp ${val.toLocaleString("id-ID")} berhasil diterapkan.`
-          : "Harga kembali menggunakan harga master toko."
+          : "Harga kembali menggunakan harga master Bisnis."
       );
       await fetchDetails();
       if (onStockUpdated) onStockUpdated();
@@ -358,23 +358,21 @@ export function StockManagementModal({
                       key={os.id}
                       type="button"
                       onClick={() => handleOutletSwitch(os.outletId)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition flex-shrink-0 cursor-pointer ${
-                        isSelected
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition flex-shrink-0 cursor-pointer ${isSelected
                           ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md"
                           : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
-                      }`}
+                        }`}
                     >
                       <span>{os.outlet?.name || "Cabang"}</span>
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-black ${
-                          isSelected
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-black ${isSelected
                             ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900"
                             : isOsEmpty
-                            ? "bg-rose-500/10 text-rose-600"
-                            : isOsLow
-                            ? "bg-amber-500/10 text-amber-600"
-                            : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                        }`}
+                              ? "bg-rose-500/10 text-rose-600"
+                              : isOsLow
+                                ? "bg-amber-500/10 text-amber-600"
+                                : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                          }`}
                       >
                         {os.stockQty ?? 0} unit
                       </span>
@@ -433,7 +431,7 @@ export function StockManagementModal({
                       Khusus Cabang Ini
                     </span>
                   ) : (
-                    <span className="text-slate-500">Mengikuti Harga Master Toko</span>
+                    <span className="text-slate-500">Mengikuti Harga Master Bisnis</span>
                   )}
                 </div>
               </div>
@@ -450,16 +448,14 @@ export function StockManagementModal({
                     onClick={() =>
                       handleToggleAvailability(!currentOutletStock?.isAvailable)
                     }
-                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
-                      currentOutletStock?.isAvailable
+                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${currentOutletStock?.isAvailable
                         ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/25"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`w-2 h-2 rounded-full ${
-                        currentOutletStock?.isAvailable ? "bg-emerald-500" : "bg-slate-400"
-                      }`}
+                      className={`w-2 h-2 rounded-full ${currentOutletStock?.isAvailable ? "bg-emerald-500" : "bg-slate-400"
+                        }`}
                     />
                     <span>
                       {currentOutletStock?.isAvailable
@@ -489,11 +485,10 @@ export function StockManagementModal({
                     <button
                       type="button"
                       onClick={() => setAdjustMode("ADD")}
-                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        adjustMode === "ADD"
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${adjustMode === "ADD"
                           ? "bg-emerald-600 text-white shadow-xs"
                           : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                      }`}
+                        }`}
                     >
                       <ArrowUpRight className="w-3 h-3" />
                       <span>Restock</span>
@@ -501,11 +496,10 @@ export function StockManagementModal({
                     <button
                       type="button"
                       onClick={() => setAdjustMode("SUBTRACT")}
-                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        adjustMode === "SUBTRACT"
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${adjustMode === "SUBTRACT"
                           ? "bg-rose-600 text-white shadow-xs"
                           : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                      }`}
+                        }`}
                     >
                       <ArrowDownRight className="w-3 h-3" />
                       <span>Buang</span>
@@ -513,11 +507,10 @@ export function StockManagementModal({
                     <button
                       type="button"
                       onClick={() => setAdjustMode("SET")}
-                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        adjustMode === "SET"
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${adjustMode === "SET"
                           ? "bg-indigo-600 text-white shadow-xs"
                           : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                      }`}
+                        }`}
                     >
                       <RefreshCw className="w-3 h-3" />
                       <span>Opname</span>
@@ -526,11 +519,10 @@ export function StockManagementModal({
                       <button
                         type="button"
                         onClick={() => setAdjustMode("TRANSFER")}
-                        className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                          adjustMode === "TRANSFER"
+                        className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap ${adjustMode === "TRANSFER"
                             ? "bg-purple-600 text-white shadow-xs"
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                        }`}
+                          }`}
                       >
                         <ArrowRightLeft className="w-3 h-3" />
                         <span>Transfer</span>
@@ -642,8 +634,8 @@ export function StockManagementModal({
                           {adjustMode === "ADD"
                             ? "Jumlah Ditambah (Unit)"
                             : adjustMode === "SUBTRACT"
-                            ? "Jumlah Dikurangi (Unit)"
-                            : "Jumlah Stok Fisik Riil"}
+                              ? "Jumlah Dikurangi (Unit)"
+                              : "Jumlah Stok Fisik Riil"}
                         </label>
                         <input
                           type="number"
@@ -668,8 +660,8 @@ export function StockManagementModal({
                             adjustMode === "ADD"
                               ? "Pengiriman dari supplier"
                               : adjustMode === "SUBTRACT"
-                              ? "Barang rusak / kadaluarsa"
-                              : "Hasil hitung fisik bulanan"
+                                ? "Barang rusak / kadaluarsa"
+                                : "Hasil hitung fisik bulanan"
                           }
                           className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                         />
@@ -679,13 +671,12 @@ export function StockManagementModal({
                     <button
                       type="submit"
                       disabled={submitting}
-                      className={`w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${
-                        adjustMode === "ADD"
+                      className={`w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${adjustMode === "ADD"
                           ? "bg-emerald-600 hover:bg-emerald-700"
                           : adjustMode === "SUBTRACT"
-                          ? "bg-rose-600 hover:bg-rose-700"
-                          : "bg-indigo-600 hover:bg-indigo-700"
-                      }`}
+                            ? "bg-rose-600 hover:bg-rose-700"
+                            : "bg-indigo-600 hover:bg-indigo-700"
+                        }`}
                     >
                       {submitting ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -696,8 +687,8 @@ export function StockManagementModal({
                         {adjustMode === "ADD"
                           ? "Simpan Restock Masuk"
                           : adjustMode === "SUBTRACT"
-                          ? "Simpan Pengurangan Stok"
-                          : "Perbarui Saldo Stok Opname"}
+                            ? "Simpan Pengurangan Stok"
+                            : "Perbarui Saldo Stok Opname"}
                       </span>
                     </button>
                   </form>
@@ -849,8 +840,8 @@ export function StockManagementModal({
                                   isPlus
                                     ? "text-emerald-600"
                                     : isMinus
-                                    ? "text-rose-600"
-                                    : "text-slate-900 dark:text-white"
+                                      ? "text-rose-600"
+                                      : "text-slate-900 dark:text-white"
                                 }
                               >
                                 {isPlus ? `+${m.qty}` : isMinus ? `-${m.qty}` : m.qty} Unit

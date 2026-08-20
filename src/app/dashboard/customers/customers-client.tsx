@@ -178,11 +178,10 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
       {/* Alert Notification */}
       {alertMsg && (
         <div
-          className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 ${
-            alertMsg.type === "success"
+          className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 ${alertMsg.type === "success"
               ? "bg-emerald-50 border-emerald-200 text-emerald-800"
               : "bg-rose-50 border-rose-200 text-rose-800"
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2">
             {alertMsg.type === "success" ? (
@@ -442,13 +441,12 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
                       {/* Visits */}
                       <td className="py-3.5 px-4 text-center">
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            c.visits >= 10
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${c.visits >= 10
                               ? "bg-amber-100 text-amber-800 border border-amber-200"
                               : c.visits >= 3
-                              ? "bg-indigo-100 text-indigo-800"
-                              : "bg-slate-100 text-slate-700"
-                          }`}
+                                ? "bg-indigo-100 text-indigo-800"
+                                : "bg-slate-100 text-slate-700"
+                            }`}
                         >
                           {c.visits} x
                         </span>
@@ -718,11 +716,10 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
             <div className="flex border-b border-slate-200 bg-slate-50 px-6 gap-2 flex-shrink-0">
               <button
                 onClick={() => setActiveDetailTab("transactions")}
-                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-                  activeDetailTab === "transactions"
+                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeDetailTab === "transactions"
                     ? "border-indigo-600 text-indigo-600 bg-white shadow-sm -mb-[1px] rounded-t-xl"
                     : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
+                  }`}
               >
                 <ShoppingBag className="w-3.5 h-3.5" />
                 Riwayat Transaksi POS ({detailCustomer.transactions.length})
@@ -730,11 +727,10 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
 
               <button
                 onClick={() => setActiveDetailTab("bookings")}
-                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-                  activeDetailTab === "bookings"
+                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeDetailTab === "bookings"
                     ? "border-indigo-600 text-indigo-600 bg-white shadow-sm -mb-[1px] rounded-t-xl"
                     : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
+                  }`}
               >
                 <Scissors className="w-3.5 h-3.5" />
                 Riwayat Barbershop ({detailCustomer.bookings.length})
@@ -742,11 +738,10 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
 
               <button
                 onClick={() => setActiveDetailTab("laundry")}
-                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-                  activeDetailTab === "laundry"
+                className={`py-3 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeDetailTab === "laundry"
                     ? "border-indigo-600 text-indigo-600 bg-white shadow-sm -mb-[1px] rounded-t-xl"
                     : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
+                  }`}
               >
                 <Shirt className="w-3.5 h-3.5" />
                 Riwayat Laundry ({detailCustomer.laundryOrders.length})
@@ -832,7 +827,7 @@ export function CustomersClient({ initialData }: CustomersClientProps) {
                             </span>
                           </div>
                           <div className="text-xs text-slate-600">
-                            Kapster: <span className="font-semibold">{b.barber?.name || "Stylist Toko"}</span> • Kursi: #{b.chairNumber || 1}
+                            Kapster: <span className="font-semibold">{b.barber?.name || "Stylist Bisnis"}</span> • Kursi: #{b.chairNumber || 1}
                           </div>
                           <div className="text-[10px] text-slate-400">
                             {new Date(b.scheduledAt).toLocaleString("id-ID")}

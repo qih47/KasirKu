@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 async function requireAuth() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   return session.user as any;
 }
@@ -47,7 +47,20 @@ export async function getCustomersData(params?: {
   sortBy?: "name" | "visits" | "totalSpent" | "lastVisitAt" | "recent";
   limit?: number;
 }): Promise<CustomersPageData> {
-  const user = await requireAuth();
+  const session = await getServerSession(authOptions);
+  if (!session || !(session.user as any)?.tenantId) {
+    return {
+      customers: [],
+      stats: {
+        totalCustomers: 0,
+        activeThisMonth: 0,
+        totalSpentAll: 0,
+        averageSpentPerCustomer: 0,
+      },
+      totalCount: 0,
+    };
+  }
+  const user = session.user as any;
 
   const whereClause: any = {
     tenantId: user.tenantId,

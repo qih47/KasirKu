@@ -105,13 +105,13 @@ Dokumen ini mencatat seluruh modul, fitur, dan task yang telah selesai dieksekus
 - [x] **3.3.2** Halaman Denah Meja & Floor Map di `/dashboard/cafe/tables` dengan visualisasi real-time status meja & kontrol okupansi
 
 #### 3.4 Custom Branding
-- [x] **3.4.1** Halaman Pengaturan Toko & Custom Branding di `/dashboard/settings`: Terkunci otomatis pada mode **TRIAL** dengan banner ajakan upgrade, dan terbuka penuh untuk kustomisasi Nama Brand, Alamat, serta Catatan Footer Struk Kasir saat lisensi berstatus **ACTIVE** (berbayar).
+- [x] **3.4.1** Halaman Pengaturan Bisnis & Custom Branding di `/dashboard/settings`: Terkunci otomatis pada mode **TRIAL** dengan banner ajakan upgrade, dan terbuka penuh untuk kustomisasi Nama Brand, Alamat, serta Catatan Footer Struk Kasir saat lisensi berstatus **ACTIVE** (berbayar).
 - [x] **3.4.2** Live Thermal Receipt Preview 58mm/80mm di `/dashboard/settings`.
 
 #### 3.5 & 3.6 Sistem Tema Preset, Marketplace Add-on & Dynamic Layout Engine
 - [x] **3.5.1** Desain token tema preset & layout dinamis (Layout Style: `MODERN`, `COMPACT`, `LUXE`, `WARM`; Kepadatan UI/Density: `NORMAL`, `COMPACT`, `SPACIOUS`; Primary Color, Accent Color, Font, Radius).
-- [x] **3.5.2** Halaman Toko & Penggantian Tema Tenant di `/dashboard/themes`: Galeri katalog marketplace tema sistem, live preview POS & tabel, tombol 1-Click "Terapkan Tema ke Sistem", dan pembelian add-on tema.
-- [x] **3.6.1** Halaman Katalog & Penjualan Tema di Super Admin (`/admin/themes`): Form pembuatan preset tema baru (nama, harga sewa bulanan, template layout, density, palette warna) yang **otomatis masuk ke katalog marketplace toko untuk dijual dan diterapkan secara live**.
+- [x] **3.5.2** Halaman Bisnis & Penggantian Tema Tenant di `/dashboard/themes`: Galeri katalog marketplace tema sistem, live preview POS & tabel, tombol 1-Click "Terapkan Tema ke Sistem", dan pembelian add-on tema.
+- [x] **3.6.1** Halaman Katalog & Penjualan Tema di Super Admin (`/admin/themes`): Form pembuatan preset tema baru (nama, harga sewa bulanan, template layout, density, palette warna) yang **otomatis masuk ke katalog marketplace Bisnis untuk dijual dan diterapkan secara live**.
 
 ---
 
@@ -199,6 +199,21 @@ Dokumen ini mencatat seluruh modul, fitur, dan task yang telah selesai dieksekus
 - [x] **W6.4** Integrasi Real-Time Kasir POS: Verifikasi kode kupon voucher langsung membaca dari database tenant, memvalidasi minimum order, kuota penggunaan, dan tanggal expired secara otomatis.
 - [x] **W6.5** Auto-Increment Kuota Penggunaan: Setiap transaksi kasir atau Live Order yang menggunakan kupon otomatis menambah counter `usedCount`.
 - [x] **W6.6** Navigasi bar dashboard tetap bersih dan ringkas tanpa tab terpisah (terintegrasi langsung di menu **"Produk"**).
+
+#### Wave 7: Table QR Standee Generator & Batch Print Engine (SELESAI 100% 🎉)
+- [x] **W7.1** Pustaka Client-Side QR Engine (`qrcode` + `@types/qrcode`) untuk generate QR Code vektor resolusi tinggi (600px) tanpa dependensi API eksternal.
+- [x] **W7.2** Modal Manajemen & Cetak QR Meja (`src/components/cafe/table-qr-modal.tsx`):
+  - **Mode Single Table:** Preview kartu meja, salin direct link (`/menu/[tenantId]?table=Meja%20XX`), unduh gambar QR PNG, dan cetak satuan.
+  - **Mode Batch Print:** Cetak seluruh meja sekaligus dengan pilihan format template:
+    1. *Standee Akrilik Meja A6 / 10x15cm*
+    2. *Stiker Meja Kotak 7x7cm*
+    3. *Grid Lembar A4 (4 Meja per Lembar)*
+  - Checklist seleksi meja spesifik atau pilih semua meja.
+- [x] **W7.3** Integrasi Halaman Denah Meja ([/dashboard/cafe/tables](http://localhost:3000/dashboard/cafe/tables)):
+  - Tombol **`[ 🖨️ Cetak QR Meja ]`** di header utama denah.
+  - Tombol quick trigger QR di tiap kartu meja (`Meja 01`, `Meja 02`, dll).
+  - Tombol **`[ 🖨️ Cetak QR Meja Ini ]`** di dalam modal detail meja.
+- [x] **W7.4** Aturan Cetak Khusus (`@media print`): Halaman bersih otomatis saat print browser terbuka tanpa banner header atau backdrop modal.
 
 ---
 

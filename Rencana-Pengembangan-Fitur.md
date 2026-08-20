@@ -8,7 +8,7 @@
 Berdasarkan analisis terhadap 3 pemain utama POS SaaS di Indonesia:
 1. **Moka POS (Market Leader Enterprise & F&B/Retail)**: Kuat di integrasi ekosistem pembayaran digital (GoFood, QRIS, EDC), manajemen inventori bahan baku (*ingredient inventory/recipes*), CRM & loyalty membership, serta laporan analitik backoffice tingkat tinggi.
 2. **Kasair POS (UMKM Agresif & Hemat)**: Mengusung tema bersih, modern, setup cepat tanpa kartu kredit, mode offline sync, multi-outlet dengan pricing terjangkau, dan UI responsif multi-perangkat (HP/Tablet/Laptop).
-3. **Kasir Pintar (Solusi Menengah, PPOB & Toko Online)**: Kuat di integrasi PPOB (pulsa, PLN, e-money), toko online/katalog digital terintegrasi, dan manajemen barcode massal.
+3. **Kasir Pintar (Solusi Menengah, PPOB & Bisnis Online)**: Kuat di integrasi PPOB (pulsa, PLN, e-money), Bisnis online/katalog digital terintegrasi, dan manajemen barcode massal.
 
 ### ✨ Posisi Nilai Unik Kita (Our Unfair Advantage):
 Sistem kita telah memiliki keunggulan fundamental arsitektur yang tidak dimiliki kompetitor, yaitu:
@@ -22,7 +22,7 @@ Sistem kita telah memiliki keunggulan fundamental arsitektur yang tidak dimiliki
 
 Berikut adalah matriks fitur unggulan hasil komparasi yang sangat direkomendasikan untuk fase berikutnya:
 
-### A. Fitur Kasir & Operasional Toko (Front-End POS)
+### A. Fitur Kasir & Operasional Bisnis (Front-End POS)
 | No | Fitur Rencana | Benchmarked From | Deskripsi & Manfaat Bisnis | Prioritas |
 |:---|:---|:---|:---|:---:|
 | 1 | **Mode Offline PWA & Auto-Sync** | Kasair / Moka | Kasir tetap dapat melakukan transaksi saat koneksi internet mati/lemah menggunakan IndexedDB, dan otomatis sinkronisasi ke PostgreSQL saat online kembali. | **Tinggi (P1)** |

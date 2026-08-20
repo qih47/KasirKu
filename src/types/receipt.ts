@@ -382,7 +382,7 @@ export const retailReceiptPreset: ReceiptConfig = {
   showLogo: true,
   legalName: "PT RETAIL NUSANTARA",
   showLegalName: false,
-  outletName: "Toko Cabang 01",
+  outletName: "Bisnis Cabang 01",
   showOutletName: true,
   npwp: "01.234.567.8-901.000",
   showNpwp: false,

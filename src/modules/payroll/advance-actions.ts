@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 async function requireOwnerOrAdmin() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   const user = session.user as any;
   if (user.role !== "OWNER" && user.role !== "ADMIN_OUTLET") {

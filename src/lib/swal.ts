@@ -130,7 +130,31 @@ export function toastSuccess(message: string) {
   return swalToast.fire({ icon: "success", title: message });
 }
 
-/** Shortcut: tampilkan toast error */
+/** Shortcut: tampilkan toast error (auto-prompt login jika sesi habis) */
 export function toastError(message: string) {
+  const isAuthError =
+    message?.toLowerCase().includes("akses ditolak") ||
+    message?.toLowerCase().includes("harus login") ||
+    message?.toLowerCase().includes("sesi berakhir");
+
+  if (isAuthError && typeof window !== "undefined") {
+    Swal.fire({
+      ...baseConfig,
+      icon: "warning",
+      title: "Sesi Login Berakhir",
+      text: message || "Silakan login kembali untuk melanjutkan transaksi / manajemen Bisnis.",
+      showCancelButton: true,
+      confirmButtonText: "🔑 Login Sekarang",
+      cancelButtonText: "Tutup",
+      confirmButtonColor: "#4f46e5",
+    }).then((res) => {
+      if (res.isConfirmed) {
+        window.location.href = "/login";
+      }
+    });
+    return;
+  }
+
   return swalToast.fire({ icon: "error", title: message });
 }
+

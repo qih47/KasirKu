@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 async function requireAuth() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   return session.user as any;
 }
@@ -53,7 +53,14 @@ export async function getVouchersData(params?: {
   search?: string;
   status?: "ALL" | "ACTIVE" | "EXPIRED" | "INACTIVE";
 }): Promise<{ vouchers: VoucherItem[]; stats: VoucherStats }> {
-  const user = await requireAuth();
+  const session = await getServerSession(authOptions);
+  if (!session || !(session.user as any)?.tenantId) {
+    return {
+      vouchers: [],
+      stats: { totalVouchers: 0, activeVouchers: 0, totalRedeemed: 0, expiredVouchers: 0 },
+    };
+  }
+  const user = session.user as any;
   const now = new Date();
 
   const rawVouchers = await prisma.voucher.findMany({
@@ -61,11 +68,11 @@ export async function getVouchersData(params?: {
       tenantId: user.tenantId,
       ...(params?.search
         ? {
-            OR: [
-              { code: { contains: params.search, mode: "insensitive" } },
-              { description: { contains: params.search, mode: "insensitive" } },
-            ],
-          }
+          OR: [
+            { code: { contains: params.search, mode: "insensitive" } },
+            { description: { contains: params.search, mode: "insensitive" } },
+          ],
+        }
         : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -163,7 +170,7 @@ export async function createVoucherAction(data: {
   });
 
   if (existing) {
-    throw new Error(`Kode voucher "${cleanCode}" sudah digunakan di toko Anda. Gunakan kode lain.`);
+    throw new Error(`Kode voucher "${cleanCode}" sudah digunakan di Bisnis Anda. Gunakan kode lain.`);
   }
 
   const voucher = await prisma.voucher.create({
@@ -365,12 +372,12 @@ export async function verifyVoucherAction(
       };
     }
 
-    throw new Error(`Kode voucher "${normalized}" tidak ditemukan atau tidak berlaku di toko ini.`);
+    throw new Error(`Kode voucher "${normalized}" tidak ditemukan atau tidak berlaku di Bisnis ini.`);
   }
 
   // 2. Cek status aktif
   if (!voucher.isActive) {
-    throw new Error(`Voucher "${normalized}" sedang dinonaktifkan oleh toko.`);
+    throw new Error(`Voucher "${normalized}" sedang dinonaktifkan oleh Bisnis.`);
   }
 
   // 3. Cek tanggal mulai berlaku

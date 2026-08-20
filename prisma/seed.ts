@@ -258,7 +258,7 @@ async function main() {
   });
 
   // 5. SEED SAMPLE DEMO TENANT & OUTLET (SIAP PAKAI)
-  console.log("🏪 5. Seeding Demo Tenant Toko & Akun Kasir...");
+  console.log("🏪 5. Seeding Demo Tenant Bisnis & Akun Kasir...");
   const ownerPasswordHash = await bcrypt.hash("owner123456", 10);
   const cashierPasswordHash = await bcrypt.hash("kasir123456", 10);
 

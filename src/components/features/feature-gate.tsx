@@ -16,7 +16,7 @@ interface FeatureGateProps {
 export function FeatureGate({
   isAllowed,
   featureName = "Fitur Eksklusif",
-  description = "Buka akses penuh ke fitur canggih ini dengan mengupgrade lisensi toko Anda.",
+  description = "Buka akses penuh ke fitur canggih ini dengan mengupgrade lisensi Bisnis Anda.",
   requiredTier = "PRO",
   children,
   fallback,

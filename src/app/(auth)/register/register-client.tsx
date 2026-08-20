@@ -418,7 +418,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
             </h1>
             <p className="text-xs sm:text-sm max-w-md mx-auto leading-relaxed" style={{ color: t.textSub }}>
               {step === 1
-                ? "Daftarkan toko Anda sekarang dan nikmati kemudahan kelola kasir, stok, dan laporan keuangan."
+                ? "Daftarkan Bisnis Anda sekarang dan nikmati kemudahan kelola kasir, stok, dan laporan keuangan."
                 : `Masukkan 6-digit kode OTP yang kami kirimkan ke ${email}`}
             </p>
           </div>
@@ -494,7 +494,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                 </div>
               </div>
 
-              {/* Seksi 2: Informasi Toko & Pemilik */}
+              {/* Seksi 2: Informasi Bisnis & Pemilik */}
               <div className="space-y-4 pt-2">
                 <label
                   className="block text-xs font-extrabold uppercase tracking-wider"
@@ -642,7 +642,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                       return (
                         <div className="mt-2 flex items-center gap-2">
                           <div className="flex gap-1 flex-1">
-                            {[0,1,2,3].map((i) => (
+                            {[0, 1, 2, 3].map((i) => (
                               <div
                                 key={i}
                                 className="h-1 flex-1 rounded-full transition-all duration-300"

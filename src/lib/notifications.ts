@@ -41,7 +41,7 @@ export async function sendOtpEmail({
     if (!NOTIFICATION_CONFIG.smtpPass) {
       console.log(`\n📧 [EMAIL OTP DISPATCH SIMULATION]`);
       console.log(`Pengirim (From): Qassa POS <${NOTIFICATION_CONFIG.defaultSenderEmail}>`);
-      console.log(`Penerima (To): ${ownerName} <${toEmail}> (Toko: ${businessName})`);
+      console.log(`Penerima (To): ${ownerName} <${toEmail}> (Bisnis: ${businessName})`);
       console.log(`Subjek: ${otp} adalah Kode Verifikasi Pendaftaran Qassa POS`);
       console.log(`Isi: Halo ${ownerName}, kode OTP Anda adalah ${otp} (berlaku 10 menit).`);
       console.log(`💡 Tips: Untuk pengiriman email nyata via Gmail, isi SMTP_PASS (16 digit Google App Password) di file .env\n`);

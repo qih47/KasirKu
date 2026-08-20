@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 async function requireCashierOrOwner() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko/kasir.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis/kasir.");
   }
   return session.user as any;
 }
@@ -35,7 +35,7 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
   }
 
   if (!targetOutletId) {
-    throw new Error("Outlet tidak ditemukan pada akun toko Anda.");
+    throw new Error("Outlet tidak ditemukan pada akun Bisnis Anda.");
   }
 
   // Cari shift yang sedang aktif (closedAt === null)

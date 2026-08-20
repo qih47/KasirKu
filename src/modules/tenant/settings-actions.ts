@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 async function requireOwner() {
   const session = await getServerSession(authOptions);
   if (!session || (session.user as any)?.role !== "OWNER") {
-    throw new Error("Akses ditolak: Hanya Owner yang dapat mengatur branding toko.");
+    throw new Error("Akses ditolak: Hanya Owner yang dapat mengatur branding Bisnis.");
   }
   return session.user as any;
 }
@@ -77,7 +77,7 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
   } else if (activePluginCode.includes("cafe") || nameLower.includes("kopi") || nameLower.includes("cafe") || nameLower.includes("coffee")) {
     detectedVertical = "CAFE";
     defaultPreset = cafeReceiptPreset;
-  } else if (activePluginCode.includes("retail") || nameLower.includes("mart") || nameLower.includes("retail") || nameLower.includes("toko")) {
+  } else if (activePluginCode.includes("retail") || nameLower.includes("mart") || nameLower.includes("retail") || nameLower.includes("Bisnis")) {
     detectedVertical = "RETAIL";
     defaultPreset = retailReceiptPreset;
   } else if (activePluginCode.includes("laundry") || nameLower.includes("laundry") || nameLower.includes("cuci")) {

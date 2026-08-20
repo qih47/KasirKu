@@ -138,10 +138,10 @@ export function ReceiptDesignerClient({ initialData }: ReceiptDesignerClientProp
     changeAmount: 0,
     coupon: couponEnabled
       ? {
-          code: couponCode,
-          text: discountText,
-          expiryDate: "14 Hari",
-        }
+        code: couponCode,
+        text: discountText,
+        expiryDate: "14 Hari",
+      }
       : undefined,
     wifi: {
       ssid: "ArtisanCafe_Guest",
@@ -354,7 +354,7 @@ export function ReceiptDesignerClient({ initialData }: ReceiptDesignerClientProp
             className="text-xs mt-1 font-medium"
             style={{ color: "var(--theme-text-secondary, #64748b)" }}
           >
-            Tingkatkan citra brand toko Anda dengan pilihan template struk berkelas, custom divider, voucher promo pintar, dan slip dapur otomatis.
+            Tingkatkan citra brand Bisnis Anda dengan pilihan template struk berkelas, custom divider, voucher promo pintar, dan slip dapur otomatis.
           </p>
         </div>
 
@@ -885,18 +885,16 @@ export function ReceiptDesignerClient({ initialData }: ReceiptDesignerClientProp
                   <button
                     type="button"
                     onClick={() => setPreviewTab("CUSTOMER")}
-                    className={`px-2 py-0.5 rounded ${
-                      previewTab === "CUSTOMER" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-                    }`}
+                    className={`px-2 py-0.5 rounded ${previewTab === "CUSTOMER" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                      }`}
                   >
                     Struk Kasir
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreviewTab("KITCHEN")}
-                    className={`px-2 py-0.5 rounded ${
-                      previewTab === "KITCHEN" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-                    }`}
+                    className={`px-2 py-0.5 rounded ${previewTab === "KITCHEN" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                      }`}
                   >
                     Slip Dapur
                   </button>
@@ -954,9 +952,8 @@ export function ReceiptDesignerClient({ initialData }: ReceiptDesignerClientProp
 
               /* Kitchen Slip Preview */
               <div
-                className={`mx-auto bg-[#FFFDF9] border border-dashed border-amber-400 rounded-2xl p-5 sm:p-6 font-mono text-stone-900 shadow-2xl space-y-2.5 transition-all ${
-                  paperSize === "80mm" ? "max-w-md text-xs" : "max-w-xs text-[11px]"
-                }`}
+                className={`mx-auto bg-[#FFFDF9] border border-dashed border-amber-400 rounded-2xl p-5 sm:p-6 font-mono text-stone-900 shadow-2xl space-y-2.5 transition-all ${paperSize === "80mm" ? "max-w-md text-xs" : "max-w-xs text-[11px]"
+                  }`}
               >
                 <div className="text-center border-b-2 border-stone-800 pb-2 space-y-1">
                   <span className="px-2 py-0.5 bg-stone-900 text-white rounded text-[9px] font-black tracking-wider uppercase">

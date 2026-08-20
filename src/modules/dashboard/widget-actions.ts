@@ -10,7 +10,7 @@ async function requireTenantUser() {
   const session = await getServerSession(authOptions);
   const user = session?.user as any;
   if (!user || !user.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   return user;
 }

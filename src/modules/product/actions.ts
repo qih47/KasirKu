@@ -16,7 +16,18 @@ async function requireTenantUser() {
 }
 
 export async function getProductsData(explicitOutletId?: string) {
-  const user = await requireTenantUser();
+  const session = await getServerSession(authOptions);
+  if (!session || !(session.user as any)?.tenantId) {
+    return {
+      products: [],
+      categories: [],
+      outlets: [],
+      selectedOutletId: null,
+      metrics: { totalItems: 0, totalBarang: 0, totalJasa: 0, lowStockCount: 0 },
+    };
+  }
+
+  const user = session.user as any;
   const targetOutletId = explicitOutletId || user.outletId;
 
   const [products, outlets] = await Promise.all([

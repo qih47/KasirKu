@@ -230,7 +230,7 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Kelola kupon diskon, batas kuota pemakaian, masa kedaluwarsa, dan promo khusus kasir toko Anda.
+              Kelola kupon diskon, batas kuota pemakaian, masa kedaluwarsa, dan promo khusus kasir Bisnis Anda.
             </p>
           </div>
 
@@ -245,7 +245,7 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
       ) : (
         <div className="flex items-center justify-between pb-1">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-            Daftar Kupon Diskon &amp; Promo Toko Aktif
+            Daftar Kupon Diskon &amp; Promo Bisnis Aktif
           </span>
           <button
             onClick={handleOpenCreate}
@@ -270,7 +270,7 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
           <div className="text-2xl font-black text-slate-900 dark:text-white">
             {stats.totalVouchers}
           </div>
-          <div className="text-[11px] text-slate-400 font-medium">Kupon terdaftar di toko</div>
+          <div className="text-[11px] text-slate-400 font-medium">Kupon terdaftar di Bisnis</div>
         </div>
 
         {/* Card 2: Voucher Aktif */}
@@ -343,11 +343,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
             <button
               key={tab.id}
               onClick={() => handleFilterChange(tab.id)}
-              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition cursor-pointer ${
-                statusFilter === tab.id
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition cursor-pointer ${statusFilter === tab.id
                   ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
                   : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -381,11 +380,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
             return (
               <div
                 key={v.id}
-                className={`rounded-3xl p-5 bg-white dark:bg-slate-900 border shadow-sm transition hover:shadow-md relative overflow-hidden flex flex-col justify-between space-y-4 ${
-                  isCurrentlyActive
+                className={`rounded-3xl p-5 bg-white dark:bg-slate-900 border shadow-sm transition hover:shadow-md relative overflow-hidden flex flex-col justify-between space-y-4 ${isCurrentlyActive
                     ? "border-slate-200/90 dark:border-slate-800"
                     : "border-slate-200/50 dark:border-slate-800/50 opacity-80"
-                }`}
+                  }`}
               >
                 {/* Top Badge & Status */}
                 <div className="flex items-start justify-between gap-2">
@@ -404,11 +402,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
                     </button>
 
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        v.discountType === "PERCENT"
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.discountType === "PERCENT"
                           ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300"
                           : "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300"
-                      }`}
+                        }`}
                     >
                       {v.discountType === "PERCENT" ? "Persen" : "Nominal"}
                     </span>
@@ -492,11 +489,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
                   <button
                     type="button"
                     onClick={() => handleToggleStatus(v)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                      v.isActive
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${v.isActive
                         ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300"
                         : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 hover:bg-emerald-100"
-                    }`}
+                      }`}
                   >
                     <Power className="w-3.5 h-3.5" />
                     <span>{v.isActive ? "Nonaktifkan" : "Aktifkan"}</span>
@@ -541,7 +537,7 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
                   <h3 className="font-black text-sm text-slate-900 dark:text-white">
                     {editingVoucher ? `Edit Voucher ${editingVoucher.code}` : "Buat Voucher Promo Baru"}
                   </h3>
-                  <p className="text-[11px] text-slate-500">Konfigurasi kupon promo untuk toko Anda</p>
+                  <p className="text-[11px] text-slate-500">Konfigurasi kupon promo untuk Bisnis Anda</p>
                 </div>
               </div>
               <button
@@ -592,11 +588,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, discountType: "PERCENT" })}
-                    className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                      form.discountType === "PERCENT"
+                    className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${form.discountType === "PERCENT"
                         ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
                         : "text-slate-500"
-                    }`}
+                      }`}
                   >
                     <Percent className="w-3.5 h-3.5" />
                     <span>Persentase (%)</span>
@@ -604,11 +599,10 @@ export function VouchersClient({ initialData, hideHeader = false }: VouchersClie
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, discountType: "FIXED" })}
-                    className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                      form.discountType === "FIXED"
+                    className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${form.discountType === "FIXED"
                         ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
                         : "text-slate-500"
-                    }`}
+                      }`}
                   >
                     <DollarSign className="w-3.5 h-3.5" />
                     <span>Nominal Tetap (Rp)</span>

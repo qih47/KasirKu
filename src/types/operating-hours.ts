@@ -1,5 +1,5 @@
 export interface DayOperatingHours {
-  isOpen: boolean;       // Status toko Buka / Libur
+  isOpen: boolean;       // Status Bisnis Buka / Libur
   openTime: string;      // Format "HH:mm" e.g. "08:00"
   closeTime: string;     // Format "HH:mm" e.g. "22:00"
   is24Hours: boolean;    // True jika buka 24 jam nonstop

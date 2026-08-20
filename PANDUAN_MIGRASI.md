@@ -14,7 +14,7 @@ Pastikan perangkat baru sudah terinstall:
 
 ## ⚡ Metode 1: Inisialisasi Cepat di Device Baru (Fresh Setup + Seed Data)
 
-Gunakan metode ini jika Anda ingin menjalankan aplikasi di device baru dengan master data default (Super Admin, Lisensi, Plugin, Tema, dan Data Toko Demo).
+Gunakan metode ini jika Anda ingin menjalankan aplikasi di device baru dengan master data default (Super Admin, Lisensi, Plugin, Tema, dan Data Bisnis Demo).
 
 ### Langkah 1: Salin Source Code
 Salin folder proyek `kasirKu` ke device baru (bisa via `git clone`, flashdisk, atau zip).
@@ -48,7 +48,7 @@ Perintah di atas akan otomatis mengeksekusi:
 1. `npm install` (mengunduh seluruh dependencies)
 2. `npx prisma generate` (menyiapkan client Prisma)
 3. `npx prisma db push` (membuat seluruh tabel database secara otomatis)
-4. `npm run db:seed` (mengisi data awal superadmin, lisensi, plugin, tema & demo toko)
+4. `npm run db:seed` (mengisi data awal superadmin, lisensi, plugin, tema & demo Bisnis)
 
 ### Langkah 4: Jalankan Aplikasi
 ```bash
@@ -93,7 +93,7 @@ pg_dump -U postgres -d pos_universal -F c -b -v -f qassa_backup.dump
 | Role Akun | Email Login | Password Default | Akses Halaman |
 | :--- | :--- | :--- | :--- |
 | **👑 Super Admin** | `admin@qassa.id` | `admin123456` | `/superadmin` (Kelola Lisensi, Plugin, Tema, Tenant) |
-| **🏪 Owner Toko Demo** | `owner@qassa.id` | `owner123456` | `/dashboard` (Dashboard, Stok, Laporan, Pengaturan) |
+| **🏪 Owner Bisnis Demo** | `owner@qassa.id` | `owner123456` | `/dashboard` (Dashboard, Stok, Laporan, Pengaturan) |
 | **👤 Kasir POS Demo** | `kasir@qassa.id` | `kasir123456` | `/pos` (Layar Kasir Transaksi Penjualan) |
 
 ---

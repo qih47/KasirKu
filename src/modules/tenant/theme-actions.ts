@@ -12,7 +12,7 @@ async function requireOwner() {
   }
   const user = session.user as any;
   if (user?.role !== "OWNER" && user?.role !== "SUPER_ADMIN") {
-    throw new Error("Akses ditolak: Hanya Owner atau Admin yang dapat mengelola tema toko.");
+    throw new Error("Akses ditolak: Hanya Owner atau Admin yang dapat mengelola tema Bisnis.");
   }
   return user;
 }
@@ -81,14 +81,14 @@ export async function getTenantThemesMarketplaceData() {
     }),
     targetTenantId
       ? prisma.tenantSubscription.findFirst({
-          where: { tenantId: targetTenantId, isActive: true },
-          include: {
-            theme: {
-              include: { theme: true },
-            },
-            licenseTier: true,
+        where: { tenantId: targetTenantId, isActive: true },
+        include: {
+          theme: {
+            include: { theme: true },
           },
-        })
+          licenseTier: true,
+        },
+      })
       : null,
   ]);
 

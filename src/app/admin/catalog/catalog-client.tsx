@@ -417,11 +417,10 @@ export function CatalogClient({
         <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-slate-900 border border-slate-800 w-fit">
           <button
             onClick={() => setTab("LICENSES")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "LICENSES"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "LICENSES"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <ShieldCheck className="w-4 h-4" />
             <span>{locale === "en" ? "Capacity Licenses (Core)" : "Lisensi Kapasitas (Core)"}</span>
@@ -429,11 +428,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("PLUGINS")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "PLUGINS"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "PLUGINS"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Layers className="w-4 h-4" />
             <span>{locale === "en" ? "Vertical Plugins & Modules" : "Plugin Vertikal & Modul"}</span>
@@ -441,11 +439,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("THEMES")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "THEMES"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "THEMES"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Palette className="w-4 h-4" />
             <span>{locale === "en" ? "Themes & UI Appearance" : "Tema & Tampilan UI"}</span>
@@ -453,11 +450,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("POS_LAYOUTS")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "POS_LAYOUTS"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "POS_LAYOUTS"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Layout className="w-4 h-4" />
             <span>{locale === "en" ? "POS Screen Layouts" : "Tata Letak Layar POS"}</span>
@@ -465,11 +461,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("RECEIPTS")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "RECEIPTS"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "RECEIPTS"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Printer className="w-4 h-4" />
             <span>{locale === "en" ? "Receipt Presets & Studio" : "Studio & Template Struk"}</span>
@@ -477,11 +472,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("DURATIONS")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "DURATIONS"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "DURATIONS"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Clock className="w-4 h-4" />
             <span>{locale === "en" ? "Subscription Durations & Discounts ⚙️" : "Diskon Durasi Langganan ⚙️"}</span>
@@ -489,11 +483,10 @@ export function CatalogClient({
 
           <button
             onClick={() => setTab("FEATURE_MATRIX")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-              tab === "FEATURE_MATRIX"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "FEATURE_MATRIX"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <ShieldCheck className="w-4 h-4" />
             <span>{locale === "en" ? "Feature Entitlements Matrix" : "Matriks Hak Akses Fitur"}</span>
@@ -874,7 +867,7 @@ export function CatalogClient({
             <div>
               <p className="font-bold text-white">Katalog Preset Tema &amp; Design Tokens UI</p>
               <p className="text-slate-400 text-[11px] mt-0.5">
-                Kelola tema visual POS. Setiap preset tema yang dibuat otomatis muncul di toko untuk dibeli atau diterapkan.
+                Kelola tema visual POS. Setiap preset tema yang dibuat otomatis muncul di Bisnis untuk dibeli atau diterapkan.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -1379,11 +1372,10 @@ export function CatalogClient({
             {durationSettings.map((dur, idx) => (
               <div
                 key={dur.key}
-                className={`p-5 rounded-2xl border transition flex flex-col justify-between ${
-                  dur.isActive
+                className={`p-5 rounded-2xl border transition flex flex-col justify-between ${dur.isActive
                     ? "bg-slate-900/90 border-slate-800 shadow-sm hover:border-slate-700"
                     : "bg-slate-950/60 border-slate-900 opacity-60"
-                }`}
+                  }`}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -1577,11 +1569,10 @@ export function CatalogClient({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             <button
               onClick={() => setFeatureFilterCategory("ALL")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${
-                featureFilterCategory === "ALL"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 ${featureFilterCategory === "ALL"
                   ? "bg-indigo-600 text-white"
                   : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
-              }`}
+                }`}
             >
               Semua Modul ({featureEntitlements.length})
             </button>
@@ -1594,11 +1585,10 @@ export function CatalogClient({
                 <button
                   key={catKey}
                   onClick={() => setFeatureFilterCategory(catKey)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 flex items-center gap-1.5 ${
-                    featureFilterCategory === catKey
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex-shrink-0 flex items-center gap-1.5 ${featureFilterCategory === catKey
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
                       : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
-                  }`}
+                    }`}
                 >
                   <span>{info.name}</span>
                   <span className="text-[10px] opacity-75 font-mono">({count})</span>
@@ -1759,7 +1749,7 @@ export function CatalogClient({
         </div>
       )}
 
-{/* MODAL: Import Plugin / Theme Package JSON */}
+      {/* MODAL: Import Plugin / Theme Package JSON */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-fadeIn">
           <div className="rounded-3xl p-6 max-w-2xl w-full bg-slate-900 border border-slate-800 shadow-2xl space-y-5 my-auto">

@@ -11,7 +11,7 @@ export type PaymentMethod = "CASH" | "QRIS" | "TRANSFER" | "CARD";
 async function requireCashierOrOwner() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko/kasir.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis/kasir.");
   }
   return session.user as any;
 }

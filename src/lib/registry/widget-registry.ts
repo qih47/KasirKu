@@ -209,8 +209,8 @@ export const OFFICIAL_RECEIPT_BLOCKS: Record<ReceiptBlockType, ReceiptBlockDefin
   },
   STORE_META: {
     type: "STORE_META",
-    name: "Informasi Outlet / Toko",
-    description: "Nama cabang, alamat lengkap, dan nomor kontak/WhatsApp toko.",
+    name: "Informasi Outlet / Bisnis",
+    description: "Nama cabang, alamat lengkap, dan nomor kontak/WhatsApp Bisnis.",
     defaultAlign: "center",
   },
   DIVIDER: {

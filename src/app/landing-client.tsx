@@ -188,7 +188,7 @@ export function LandingClient({
     {
       icon: Printer,
       title: "Cetak Struk Thermal Fleksibel",
-      desc: "Mendukung printer 58mm & 80mm via Bluetooth/USB/WiFi, lengkap QRIS dinamis dan logo toko.",
+      desc: "Mendukung printer 58mm & 80mm via Bluetooth/USB/WiFi, lengkap QRIS dinamis dan logo Bisnis.",
     },
   ];
 
@@ -1034,9 +1034,8 @@ export function LandingClient({
                   <span>{dur.label}</span>
                   {dur.discountPercent > 0 && (
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                        isSelected ? "bg-white/20 text-white" : "bg-emerald-500 text-white"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isSelected ? "bg-white/20 text-white" : "bg-emerald-500 text-white"
+                        }`}
                     >
                       Hemat {dur.discountPercent}%
                     </span>
@@ -1099,7 +1098,7 @@ export function LandingClient({
                         <span>{f}</span>
                       </li>
                     ))}
-     
+
                     {expandedFaqIndex === "starter" && [
                       "Buka / Tutup Shift Kasir & Rekap Kas Harian",
                       "Laporan Penjualan & Laba Rugi Outlet",
@@ -1184,7 +1183,7 @@ export function LandingClient({
                         <span>{f}</span>
                       </li>
                     ))}
-                    
+
                     {expandedFaqIndex === "pro" && [
                       "Laporan Penjualan per Kasir & Audit Transaksi",
                       "Export Laporan Lengkap ke Excel / CSV / PDF",

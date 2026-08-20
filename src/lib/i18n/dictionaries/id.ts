@@ -50,7 +50,7 @@ export const id = {
     retailCommissions: "Insentif Kasir",
     reports: "Laporan Bisnis",
     subscriptions: "Langganan",
-    store: "Toko Add-on",
+    store: "Bisnis Add-on",
     settings: "Pengaturan",
     adminCatalog: "Katalog Lisensi",
     adminTenants: "Kelola Bisnis",

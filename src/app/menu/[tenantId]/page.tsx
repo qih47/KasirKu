@@ -10,17 +10,14 @@ export default async function CustomerMenuPage({
   searchParams,
 }: {
   params: { tenantId: string };
-  searchParams?: { table?: string };
+  searchParams?: { table?: string; outlet?: string };
 }) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: params.tenantId },
     include: {
       outlets: {
         where: { isActive: true },
-        take: 1,
-      },
-      cafeTables: {
-        orderBy: { tableNumber: "asc" },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
@@ -45,14 +42,14 @@ export default async function CustomerMenuPage({
               Layanan Self-Order Belum Aktif
             </h2>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Toko <span className="font-bold text-slate-200">{tenant.businessName}</span> belum mengaktifkan plugin premium <span className="font-mono text-indigo-400 font-bold">QR Self-Order &amp; Live Order</span>.
+              Bisnis <span className="font-bold text-slate-200">{tenant.businessName}</span> belum mengaktifkan plugin premium <span className="font-mono text-indigo-400 font-bold">QR Self-Order &amp; Live Order</span>.
             </p>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-700/50 text-left text-xs space-y-2">
-            <div className="text-slate-400 font-medium">Bagi Pemilik Toko:</div>
+            <div className="text-slate-400 font-medium">Bagi Pemilik Bisnis:</div>
             <p className="text-slate-300 text-[11px]">
-              Silakan aktifkan modul <strong>QR Self-Order</strong> di menu <em>Pengaturan Toko &rarr; Plugin &amp; Add-ons</em> untuk membuka akses menu digital mandiri bagi pelanggan.
+              Silakan aktifkan modul <strong>QR Self-Order</strong> di menu <em>Pengaturan Bisnis &rarr; Plugin &amp; Add-ons</em> untuk membuka akses menu digital mandiri bagi pelanggan.
             </p>
           </div>
 
@@ -68,12 +65,33 @@ export default async function CustomerMenuPage({
     );
   }
 
-  const products = await prisma.product.findMany({
-    where: { tenantId: params.tenantId, isActive: true },
-    orderBy: { category: "asc" },
-  });
+  // Tentukan target outlet berdasarkan QR query param ?outlet=[id]
+  const targetOutlet =
+    (searchParams?.outlet
+      ? tenant.outlets.find((o) => o.id === searchParams.outlet)
+      : null) ||
+    tenant.outlets[0] ||
+    null;
 
-  const defaultOutlet = tenant.outlets[0] || null;
+  const [products, tables] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        tenantId: params.tenantId,
+        isActive: true,
+        ...(targetOutlet ? { OR: [{ outletId: null }, { outletId: targetOutlet.id }] } : {}),
+      },
+      orderBy: { category: "asc" },
+    }),
+    targetOutlet
+      ? prisma.cafeTable.findMany({
+          where: { outletId: targetOutlet.id },
+          orderBy: { tableNumber: "asc" },
+        })
+      : prisma.cafeTable.findMany({
+          where: { tenantId: params.tenantId },
+          orderBy: { tableNumber: "asc" },
+        }),
+  ]);
 
   return (
     <CustomerMenuClient
@@ -81,10 +99,10 @@ export default async function CustomerMenuPage({
         id: tenant.id,
         businessName: tenant.businessName,
         logoUrl: tenant.logoUrl,
-        outletId: defaultOutlet?.id || "",
-        outletName: defaultOutlet?.name || "Outlet Utama",
+        outletId: targetOutlet?.id || "",
+        outletName: targetOutlet?.name || "Outlet Utama",
       }}
-      tables={tenant.cafeTables.map((t) => ({
+      tables={tables.map((t) => ({
         id: t.id,
         tableNumber: t.tableNumber,
         status: t.status,

@@ -15,7 +15,7 @@
 
 ### 1. 🏪 Multi-Tenant & Multi-Outlet Engine
 - **Tenant Lifecycle:** Pengelolaan status akun otomatis (`TRIAL` 30 Hari &rarr; `ACTIVE` Berbayar &rarr; `LOCKED` &rarr; `FROZEN`).
-- **Multi-Outlet Cabang:** Manajemen banyak cabang outlet toko dengan alokasi kuota lisensi independen.
+- **Multi-Outlet Cabang:** Manajemen banyak cabang outlet Bisnis dengan alokasi kuota lisensi independen.
 - **Role-Based Access Control (RBAC):** Hak akses terpisah antara `OWNER`, `MANAGER`, `KASIR`, dan `SUPER_ADMIN`.
 
 ### 2. ✂️ Modul Barbershop & Salon
@@ -124,7 +124,7 @@ Buka browser Anda di **[http://localhost:3000](http://localhost:3000)**.
 | Role / Portal | URL Akses | Email / Username | Password | Keterangan |
 | :--- | :--- | :--- | :--- | :--- |
 | **Super Admin** | [`/admin/login`](http://localhost:3000/admin/login) | `superadmin@posuniversal.com` | `admin123456` | Kontrol platform & katalog harga |
-| **Owner Toko (Trial)** | [`/login`](http://localhost:3000/login) | *(Daftar di `/register`)* | *(Password Anda)* | Kelola toko, cabang & langganan |
+| **Owner Bisnis (Trial)** | [`/login`](http://localhost:3000/login) | *(Daftar di `/register`)* | *(Password Anda)* | Kelola Bisnis, cabang & langganan |
 | **Guest Demo (Sandbox)** | [`/demo`](http://localhost:3000/demo) | *Bebas Coba* | *Tanpa Password* | Uji coba kasir tanpa database |
 
 ---

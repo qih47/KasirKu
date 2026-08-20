@@ -74,30 +74,30 @@ export function StaffClient({
     { value: "KASIR", label: "Kasir POS (Front Desk)" },
     ...(isBarberActive
       ? [
-          { value: "BARBER", label: "Barber / Capster (Potong Rambut)" },
-          { value: "HAIR_STYLIST", label: "Hair Stylist / Beautician" },
-        ]
+        { value: "BARBER", label: "Barber / Capster (Potong Rambut)" },
+        { value: "HAIR_STYLIST", label: "Hair Stylist / Beautician" },
+      ]
       : []),
     ...(isCafeActive
       ? [
-          { value: "BARISTA", label: "Barista (Minuman & Kopi)" },
-          { value: "WAITER", label: "Waiter / Server Resto" },
-          { value: "COOK", label: "Cook / Chef Dapur" },
-          { value: "BARTENDER", label: "Bartender" },
-        ]
+        { value: "BARISTA", label: "Barista (Minuman & Kopi)" },
+        { value: "WAITER", label: "Waiter / Server Resto" },
+        { value: "COOK", label: "Cook / Chef Dapur" },
+        { value: "BARTENDER", label: "Bartender" },
+      ]
       : []),
     ...(isLaundryActive
       ? [
-          { value: "PENCUCI", label: "Operator Cuci (Washer)" },
-          { value: "PENYETRIKA", label: "Penyetrika (Ironer)" },
-          { value: "KURIR", label: "Kurir Antar-Jemput" },
-        ]
+        { value: "PENCUCI", label: "Operator Cuci (Washer)" },
+        { value: "PENYETRIKA", label: "Penyetrika (Ironer)" },
+        { value: "KURIR", label: "Kurir Antar-Jemput" },
+      ]
       : []),
     ...(isRetailActive || (!isBarberActive && !isCafeActive && !isLaundryActive)
       ? [
-          { value: "PRAMUNIAGA", label: "Pramuniaga / Sales Toko" },
-          { value: "STAFF_GUDANG", label: "Staff Gudang / Inventory" },
-        ]
+        { value: "PRAMUNIAGA", label: "Pramuniaga / Sales Bisnis" },
+        { value: "STAFF_GUDANG", label: "Staff Gudang / Inventory" },
+      ]
       : []),
     { value: "SUPERVISOR", label: "Supervisor / Admin Cabang" },
   ];
@@ -351,7 +351,7 @@ export function StaffClient({
             <span>Manajemen Staf &amp; Karyawan</span>
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Kelola seluruh tim operasional toko (Kasir, Barista, Barber, Penyetrika, Waiter) per cabang.
+            Kelola seluruh tim operasional Bisnis (Kasir, Barista, Barber, Penyetrika, Waiter) per cabang.
           </p>
         </div>
 
@@ -631,16 +631,14 @@ export function StaffClient({
                           <button
                             onClick={() => handleToggle(staff.id, staff.isActive)}
                             disabled={actionLoadingId === staff.id}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold transition cursor-pointer ${
-                              staff.isActive
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold transition cursor-pointer ${staff.isActive
                                 ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100"
                                 : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200"
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                staff.isActive ? "bg-emerald-500" : "bg-slate-400"
-                              }`}
+                              className={`w-1.5 h-1.5 rounded-full ${staff.isActive ? "bg-emerald-500" : "bg-slate-400"
+                                }`}
                             />
                             <span>{staff.isActive ? "Aktif" : "Non-aktif"}</span>
                           </button>
@@ -752,7 +750,7 @@ export function StaffClient({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="dimas@toko.com"
+                    placeholder="dimas@Bisnis.com"
                     className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono"
                   />
                 </div>
@@ -776,7 +774,7 @@ export function StaffClient({
                 </div>
               </div>
 
-              {/* Jabatan / Role (Dinamis Sesuai Plugin Toko) */}
+              {/* Jabatan / Role (Dinamis Sesuai Plugin Bisnis) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -1018,10 +1016,10 @@ export function StaffClient({
                           {isBarberActive
                             ? "Komisi Bagi Hasil Jasa (%)"
                             : isLaundryActive
-                            ? "Bagi Hasil Cuci / Setrika (%)"
-                            : isCafeActive
-                            ? "Bagi Hasil Menu Cafe (%)"
-                            : "Insentif Penjualan Produk (%)"}
+                              ? "Bagi Hasil Cuci / Setrika (%)"
+                              : isCafeActive
+                                ? "Bagi Hasil Menu Cafe (%)"
+                                : "Insentif Penjualan Produk (%)"}
                         </label>
                         <input
                           type="number"
@@ -1033,10 +1031,10 @@ export function StaffClient({
                             isBarberActive
                               ? "Contoh: 30 (% jasa potong)"
                               : isLaundryActive
-                              ? "Contoh: 20 (% bagi hasil cuci)"
-                              : isCafeActive
-                              ? "Contoh: 5 (% omset shift)"
-                              : "Contoh: 5 (% penjualan)"
+                                ? "Contoh: 20 (% bagi hasil cuci)"
+                                : isCafeActive
+                                  ? "Contoh: 5 (% omset shift)"
+                                  : "Contoh: 5 (% penjualan)"
                           }
                           className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                         />
@@ -1047,10 +1045,10 @@ export function StaffClient({
                           {isBarberActive
                             ? "Komisi Flat per Customer (Rp)"
                             : isLaundryActive
-                            ? "Komisi per Kg Laundry (Rp)"
-                            : isCafeActive
-                            ? "Komisi Flat per Shift / Porsi (Rp)"
-                            : "Komisi Flat per Transaksi (Rp)"}
+                              ? "Komisi per Kg Laundry (Rp)"
+                              : isCafeActive
+                                ? "Komisi Flat per Shift / Porsi (Rp)"
+                                : "Komisi Flat per Transaksi (Rp)"}
                         </label>
                         <input
                           type="number"
@@ -1061,10 +1059,10 @@ export function StaffClient({
                             isBarberActive
                               ? "Contoh: 10000 (per customer)"
                               : isLaundryActive
-                              ? "Contoh: 1500 (per kg)"
-                              : isCafeActive
-                              ? "Contoh: 2000 (per porsi)"
-                              : "Contoh: 5000 (per transaksi)"
+                                ? "Contoh: 1500 (per kg)"
+                                : isCafeActive
+                                  ? "Contoh: 2000 (per porsi)"
+                                  : "Contoh: 5000 (per transaksi)"
                           }
                           className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                         />

@@ -155,8 +155,7 @@ export async function createStaffAction(data: {
 
       if (kasirLimit !== null && currentCount >= kasirLimit) {
         throw new Error(
-          `Kuota kasir aktif untuk cabang ini sudah penuh (${currentCount}/${kasirLimit} kasir pada ${
-            activeSub?.licenseTier?.name || "Lisensi Toko"
+          `Kuota kasir aktif untuk cabang ini sudah penuh (${currentCount}/${kasirLimit} kasir pada ${activeSub?.licenseTier?.name || "Lisensi Bisnis"
           }). Silakan upgrade lisensi atau nonaktifkan akses POS kasir lain.`
         );
       }
@@ -172,7 +171,7 @@ export async function createStaffAction(data: {
   });
 
   if (existingUser) {
-    throw new Error("Email ini sudah digunakan oleh karyawan lain di toko Anda.");
+    throw new Error("Email ini sudah digunakan oleh karyawan lain di Bisnis Anda.");
   }
 
   // Generate password hash (atau random password jika non-login POS)

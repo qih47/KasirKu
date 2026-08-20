@@ -332,7 +332,7 @@ export function DynamicDashboardGrid({
                   Grafik Penjualan 7 Hari Terakhir
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Pergerakan omzet toko per hari dalam seminggu.
+                  Pergerakan omzet Bisnis per hari dalam seminggu.
                 </p>
               </div>
               <Link
@@ -565,13 +565,12 @@ export function DynamicDashboardGrid({
               {peakMini.map((p, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-1">
                   <div
-                    className={`w-full rounded-t-lg transition-all ${
-                      p.rate >= 90
+                    className={`w-full rounded-t-lg transition-all ${p.rate >= 90
                         ? "bg-orange-500"
                         : p.rate >= 60
-                        ? "bg-amber-400"
-                        : "bg-slate-200 dark:bg-slate-800"
-                    }`}
+                          ? "bg-amber-400"
+                          : "bg-slate-200 dark:bg-slate-800"
+                      }`}
                     style={{ height: `${(p.rate / 100) * 80}px` }}
                   />
                   <span className="text-[9.5px] font-mono text-slate-400">{p.hour}</span>
@@ -693,11 +692,10 @@ export function DynamicDashboardGrid({
           return (
             <div
               key={widget.instanceId}
-              className={`${colClass} p-5 rounded-3xl bg-white dark:bg-slate-900 border transition shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${
-                isCustomizing
+              className={`${colClass} p-5 rounded-3xl bg-white dark:bg-slate-900 border transition shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${isCustomizing
                   ? "border-dashed border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-500/10 bg-indigo-50/10"
                   : "border-slate-200 dark:border-slate-800 hover:shadow-md"
-              }`}
+                }`}
             >
               {/* Customize Mode Controls Header */}
               {isCustomizing && (
@@ -712,11 +710,10 @@ export function DynamicDashboardGrid({
                       <button
                         key={span}
                         onClick={() => handleChangeColSpan(widget.instanceId, span)}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                          widget.colSpan === span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-black ${widget.colSpan === span
                             ? "bg-indigo-600 text-white"
                             : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
+                          }`}
                         title={`Ubah ukuran ke ${span} Kolom`}
                       >
                         {span}x
@@ -775,7 +772,7 @@ export function DynamicDashboardGrid({
                   Galeri Komponen Widget Dashboard
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Pilih komponen statistik atau utilitas yang ingin ditambahkan ke layar ringkasan toko.
+                  Pilih komponen statistik atau utilitas yang ingin ditambahkan ke layar ringkasan Bisnis.
                 </p>
               </div>
               <button

@@ -150,7 +150,7 @@ export const phraseMap: Record<string, string> = {
   "Analitik Penjualan & Laba Real-Time": "Real-Time Sales & Profit Analytics",
   "Laporan harian, mingguan, bulanan yang otomatis kalkulasi HPP, laba kotor, dan produk terlaris.": "Daily, weekly, and monthly reports with automatic COGS calculation, gross profit, and top sellers.",
   "Cetak Struk Thermal Fleksibel": "Flexible Thermal Receipt Printing",
-  "Mendukung printer 58mm & 80mm via Bluetooth/USB/WiFi, lengkap QRIS dinamis dan logo toko.": "Supports 58mm & 80mm Bluetooth/USB/WiFi printers with dynamic QRIS and custom logo.",
+  "Mendukung printer 58mm & 80mm via Bluetooth/USB/WiFi, lengkap QRIS dinamis dan logo Bisnis.": "Supports 58mm & 80mm Bluetooth/USB/WiFi printers with dynamic QRIS and custom logo.",
 
   // ─── FAQ ─────────────────────────────────────────────────────────────────
   "Apakah saya bisa mencoba Qassa secara gratis sebelum berlangganan?": "Can I try Qassa for free before subscribing?",
@@ -246,9 +246,9 @@ export const phraseMap: Record<string, string> = {
   "Laporan & Analitik Keuangan": "Financial Reports & Analytics",
   "Pantau pendapatan harian, laba kotor, dan riwayat transaksi.": "Monitor daily revenue, gross profit, and transaction history.",
   "Profil & Pengaturan Bisnis": "Business Profile & Settings",
-  "Atur nama toko, logo, format struk, dan preferensi operasional.": "Configure store name, logo, receipt layout, and operational preferences.",
+  "Atur nama Bisnis, logo, format struk, dan preferensi operasional.": "Configure store name, logo, receipt layout, and operational preferences.",
   "Status Paket Langganan": "Subscription Plan Status",
   "Kelola tier lisensi, durasi aktif, dan metode pembayaran langganan.": "Manage license tiers, active duration, and subscription payments.",
-  "Toko Add-on & Plugin": "Add-on & Plugin Store",
+  "Bisnis Add-on & Plugin": "Add-on & Plugin Store",
   "Buka fitur spesifik vertikal untuk meningkatkan efisiensi usaha Anda.": "Unlock vertical-specific features to enhance your business workflow.",
 };

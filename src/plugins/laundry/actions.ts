@@ -11,14 +11,14 @@ import { addDays, format, startOfDay } from "date-fns";
 async function requireTenantLaundryUser() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
   const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "laundry");
   if (!isPluginActive) {
     throw new Error(
-      "Akses ditolak: Modul Laundry belum diaktifkan pada langganan toko Anda."
+      "Akses ditolak: Modul Laundry belum diaktifkan pada langganan Bisnis Anda."
     );
   }
 

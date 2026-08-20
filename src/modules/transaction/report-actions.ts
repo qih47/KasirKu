@@ -8,7 +8,7 @@ import { startOfDay, endOfDay, subDays, startOfMonth, format } from "date-fns";
 async function requireTenantUser() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   return session.user as any;
 }
@@ -21,7 +21,32 @@ export async function getSalesReportData(params: {
   endDate?: string;
   outletId?: string;
 }) {
-  const user = await requireTenantUser();
+  const session = await getServerSession(authOptions);
+  if (!session || !(session.user as any)?.tenantId) {
+    return {
+      summary: {
+        totalGrossSales: 0,
+        totalDiscounts: 0,
+        totalNetSales: 0,
+        totalTransactions: 0,
+        totalItemsSold: 0,
+        averageBasketSize: 0,
+        totalTax: 0,
+        totalService: 0,
+      },
+      chartData: [],
+      paymentMethodBreakdown: [],
+      topProducts: [],
+      recentTransactions: [],
+      period: params.period || "LAST_7_DAYS",
+      outlets: [],
+      selectedOutletId: null,
+      tierCode: "basic",
+      canViewConsolidated: false,
+    };
+  }
+
+  const user = session.user as any;
   const period = params.period || "LAST_7_DAYS";
 
   const now = new Date();
@@ -338,15 +363,15 @@ export async function getSalesReportData(params: {
         startH = 0;
         endH = 23;
       } else {
-        const rawOpen  = todaySchedule.openTime  || "08:00";
+        const rawOpen = todaySchedule.openTime || "08:00";
         const rawClose = todaySchedule.closeTime || "22:00";
-        const [opH]  = rawOpen.split(":").map(Number);
+        const [opH] = rawOpen.split(":").map(Number);
         const clHParsed = parseCloseHour(rawClose, opH);
 
-        labelOpenStr  = rawOpen;
+        labelOpenStr = rawOpen;
         labelCloseStr = clHParsed === 24 ? "23:59" : rawClose;
         startH = isNaN(opH) ? 8 : opH;
-        endH   = clHParsed === 24 ? 23 : clHParsed;
+        endH = clHParsed === 24 ? 23 : clHParsed;
       }
     }
   }
@@ -382,7 +407,7 @@ export async function getSalesReportData(params: {
   const totalTables = cafeTables.length;
   const occupiedTables = cafeTables.filter((t) => t.status === "OCCUPIED").length;
   const tableOccupancyPercent = totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0;
-  
+
   let cafeSignatureRevenue = 0;
   let cafeFoodRevenue = 0;
   let cafeBeverageRevenue = 0;

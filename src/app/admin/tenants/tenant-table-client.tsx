@@ -168,11 +168,10 @@ export function TenantTableClient({
             <button
               key={st}
               onClick={() => setFilterStatus(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                filterStatus === st
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterStatus === st
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-slate-400 hover:text-slate-200"
-              }`}
+                }`}
             >
               {st}
             </button>
@@ -185,7 +184,7 @@ export function TenantTableClient({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari toko / nama owner..."
+            placeholder="Cari Bisnis / nama owner..."
             className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
@@ -271,13 +270,13 @@ export function TenantTableClient({
                           s/d{" "}
                           {t.trialEndAt
                             ? new Date(t.trialEndAt).toLocaleDateString(
-                                "id-ID",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                }
-                              )
+                              "id-ID",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )
                             : "-"}
                         </div>
                       </td>

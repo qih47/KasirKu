@@ -25,8 +25,11 @@ import {
   Trash2,
   SlidersHorizontal,
   MapPin,
+  QrCode,
+  Building2,
 } from "lucide-react";
 import { TableStatus } from "@prisma/client";
+import { TableQrModal } from "@/components/cafe/table-qr-modal";
 
 const ZONE_LABELS: Record<string, string> = {
   INDOOR: "Indoor AC",
@@ -45,6 +48,8 @@ export function CafeTablesClient({
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>("ALL");
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [selectedQrTableId, setSelectedQrTableId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Add Table state
@@ -181,7 +186,27 @@ export function CafeTablesClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Multi-Outlet Switcher for Owner */}
+          {data.outlets && data.outlets.length > 1 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <select
+                value={data.currentOutletId}
+                onChange={(e) => {
+                  window.location.href = `/dashboard/cafe/tables?outletId=${e.target.value}`;
+                }}
+                className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-0 cursor-pointer pr-2"
+              >
+                {data.outlets.map((o: any) => (
+                  <option key={o.id} value={o.id} className="dark:bg-slate-900">
+                    Cabang: {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Mode Switcher Toggle */}
           <div className="p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center gap-1">
             <button
@@ -203,13 +228,24 @@ export function CafeTablesClient({
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Kelola Denah Meja</span>
+              <span>Kelola Denah</span>
             </button>
           </div>
 
           <button
+            onClick={() => {
+              setSelectedQrTableId(null);
+              setShowQrModal(true);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <QrCode className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+            <span>Cetak QR Meja</span>
+          </button>
+
+          <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Meja</span>
@@ -385,7 +421,22 @@ export function CafeTablesClient({
                       ? "Sedang Terisi"
                       : "Reservasi"}
                   </span>
-                  <span className="text-emerald-600 font-extrabold">&rarr;</span>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedQrTableId(table.id);
+                        setShowQrModal(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 text-slate-500 transition cursor-pointer"
+                      title="Lihat / Cetak QR Meja Ini"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-emerald-600 font-extrabold">&rarr;</span>
+                  </div>
                 </div>
               </div>
             );
@@ -621,10 +672,41 @@ export function CafeTablesClient({
                   </button>
                 </div>
               </div>
+
+              {/* QR Action Button in Table Detail */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedQrTableId(selectedTable.id);
+                    setSelectedTable(null);
+                    setShowQrModal(true);
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold flex items-center justify-center gap-2 cursor-pointer transition"
+                >
+                  <QrCode className="w-4 h-4 text-emerald-600" />
+                  <span>Lihat &amp; Cetak QR {selectedTable.tableNumber}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal QR Code Standee Generator & Batch Print */}
+      <TableQrModal
+        isOpen={showQrModal}
+        onClose={() => {
+          setShowQrModal(false);
+          setSelectedQrTableId(null);
+        }}
+        tables={data.tables || []}
+        tenantId={data.tenantId || ""}
+        businessName={data.businessName || "Cafe & Resto"}
+        outletId={data.currentOutletId}
+        outletName={data.outletName || "Outlet Utama"}
+        selectedTableId={selectedQrTableId}
+      />
     </div>
   );
 }

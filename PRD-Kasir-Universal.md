@@ -206,7 +206,7 @@ Berlaku untuk: (1) trial berakhir tanpa subscribe, (2) downgrade lisensi, (3) pl
 
 ## 7. Hardware
 
-- **Printer struk:** printer thermal fisik (protokol ESC/POS), koneksi via USB/Bluetooth dari browser (WebUSB/WebBluetooth) atau melalui print-bridge agent lokal. Pemilihan device spesifik menyusul.
+- **Printer struk:** printer thermal fisik (proBisnisl ESC/POS), koneksi via USB/Bluetooth dari browser (WebUSB/WebBluetooth) atau melalui print-bridge agent lokal. Pemilihan device spesifik menyusul.
 - **Scan barcode:** mendukung barcode scanner fisik (USB/Bluetooth, umumnya terbaca sebagai keyboard input) dan/atau scan via kamera device.
 
 ---
@@ -215,7 +215,7 @@ Berlaku untuk: (1) trial berakhir tanpa subscribe, (2) downgrade lisensi, (3) pl
 
 - **Offline-first:** transaksi kasir harus tetap bisa berjalan tanpa koneksi internet, dengan sinkronisasi otomatis ke server saat koneksi kembali tersedia.
 - **PWA (Progressive Web App):** dapat diinstal ke home screen, berjalan di berbagai device (tablet, laptop, HP) tanpa perlu app store.
-- **Multi-tenant:** isolasi data antar tenant (toko/bisnis) harus terjamin aman.
+- **Multi-tenant:** isolasi data antar tenant (Bisnis/bisnis) harus terjamin aman.
 - **Real-time UI update:** perubahan tier/fitur langsung tercermin di antarmuka pengguna.
 
 ---

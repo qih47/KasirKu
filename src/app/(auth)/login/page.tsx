@@ -156,7 +156,7 @@ export default function LoginPage() {
               {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-500" />}
             </button>
 
-            <span className="hidden sm:inline" style={{ color: t.textMuted }}>Belum punya akun toko?</span>
+            <span className="hidden sm:inline" style={{ color: t.textMuted }}>Belum punya akun Bisnis?</span>
             <Link
               href="/register"
               className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow-md shadow-indigo-600/20 flex items-center gap-1"

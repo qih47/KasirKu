@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 async function requireAuth() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
   return session.user as any;
 }
@@ -162,7 +162,7 @@ export async function submitSelfOrderAction(data: {
   // Cek apakah tenant berhak atas plugin self_order
   const isEnabled = await hasSelfOrderPlugin(tenantId);
   if (!isEnabled) {
-    throw new Error("Layanan Self-Order belum diaktifkan oleh pemilik toko.");
+    throw new Error("Layanan Self-Order belum diaktifkan oleh pemilik Bisnis.");
   }
 
   // Cari atau buat customer secara otomatis jika ada nomor kontak

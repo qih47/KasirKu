@@ -12,14 +12,14 @@ export type BookingStatusType = "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCE
 async function requireTenantBarbershopUser() {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
-    throw new Error("Akses ditolak: Anda harus login ke akun toko.");
+    throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
   const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "barbershop");
   if (!isPluginActive) {
     throw new Error(
-      "Akses ditolak: Modul Barbershop belum diaktifkan pada langganan toko Anda."
+      "Akses ditolak: Modul Barbershop belum diaktifkan pada langganan Bisnis Anda."
     );
   }
 

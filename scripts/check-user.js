@@ -37,7 +37,7 @@ async function main() {
     // Create a test tenant
     const tenant = await prisma.tenant.create({
       data: {
-        businessName: 'Toko Qisthih Demo',
+        businessName: 'Bisnis Qisthih Demo',
         status: 'TRIAL',
         trialStartAt: new Date(),
         trialEndAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

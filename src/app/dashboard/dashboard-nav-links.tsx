@@ -18,6 +18,8 @@ import {
   Scale,
   Award,
   DollarSign,
+  UserCheck,
+  Ticket,
 } from "lucide-react";
 
 interface DashboardNavLinksProps {
@@ -71,6 +73,11 @@ export function DashboardNavLinks({
       name: "Gaji & Komisi",
       href: "/dashboard/payroll",
       icon: DollarSign,
+    },
+    {
+      name: "Pelanggan",
+      href: "/dashboard/customers",
+      icon: UserCheck,
     },
     // Modul Dinamis Barbershop
     ...(isBarbershopActive

@@ -16,6 +16,16 @@ import {
   DiscountType,
   VoucherValidationResult,
 } from "@/modules/transaction/actions";
+import {
+  searchCustomerQuickAction,
+  createCustomerAction,
+} from "@/modules/customer/actions";
+import {
+  getLiveOrdersAction,
+  updateLiveOrderStatusAction,
+  checkoutLiveOrderAction,
+  LiveOrderSummary,
+} from "@/modules/self-order/actions";
 import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import { useTranslation } from "@/lib/i18n/language-context";
 import {
@@ -55,6 +65,16 @@ import {
   Tag,
   Ticket,
   Percent,
+  UserCheck,
+  UserPlus,
+  Phone,
+  MapPin,
+  FileText,
+  Smartphone,
+  Send,
+  QrCode,
+  RefreshCw,
+  Receipt,
 } from "lucide-react";
 import { PosLayoutType } from "@/types/pos-layout";
 import { useDynamicTheme, BUILTIN_THEME_PRESETS } from "@/components/theme/dynamic-theme-provider";
@@ -82,7 +102,9 @@ interface PosClientProps {
   cafeTables?: any[];
   staffList?: any[];
   appliedTheme?: any;
+  hasSelfOrderPlugin?: boolean;
   tenantInfo?: {
+    tenantId?: string;
     businessName?: string;
     logoUrl?: string | null;
     receiptConfig?: any;
@@ -96,6 +118,7 @@ export function PosClient({
   cafeTables = [],
   staffList = [],
   appliedTheme,
+  hasSelfOrderPlugin = false,
   tenantInfo,
 }: PosClientProps) {
   const { locale, tr, t } = useTranslation();
@@ -177,6 +200,31 @@ export function PosClient({
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherValidationResult | null>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState<string | null>(null);
+
+  // Customer CRM States (Fase 4)
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    name: "",
+    phone: "",
+    notes: "",
+    address: "",
+  });
+  const [newCustomerLoading, setNewCustomerLoading] = useState(false);
+  const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
+
+  // Live Order & QR Self-Order States (Fase 5)
+  const [posCartTab, setPosCartTab] = useState<"MANUAL" | "LIVE_ORDERS">("MANUAL");
+  const [liveOrders, setLiveOrders] = useState<LiveOrderSummary[]>([]);
+  const [liveOrdersLoading, setLiveOrdersLoading] = useState(false);
+  const [selectedLiveOrderForPay, setSelectedLiveOrderForPay] = useState<LiveOrderSummary | null>(null);
+  const [liveOrderPaidInput, setLiveOrderPaidInput] = useState<number | string>("");
+  const [liveOrderPaymentMethod, setLiveOrderPaymentMethod] = useState<"CASH" | "QRIS">("CASH");
+  const [processingLiveOrder, setProcessingLiveOrder] = useState(false);
 
   // POS Screen Layout Detection
   const posLayout: PosLayoutType =
@@ -279,6 +327,136 @@ export function PosClient({
     setVoucherCodeInput("");
     setAppliedVoucher(null);
     setVoucherError(null);
+  };
+
+  // Customer Quick Search & Add Handlers (Fase 4)
+  const handleSearchCustomer = async (q: string) => {
+    setCustomerSearchQuery(q);
+    if (!q || q.trim().length < 1) {
+      setCustomerSearchResults([]);
+      return;
+    }
+    setCustomerSearchLoading(true);
+    try {
+      const results = await searchCustomerQuickAction(q);
+      setCustomerSearchResults(results);
+    } catch (err) {
+      console.error("Gagal mencari pelanggan:", err);
+    } finally {
+      setCustomerSearchLoading(false);
+    }
+  };
+
+  const handleSelectCustomer = (cust: any) => {
+    setSelectedCustomer(cust);
+    setShowCustomerModal(false);
+    setCustomerSearchQuery("");
+    setCustomerSearchResults([]);
+    setSuccessMsg(`Pelanggan "${cust.name}" terpilih untuk transaksi ini.`);
+    setTimeout(() => setSuccessMsg(null), 2500);
+  };
+
+  const handleCreateCustomerFromPos = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerForm.name.trim()) return;
+    setNewCustomerLoading(true);
+    setNewCustomerError(null);
+    try {
+      const res = await createCustomerAction(newCustomerForm);
+      if (res.success && res.customer) {
+        setSelectedCustomer(res.customer);
+        setShowCustomerModal(false);
+        setIsCreatingCustomer(false);
+        setNewCustomerForm({ name: "", phone: "", notes: "", address: "" });
+        setSuccessMsg(`Pelanggan baru "${res.customer.name}" berhasil didaftarkan & dipilih!`);
+        setTimeout(() => setSuccessMsg(null), 3000);
+      }
+    } catch (err: any) {
+      setNewCustomerError(err.message || "Gagal menambahkan pelanggan.");
+    } finally {
+      setNewCustomerLoading(false);
+    }
+  };
+
+  // Live Order Action Handlers (Fase 5)
+  const loadLiveOrders = async () => {
+    if (!hasSelfOrderPlugin) return;
+    setLiveOrdersLoading(true);
+    try {
+      const res = await getLiveOrdersAction({ outletId: shiftData.currentOutletId });
+      setLiveOrders(res);
+    } catch (err) {
+      console.error("Gagal memuat live orders:", err);
+    } finally {
+      setLiveOrdersLoading(false);
+    }
+  };
+
+  // Auto-polling live orders setiap 15 detik jika plugin aktif
+  useEffect(() => {
+    if (!hasSelfOrderPlugin) return;
+    loadLiveOrders();
+    const interval = setInterval(() => {
+      loadLiveOrders();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [hasSelfOrderPlugin, shiftData.currentOutletId]);
+
+  const handleUpdateLiveOrderStatus = async (
+    orderId: string,
+    status: "PENDING" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED"
+  ) => {
+    try {
+      await updateLiveOrderStatusAction(orderId, status);
+      setLiveOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status } : o))
+      );
+      setSuccessMsg(`Status pesanan berhasil diubah menjadi ${status}.`);
+      setTimeout(() => setSuccessMsg(null), 2500);
+    } catch (err: any) {
+      toastError(err.message || "Gagal mengubah status pesanan.");
+    }
+  };
+
+  const handleOpenLiveOrderPayment = (order: LiveOrderSummary) => {
+    setSelectedLiveOrderForPay(order);
+    setLiveOrderPaidInput(order.totalAmount);
+    setLiveOrderPaymentMethod("CASH");
+  };
+
+  const handleConfirmLiveOrderPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLiveOrderForPay || !activeShift) {
+      toastError("Harap buka shift kasir terlebih dahulu.");
+      return;
+    }
+
+    const paidNum = Number(liveOrderPaidInput) || 0;
+    if (paidNum < selectedLiveOrderForPay.totalAmount) {
+      toastError(`Uang bayar kurang dari total tagihan (Rp ${selectedLiveOrderForPay.totalAmount.toLocaleString("id-ID")}).`);
+      return;
+    }
+
+    setProcessingLiveOrder(true);
+    try {
+      const res = await checkoutLiveOrderAction({
+        orderId: selectedLiveOrderForPay.id,
+        shiftId: activeShift.id,
+        paymentMethod: liveOrderPaymentMethod,
+        amountPaid: paidNum,
+      });
+
+      if (res.success) {
+        setSelectedLiveOrderForPay(null);
+        setSuccessMsg(`Pesanan ${selectedLiveOrderForPay.orderNumber} berhasil dilunasi & dicatat ke shift kasir!`);
+        setTimeout(() => setSuccessMsg(null), 3000);
+        loadLiveOrders();
+      }
+    } catch (err: any) {
+      toastError(err.message || "Gagal memproses pembayaran live order.");
+    } finally {
+      setProcessingLiveOrder(false);
+    }
   };
 
   // Tambah item ke keranjang
@@ -478,6 +656,7 @@ export function PosClient({
       const res = await createTransactionAction({
         shiftId: activeShift.id,
         outletId: shiftData.currentOutletId,
+        customerId: selectedCustomer?.id || null,
         items: cart,
         paymentMethod: "CASH",
         amountPaid: parsedPaid,
@@ -495,6 +674,8 @@ export function PosClient({
         laundryDetails:
           posLayout === "LAUNDRY_WEIGHING"
             ? {
+                customerName: selectedCustomer?.name,
+                customerPhone: selectedCustomer?.phone || undefined,
                 weightKg: Number(laundryWeight) || undefined,
                 fragrance: laundryFragrance,
                 rackNumber: laundryRack,
@@ -1246,7 +1427,7 @@ export function PosClient({
             </div>
           </div>
 
-          {/* Right Column: Order Cart & Cash Checkout */}
+          {/* Right Column: Order Cart & Cash Checkout / Live Order Feed */}
           <div
             className="w-80 md:w-96 flex flex-col border-l flex-shrink-0 shadow-lg transition-all duration-300"
             style={{
@@ -1254,584 +1435,872 @@ export function PosClient({
               borderColor: cardBorder,
             }}
           >
-            {/* Cart Header */}
-            <div
-              className="p-3.5 border-b flex items-center justify-between"
-              style={{ borderColor: cardBorder }}
-            >
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-4 h-4" style={{ color: primaryColor }} />
-                  <h3 className="text-xs font-black uppercase tracking-wider" style={{ color: textPrimary }}>
-                    Keranjang ({totalItemsCount})
-                  </h3>
-                </div>
-                {/* Vertical Order Context Badge */}
-                {posLayout === "CAFE_QUICK_ORDER" && (
-                  <span className="text-[10px] font-bold text-indigo-600 block">
-                    🪑 {selectedTable} • {isDineIn ? "Dine In" : "Take Away"}
-                  </span>
-                )}
-                {posLayout === "BARBERSHOP_STATION" && (
-                  <span className="text-[10px] font-bold text-amber-600 block">
-                    💈 {selectedChair} • {selectedCapster}
-                  </span>
-                )}
-                {posLayout === "LAUNDRY_WEIGHING" && (
-                  <span className="text-[10px] font-bold text-cyan-600 block">
-                    🧺 {laundryWeight} Kg • {laundryRack}
-                  </span>
-                )}
-              </div>
-
-              {cart.length > 0 && (
+            {/* DYNAMIC POS SWITCHER TAB (Hanya muncul jika plugin self_order aktif) */}
+            {hasSelfOrderPlugin && (
+              <div
+                className="p-2 border-b flex gap-1 flex-shrink-0"
+                style={{ borderColor: cardBorder, backgroundColor: innerBoxBg }}
+              >
                 <button
-                  onClick={clearCart}
-                  className="text-[11px] text-rose-500 hover:text-rose-600 font-bold"
+                  type="button"
+                  onClick={() => setPosCartTab("MANUAL")}
+                  className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    posCartTab === "MANUAL"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
                 >
-                  Kosongkan
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Kasir Manual</span>
+                  {cart.length > 0 && (
+                    <span className={`text-[10px] px-1.5 rounded-full font-black ${posCartTab === "MANUAL" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+                      {cart.length}
+                    </span>
+                  )}
                 </button>
-              )}
-            </div>
-
-            {/* Cart Items List */}
-            <div className="flex-1 p-3 overflow-y-auto space-y-2">
-              {cart.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400">
-                  <ShoppingCart className="w-8 h-8 mb-2 opacity-30" />
-                  <p className="text-xs font-bold" style={{ color: textPrimary }}>Keranjang masih kosong</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: textSecondary }}>
-                    Klik produk di sebelah kiri atau scan barcode untuk menambahkan item.
-                  </p>
-                </div>
-              ) : (
-                cart.map((item, cIdx) => (
-                  <div
-                    key={item.productId}
-                    onClick={() => setSelectedCartIdx(cIdx)}
-                    className={`p-3 border flex items-center justify-between gap-2 transition cursor-pointer ${
-                      selectedCartIdx === cIdx ? "ring-2 ring-indigo-500/50" : ""
-                    }`}
-                    style={{
-                      backgroundColor: innerBoxBg,
-                      borderColor: cardBorder,
-                      borderRadius: `calc(${radius} * 0.7)`,
-                    }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate" style={{ color: textPrimary }}>
-                        {item.name}
-                      </p>
-                      <p className="text-[11px] font-semibold" style={{ color: textSecondary }}>
-                        Rp {item.price.toLocaleString("id-ID")} &times; {item.qty}
-                      </p>
-                      {item.notes && (
-                        <p className="text-[9px] text-indigo-600 italic truncate mt-0.5">
-                          {item.notes}
-                        </p>
-                      )}
-                      {/* Staff Assignment per Item */}
-                      {staffList && staffList.length > 0 && (
-                        <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
-                          <span className="text-[9px] text-slate-400 font-semibold">Petugas:</span>
-                          <select
-                            value={item.staffId || ""}
-                            onChange={(e) => updateItemStaff(item.productId, e.target.value)}
-                            className="px-2 py-0.5 rounded-lg border text-[9.5px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
-                            style={{ borderColor: cardBorder }}
-                          >
-                            <option value="">-- Tanpa Komisi (Opsional) --</option>
-                            {staffList.map((st: any) => (
-                              <option key={st.id} value={st.id}>
-                                {st.name} ({st.position || "Staff"})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => updateCartQty(item.productId, -1)}
-                        className="w-6 h-6 rounded-lg border flex items-center justify-center font-bold"
-                        style={{
-                          backgroundColor: cardBg,
-                          borderColor: cardBorder,
-                          color: textPrimary,
-                        }}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-5 text-center text-xs font-black" style={{ color: textPrimary }}>
-                        {item.qty}
-                      </span>
-                      <button
-                        onClick={() => updateCartQty(item.productId, 1)}
-                        className="w-6 h-6 rounded-lg border flex items-center justify-center font-bold"
-                        style={{
-                          backgroundColor: cardBg,
-                          borderColor: cardBorder,
-                          color: textPrimary,
-                        }}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item.productId)}
-                        className="p-1 text-slate-400 hover:text-rose-500 ml-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Specialized Numpad for Retail Fast-Barcode */}
-            {posLayout === "RETAIL_FAST_BARCODE" && showNumpad && (
-              <div className="p-2 border-t bg-slate-50/80 dark:bg-slate-900/50 space-y-1">
-                <div className="grid grid-cols-4 gap-1 text-xs font-black">
-                  {[
-                    "1", "2", "3", "+1",
-                    "4", "5", "6", "+5",
-                    "7", "8", "9", "C",
-                    "0", "00", "Rp", "Pas",
-                  ].map((btn) => (
-                    <button
-                      key={btn}
-                      type="button"
-                      onClick={() => {
-                        if (btn === "C") {
-                          setAmountPaid("");
-                        } else if (btn === "Pas") {
-                          setAmountPaid(totalAmount);
-                        } else if (btn === "+1" && selectedCartIdx !== null && cart[selectedCartIdx]) {
-                          updateCartQty(cart[selectedCartIdx].productId, 1);
-                        } else if (btn === "+5" && selectedCartIdx !== null && cart[selectedCartIdx]) {
-                          updateCartQty(cart[selectedCartIdx].productId, 5);
-                        } else if (btn !== "+1" && btn !== "+5" && btn !== "Rp") {
-                          setAmountPaid((prev) => `${prev}${btn}`);
-                        }
-                      }}
-                      className="py-2 rounded-lg bg-white dark:bg-slate-800 border shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95"
-                    >
-                      {btn}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Cart Summary & Payment Keypad */}
-            <div
-              className="p-4 border-t space-y-3"
-              style={{
-                backgroundColor: innerBoxBg,
-                borderColor: cardBorder,
-              }}
-            >
-              {/* Specialized Kitchen Slip Button for Cafe */}
-              {posLayout === "CAFE_QUICK_ORDER" && cart.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
-                    setKitchenSlipSent(true);
-                    setTimeout(() => setKitchenSlipSent(false), 3000);
+                    setPosCartTab("LIVE_ORDERS");
+                    loadLiveOrders();
                   }}
-                  className="w-full py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                  className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 relative cursor-pointer ${
+                    posCartTab === "LIVE_ORDERS"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
                 >
-                  <ChefHat className="w-4 h-4 text-amber-600" />
+                  <Smartphone className="w-3.5 h-3.5" />
                   <span>
-                    {kitchenSlipSent ? "✓ Tiket Terkirim ke Dapur!" : "Kirim Pesanan ke Dapur (KOT)"}
+                    {posLayout === "CAFE_QUICK_ORDER"
+                      ? "Pesanan Meja"
+                      : posLayout === "BARBERSHOP_STATION"
+                      ? "Antrean Tamu"
+                      : posLayout === "LAUNDRY_WEIGHING"
+                      ? "Drop-Off"
+                      : "Live Order"}
+                  </span>
+                  {liveOrders.filter((o) => o.status === "PENDING").length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+                  )}
+                  <span
+                    className={`text-[10px] px-1.5 rounded-full font-black ${
+                      posCartTab === "LIVE_ORDERS" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
+                    }`}
+                  >
+                    {liveOrders.length}
                   </span>
                 </button>
-              )}
+              </div>
+            )}
 
-              {/* Specialized Stylist Tip for Barbershop */}
-              {posLayout === "BARBERSHOP_STATION" && cart.length > 0 && (
-                <div className="flex items-center justify-between text-xs font-bold pt-1">
-                  <span className="text-slate-500">Tip / Komisi Barber:</span>
-                  <div className="flex items-center gap-1">
-                    {[5000, 10000, 20000].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setBarberTip(barberTip === t ? 0 : t)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
-                          barberTip === t ? "bg-amber-600 text-white" : "bg-white text-slate-600"
-                        }`}
-                      >
-                        +{t / 1000}k
-                      </button>
-                    ))}
+            {/* TAB VIEW 1: LIVE ORDERS FEED (Fase 5) */}
+            {posCartTab === "LIVE_ORDERS" ? (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Live Order Header */}
+                <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: cardBorder }}>
+                  <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: textPrimary }}>
+                    <Smartphone className="w-4 h-4 text-indigo-600" />
+                    <span>Live Incoming Orders ({liveOrders.length})</span>
                   </div>
-                </div>
-              )}
-
-              {/* DISKON & VOUCHER PROMO SECTION */}
-              <div
-                className="p-3 rounded-2xl border transition-all space-y-2.5"
-                style={{
-                  backgroundColor: innerBoxBg,
-                  borderColor: cardBorder,
-                }}
-              >
-                <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => setShowDiscountDrawer((prev) => !prev)}
-                    className="flex items-center gap-1.5 text-xs font-bold transition hover:opacity-80"
-                    style={{ color: primaryColor }}
+                    onClick={loadLiveOrders}
+                    disabled={liveOrdersLoading}
+                    className="p-1.5 rounded-lg border text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50 transition cursor-pointer"
+                    style={{ borderColor: cardBorder }}
+                    title="Refresh pesanan live"
                   >
-                    <Tag className="w-3.5 h-3.5" />
-                    <span>{discountAmount > 0 ? "Promo Diterapkan" : "+ Diskon / Voucher Promo"}</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${liveOrdersLoading ? "animate-spin text-indigo-600" : ""}`} />
                   </button>
+                </div>
 
-                  {discountAmount > 0 && (
+                {/* Orders List Container */}
+                <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                  {liveOrders.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 space-y-2">
+                      <QrCode className="w-10 h-10 opacity-30 text-indigo-500" />
+                      <p className="text-xs font-bold" style={{ color: textPrimary }}>Belum Ada Pesanan Masuk</p>
+                      <p className="text-[11px] max-w-[200px]" style={{ color: textSecondary }}>
+                        Pelanggan dapat melakukan scan QR di meja/lokasi untuk memesan mandiri.
+                      </p>
+                    </div>
+                  ) : (
+                    liveOrders.map((order) => {
+                      const isOnlinePaid = order.paymentStatus === "PAID_ONLINE";
+
+                      return (
+                        <div
+                          key={order.id}
+                          className="p-3.5 rounded-2xl border space-y-2.5 shadow-sm transition hover:shadow-md animate-in fade-in"
+                          style={{
+                            backgroundColor: innerBoxBg,
+                            borderColor: order.status === "PENDING" ? "#6366f1" : cardBorder,
+                          }}
+                        >
+                          {/* Card Header per Vertical Adapter */}
+                          <div className="flex items-start justify-between gap-2 border-b pb-2" style={{ borderColor: cardBorder }}>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-black text-xs text-indigo-600">
+                                  {order.verticalType === "CAFE" && `🪑 ${order.tableNumber || "Meja"}`}
+                                  {order.verticalType === "BARBERSHOP" && `💈 Antrean #${order.queueNumber || "A-01"}`}
+                                  {order.verticalType === "LAUNDRY" && `🧺 ${order.serviceType || "KILOAN"} (${order.fragrance || "Parfum"})`}
+                                  {order.verticalType === "RETAIL" && `🛍️ Pickup ${order.orderNumber.slice(-4)}`}
+                                </span>
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                                    order.status === "PENDING"
+                                      ? "bg-rose-100 text-rose-800 animate-pulse"
+                                      : order.status === "PREPARING"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : order.status === "READY"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-slate-100 text-slate-700"
+                                  }`}
+                                >
+                                  {order.status}
+                                </span>
+                              </div>
+                              <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                                {order.customerName} {order.customerPhone && <span className="text-slate-400 font-normal">({order.customerPhone})</span>}
+                              </div>
+                            </div>
+
+                            {/* Payment Status Badge */}
+                            <div className="text-right">
+                              {isOnlinePaid ? (
+                                <span className="inline-flex items-center gap-0.5 text-[9.5px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <Check className="w-2.5 h-2.5" /> SUDAH LUNAS (QRIS)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                  <DollarSign className="w-2.5 h-2.5" /> Bayar di Kasir
+                                </span>
+                              )}
+                              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                {new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Items List */}
+                          <div className="space-y-1 text-xs">
+                            {order.items.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-[11px]">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                  {item.qty}x {item.name}
+                                  {item.notes && <span className="italic text-indigo-500 text-[10px] ml-1">({item.notes})</span>}
+                                </span>
+                                <span className="font-mono text-slate-500">
+                                  Rp {(item.price * item.qty).toLocaleString("id-ID")}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Customer Notes */}
+                          {order.customerNotes && (
+                            <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[10px] text-amber-800 dark:text-amber-300 flex items-start gap-1">
+                              <FileText className="w-3 h-3 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <span><strong>Catatan Tamu:</strong> {order.customerNotes}</span>
+                            </div>
+                          )}
+
+                          {/* Total Tagihan */}
+                          <div className="flex justify-between items-center pt-1 border-t text-xs font-black" style={{ borderColor: cardBorder }}>
+                            <span style={{ color: textSecondary }}>Total:</span>
+                            <span className="text-sm font-black text-indigo-600">
+                              Rp {order.totalAmount.toLocaleString("id-ID")}
+                            </span>
+                          </div>
+
+                          {/* Action Buttons per Vertical */}
+                          <div className="grid grid-cols-2 gap-1.5 pt-1">
+                            {/* Tombol Cetak Struk Dapur / Slip */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSuccessMsg(`Tiket dapur untuk ${order.tableNumber || order.orderNumber} dicetak.`);
+                                setTimeout(() => setSuccessMsg(null), 2500);
+                              }}
+                              className="py-1.5 px-2 rounded-xl border text-[10px] font-bold flex items-center justify-center gap-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                              style={{ borderColor: cardBorder, color: textPrimary }}
+                            >
+                              <Printer className="w-3 h-3 text-slate-500" />
+                              <span>Struk Dapur</span>
+                            </button>
+
+                            {/* Tombol Aksi Kasir Utama */}
+                            {isOnlinePaid ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateLiveOrderStatus(order.id, "COMPLETED")}
+                                className="py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Selesaikan Meja</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLiveOrderPayment(order)}
+                                className="py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition"
+                              >
+                                <DollarSign className="w-3 h-3" />
+                                <span>Terima Bayar</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* TAB VIEW 2: MANUAL POS CART */
+              <>
+                {/* Cart Header */}
+                <div
+                  className="p-3.5 border-b flex items-center justify-between"
+                  style={{ borderColor: cardBorder }}
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4" style={{ color: primaryColor }} />
+                      <h3 className="text-xs font-black uppercase tracking-wider" style={{ color: textPrimary }}>
+                        Keranjang ({totalItemsCount})
+                      </h3>
+                    </div>
+                    {/* Vertical Order Context Badge */}
+                    {posLayout === "CAFE_QUICK_ORDER" && (
+                      <span className="text-[10px] font-bold text-indigo-600 block">
+                        🪑 {selectedTable} • {isDineIn ? "Dine In" : "Take Away"}
+                      </span>
+                    )}
+                    {posLayout === "BARBERSHOP_STATION" && (
+                      <span className="text-[10px] font-bold text-amber-600 block">
+                        💈 {selectedChair} • {selectedCapster}
+                      </span>
+                    )}
+                    {posLayout === "LAUNDRY_WEIGHING" && (
+                      <span className="text-[10px] font-bold text-cyan-600 block">
+                        🧺 {laundryWeight} Kg • {laundryRack}
+                      </span>
+                    )}
+                  </div>
+
+                  {cart.length > 0 && (
                     <button
-                      type="button"
-                      onClick={handleResetDiscount}
-                      className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-0.5"
+                      onClick={clearCart}
+                      className="text-[11px] text-rose-500 hover:text-rose-600 font-bold cursor-pointer"
                     >
-                      <X className="w-3 h-3" /> Hapus Diskon
+                      Kosongkan
                     </button>
                   )}
                 </div>
 
-                {/* Discount Applied Badge */}
-                {discountAmount > 0 && !showDiscountDrawer && (
-                  <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs font-bold text-emerald-600">
-                    <span className="flex items-center gap-1">
-                      <Ticket className="w-3.5 h-3.5" />
-                      {discountType === "PERCENT"
-                        ? `Diskon ${discountPercent}%`
-                        : discountType === "FIXED"
-                        ? `Potongan Manual`
-                        : `Voucher: ${appliedVoucher?.code}`}
-                    </span>
-                    <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
-                  </div>
-                )}
-
-                {/* Expanded Discount & Voucher Controls */}
-                {showDiscountDrawer && (
-                  <div className="space-y-3 pt-2 border-t" style={{ borderColor: cardBorder }}>
-                    {/* Mode Tabs */}
-                    <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 text-[11px] font-bold">
+                {/* Customer CRM Bar (Fase 4) */}
+                <div
+                  className="px-3.5 py-2 border-b flex items-center justify-between gap-2"
+                  style={{
+                    borderColor: cardBorder,
+                    backgroundColor: innerBoxBg,
+                  }}
+                >
+                  {selectedCustomer ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          {selectedCustomer.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate flex items-center gap-1" style={{ color: textPrimary }}>
+                            <span>{selectedCustomer.name}</span>
+                            {selectedCustomer.notes && (
+                              <span className="text-[9px] px-1 py-0.2 bg-amber-100 text-amber-800 rounded font-normal truncate max-w-[90px]" title={selectedCustomer.notes}>
+                                {selectedCustomer.notes}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5">
+                            {selectedCustomer.phone && <span>{selectedCustomer.phone}</span>}
+                            <span className="text-indigo-600 font-bold">• {selectedCustomer.visits || 0}x hadir</span>
+                          </div>
+                        </div>
+                      </div>
                       <button
-                        type="button"
-                        onClick={() => {
-                          setDiscountType("PERCENT");
-                          setAppliedVoucher(null);
-                        }}
-                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
-                          discountType === "PERCENT"
-                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
-                            : "opacity-70 hover:opacity-100"
-                        }`}
+                        onClick={() => setSelectedCustomer(null)}
+                        className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                        title="Ganti / Lepas Pelanggan"
                       >
-                        <Percent className="w-3 h-3" />
-                        <span>Persen</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiscountType("FIXED");
-                          setAppliedVoucher(null);
-                        }}
-                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
-                          discountType === "FIXED"
-                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
-                            : "opacity-70 hover:opacity-100"
-                        }`}
-                      >
-                        <DollarSign className="w-3 h-3" />
-                        <span>Nominal</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiscountType("VOUCHER");
-                          setDiscountPercent("");
-                          setDiscountFixed("");
-                        }}
-                        className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
-                          discountType === "VOUCHER"
-                            ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
-                            : "opacity-70 hover:opacity-100"
-                        }`}
-                      >
-                        <Ticket className="w-3 h-3" />
-                        <span>Voucher</span>
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowCustomerModal(true);
+                        setIsCreatingCustomer(false);
+                      }}
+                      className="w-full py-1.5 px-2.5 rounded-xl border border-dashed text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/40 active:scale-98 cursor-pointer"
+                      style={{ borderColor: cardBorder }}
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>+ Pilih / Tambah Pelanggan (CRM)</span>
+                    </button>
+                  )}
+                </div>
 
-                    {/* Tab 1: Persen Diskon */}
-                    {discountType === "PERCENT" && (
-                      <div className="space-y-2">
-                        <div className="flex gap-1">
-                          {[5, 10, 15, 20, 50].map((p) => (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => {
-                                setDiscountPercent(p);
-                                setDiscountFixed("");
-                              }}
-                              className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
-                                Number(discountPercent) === p
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
-                              }`}
-                              style={{ borderColor: cardBorder }}
-                            >
-                              {p}%
-                            </button>
-                          ))}
+                {/* Cart Items List */}
+                <div className="flex-1 p-3 overflow-y-auto space-y-2">
+                  {cart.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400">
+                      <ShoppingCart className="w-8 h-8 mb-2 opacity-30" />
+                      <p className="text-xs font-bold" style={{ color: textPrimary }}>Keranjang masih kosong</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: textSecondary }}>
+                        Klik produk di sebelah kiri atau scan barcode untuk menambahkan item.
+                      </p>
+                    </div>
+                  ) : (
+                    cart.map((item, cIdx) => (
+                      <div
+                        key={item.productId}
+                        onClick={() => setSelectedCartIdx(cIdx)}
+                        className={`p-3 border flex items-center justify-between gap-2 transition cursor-pointer ${
+                          selectedCartIdx === cIdx ? "ring-2 ring-indigo-500/50" : ""
+                        }`}
+                        style={{
+                          backgroundColor: innerBoxBg,
+                          borderColor: cardBorder,
+                          borderRadius: `calc(${radius} * 0.7)`,
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate" style={{ color: textPrimary }}>
+                            {item.name}
+                          </p>
+                          <p className="text-[11px] font-semibold" style={{ color: textSecondary }}>
+                            Rp {item.price.toLocaleString("id-ID")} &times; {item.qty}
+                          </p>
+                          {item.notes && (
+                            <p className="text-[9px] text-indigo-600 italic truncate mt-0.5">
+                              {item.notes}
+                            </p>
+                          )}
+                          {/* Staff Assignment per Item */}
+                          {staffList && staffList.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-[9px] text-slate-400 font-semibold">Petugas:</span>
+                              <select
+                                value={item.staffId || ""}
+                                onChange={(e) => updateItemStaff(item.productId, e.target.value)}
+                                className="px-2 py-0.5 rounded-lg border text-[9.5px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
+                                style={{ borderColor: cardBorder }}
+                              >
+                                <option value="">-- Tanpa Komisi (Opsional) --</option>
+                                {staffList.map((st: any) => (
+                                  <option key={st.id} value={st.id}>
+                                    {st.name} ({st.position || "Staff"})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={discountPercent}
-                          onChange={(e) => {
-                            setDiscountPercent(e.target.value);
-                            setDiscountFixed("");
-                          }}
-                          placeholder="Atau ketik persen diskon..."
-                          className="w-full px-3 py-1.5 rounded-xl border text-xs font-bold focus:outline-none"
-                          style={{
-                            backgroundColor: inputBg,
-                            borderColor: cardBorder,
-                            color: textPrimary,
-                          }}
-                        />
-                      </div>
-                    )}
 
-                    {/* Tab 2: Nominal Diskon */}
-                    {discountType === "FIXED" && (
-                      <div className="space-y-2">
-                        <div className="flex gap-1">
-                          {[5000, 10000, 20000, 50000].map((f) => (
-                            <button
-                              key={f}
-                              type="button"
-                              onClick={() => {
-                                setDiscountFixed(f);
-                                setDiscountPercent("");
-                              }}
-                              className={`flex-1 py-1 rounded-lg text-[11px] font-bold border transition ${
-                                Number(discountFixed) === f
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
-                              }`}
-                              style={{ borderColor: cardBorder }}
-                            >
-                              {f / 1000}k
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          type="number"
-                          min={0}
-                          value={discountFixed}
-                          onChange={(e) => {
-                            setDiscountFixed(e.target.value);
-                            setDiscountPercent("");
-                          }}
-                          placeholder="Nominal potongan (Rp)..."
-                          className="w-full px-3 py-1.5 rounded-xl border text-xs font-mono font-bold focus:outline-none"
-                          style={{
-                            backgroundColor: inputBg,
-                            borderColor: cardBorder,
-                            color: textPrimary,
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Tab 3: Kode Voucher */}
-                    {discountType === "VOUCHER" && (
-                      <div className="space-y-2">
-                        <div className="flex gap-1.5">
-                          <input
-                            type="text"
-                            value={voucherCodeInput}
-                            onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
-                            onKeyDown={(e) => e.key === "Enter" && handleApplyVoucher()}
-                            placeholder="KODE VOUCHER (HEMAT10, PROMO20)"
-                            className="flex-1 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold uppercase focus:outline-none"
+                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => updateCartQty(item.productId, -1)}
+                            className="w-6 h-6 rounded-lg border flex items-center justify-center font-bold cursor-pointer"
                             style={{
-                              backgroundColor: inputBg,
+                              backgroundColor: cardBg,
                               borderColor: cardBorder,
                               color: textPrimary,
                             }}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleApplyVoucher}
-                            disabled={voucherLoading || !voucherCodeInput.trim()}
-                            className="px-3 py-1.5 rounded-xl text-white font-extrabold text-xs shadow transition disabled:opacity-50"
-                            style={{ backgroundColor: primaryColor }}
                           >
-                            {voucherLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Gunakan"}
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-5 text-center text-xs font-black" style={{ color: textPrimary }}>
+                            {item.qty}
+                          </span>
+                          <button
+                            onClick={() => updateCartQty(item.productId, 1)}
+                            className="w-6 h-6 rounded-lg border flex items-center justify-center font-bold cursor-pointer"
+                            style={{
+                              backgroundColor: cardBg,
+                              borderColor: cardBorder,
+                              color: textPrimary,
+                            }}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => removeFromCart(item.productId)}
+                            className="p-1 text-slate-400 hover:text-rose-500 ml-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        {voucherError && (
-                          <p className="text-[11px] text-rose-500 font-bold">⚠️ {voucherError}</p>
-                        )}
-                        {appliedVoucher && (
-                          <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-600 flex items-center justify-between">
-                            <span>✓ {appliedVoucher.description}</span>
-                            <span>- Rp {appliedVoucher.discountAmount.toLocaleString("id-ID")}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Specialized Numpad for Retail Fast-Barcode */}
+                {posLayout === "RETAIL_FAST_BARCODE" && showNumpad && (
+                  <div className="p-2 border-t bg-slate-50/80 dark:bg-slate-900/50 space-y-1">
+                    <div className="grid grid-cols-4 gap-1 text-xs font-black">
+                      {[
+                        "1", "2", "3", "+1",
+                        "4", "5", "6", "+5",
+                        "7", "8", "9", "C",
+                        "0", "00", "Rp", "Pas",
+                      ].map((btn) => (
+                        <button
+                          key={btn}
+                          type="button"
+                          onClick={() => {
+                            if (btn === "C") {
+                              setAmountPaid("");
+                            } else if (btn === "Pas") {
+                              setAmountPaid(totalAmount);
+                            } else if (btn === "+1" && selectedCartIdx !== null && cart[selectedCartIdx]) {
+                              updateCartQty(cart[selectedCartIdx].productId, 1);
+                            } else if (btn === "+5" && selectedCartIdx !== null && cart[selectedCartIdx]) {
+                              updateCartQty(cart[selectedCartIdx].productId, 5);
+                            } else if (btn !== "+1" && btn !== "+5" && btn !== "Rp") {
+                              setAmountPaid((prev) => `${prev}${btn}`);
+                            }
+                          }}
+                          className="py-2 rounded-lg bg-white dark:bg-slate-800 border shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95 cursor-pointer"
+                        >
+                          {btn}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cart Summary & Payment Keypad */}
+                <div
+                  className="p-4 border-t space-y-3"
+                  style={{
+                    backgroundColor: innerBoxBg,
+                    borderColor: cardBorder,
+                  }}
+                >
+                  {/* Specialized Kitchen Slip Button for Cafe */}
+                  {posLayout === "CAFE_QUICK_ORDER" && cart.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKitchenSlipSent(true);
+                        setTimeout(() => setKitchenSlipSent(false), 3000);
+                      }}
+                      className="w-full py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <ChefHat className="w-4 h-4 text-amber-600" />
+                      <span>
+                        {kitchenSlipSent ? "✓ Tiket Terkirim ke Dapur!" : "Kirim Pesanan ke Dapur (KOT)"}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Specialized Stylist Tip for Barbershop */}
+                  {posLayout === "BARBERSHOP_STATION" && cart.length > 0 && (
+                    <div className="flex items-center justify-between text-xs font-bold pt-1">
+                      <span className="text-slate-500">Tip / Komisi Barber:</span>
+                      <div className="flex items-center gap-1">
+                        {[5000, 10000, 20000].map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setBarberTip(barberTip === t ? 0 : t)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                              barberTip === t ? "bg-amber-600 text-white" : "bg-white text-slate-600"
+                            }`}
+                          >
+                            +{t / 1000}k
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DISKON & VOUCHER PROMO SECTION */}
+                  <div
+                    className="p-3 rounded-2xl border transition-all space-y-2.5"
+                    style={{
+                      backgroundColor: innerBoxBg,
+                      borderColor: cardBorder,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowDiscountDrawer((prev) => !prev)}
+                        className="flex items-center gap-1.5 text-xs font-bold transition hover:opacity-80 cursor-pointer"
+                        style={{ color: primaryColor }}
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>{discountAmount > 0 ? "Promo Diterapkan" : "+ Diskon / Voucher Promo"}</span>
+                      </button>
+
+                      {discountAmount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleResetDiscount}
+                          className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" /> Hapus Diskon
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Discount Applied Badge */}
+                    {discountAmount > 0 && !showDiscountDrawer && (
+                      <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs font-bold text-emerald-600">
+                        <span className="flex items-center gap-1">
+                          <Ticket className="w-3.5 h-3.5" />
+                          {discountType === "PERCENT"
+                            ? `Diskon ${discountPercent}%`
+                            : discountType === "FIXED"
+                            ? `Potongan Manual`
+                            : `Voucher: ${appliedVoucher?.code}`}
+                        </span>
+                        <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
+                      </div>
+                    )}
+
+                    {/* Expanded Discount Controls */}
+                    {showDiscountDrawer && (
+                      <div className="space-y-3 pt-2 border-t" style={{ borderColor: cardBorder }}>
+                        <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountType("PERCENT");
+                              setAppliedVoucher(null);
+                            }}
+                            className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                              discountType === "PERCENT"
+                                ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <Percent className="w-3 h-3" />
+                            <span>Persen</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountType("FIXED");
+                              setAppliedVoucher(null);
+                            }}
+                            className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                              discountType === "FIXED"
+                                ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <DollarSign className="w-3 h-3" />
+                            <span>Nominal</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountType("VOUCHER");
+                              setDiscountPercent("");
+                              setDiscountFixed("");
+                            }}
+                            className={`py-1 rounded-lg transition flex items-center justify-center gap-1 ${
+                              discountType === "VOUCHER"
+                                ? "bg-white dark:bg-slate-900 shadow-sm text-indigo-600 font-black"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <Ticket className="w-3 h-3" />
+                            <span>Voucher</span>
+                          </button>
+                        </div>
+
+                        {discountType === "PERCENT" && (
+                          <div className="space-y-2">
+                            <div className="flex gap-1">
+                              {[5, 10, 15, 20, 50].map((p) => (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => {
+                                    setDiscountPercent(p);
+                                    setDiscountFixed("");
+                                  }}
+                                  className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
+                                    Number(discountPercent) === p
+                                      ? "bg-indigo-600 text-white border-indigo-600"
+                                      : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                                  }`}
+                                  style={{ borderColor: cardBorder }}
+                                >
+                                  {p}%
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={discountPercent}
+                              onChange={(e) => {
+                                setDiscountPercent(e.target.value);
+                                setDiscountFixed("");
+                              }}
+                              placeholder="Atau ketik persen diskon..."
+                              className="w-full px-3 py-1.5 rounded-xl border text-xs font-bold focus:outline-none"
+                              style={{
+                                backgroundColor: inputBg,
+                                borderColor: cardBorder,
+                                color: textPrimary,
+                              }}
+                            />
                           </div>
                         )}
-                        <div className="text-[10px] text-slate-400 flex flex-wrap gap-1">
-                          <span>Voucher aktif:</span>
-                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("HEMAT10")}>HEMAT10</span>,
-                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("PROMO20")}>PROMO20</span>,
-                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("DISKON10K")}>DISKON10K</span>,
-                          <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("KASIRKU")}>KASIRKU</span>
-                        </div>
+
+                        {discountType === "FIXED" && (
+                          <div className="space-y-2">
+                            <div className="flex gap-1">
+                              {[5000, 10000, 20000, 50000].map((f) => (
+                                <button
+                                  key={f}
+                                  type="button"
+                                  onClick={() => {
+                                    setDiscountFixed(f);
+                                    setDiscountPercent("");
+                                  }}
+                                  className={`flex-1 py-1 rounded-lg text-[11px] font-bold border transition ${
+                                    Number(discountFixed) === f
+                                      ? "bg-indigo-600 text-white border-indigo-600"
+                                      : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                                  }`}
+                                  style={{ borderColor: cardBorder }}
+                                >
+                                  {f / 1000}k
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              value={discountFixed}
+                              onChange={(e) => {
+                                setDiscountFixed(e.target.value);
+                                setDiscountPercent("");
+                              }}
+                              placeholder="Nominal potongan (Rp)..."
+                              className="w-full px-3 py-1.5 rounded-xl border text-xs font-mono font-bold focus:outline-none"
+                              style={{
+                                backgroundColor: inputBg,
+                                borderColor: cardBorder,
+                                color: textPrimary,
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {discountType === "VOUCHER" && (
+                          <div className="space-y-2">
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                value={voucherCodeInput}
+                                onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => e.key === "Enter" && handleApplyVoucher()}
+                                placeholder="KODE VOUCHER (HEMAT10, PROMO20)"
+                                className="flex-1 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold uppercase focus:outline-none"
+                                style={{
+                                  backgroundColor: inputBg,
+                                  borderColor: cardBorder,
+                                  color: textPrimary,
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleApplyVoucher}
+                                disabled={voucherLoading || !voucherCodeInput.trim()}
+                                className="px-3 py-1.5 rounded-xl text-white font-extrabold text-xs shadow transition disabled:opacity-50 cursor-pointer"
+                                style={{ backgroundColor: primaryColor }}
+                              >
+                                {voucherLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Gunakan"}
+                              </button>
+                            </div>
+                            {voucherError && (
+                              <p className="text-[11px] text-rose-500 font-bold">⚠️ {voucherError}</p>
+                            )}
+                            {appliedVoucher && (
+                              <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-600 flex items-center justify-between">
+                                <span>✓ {appliedVoucher.description}</span>
+                                <span>- Rp {appliedVoucher.discountAmount.toLocaleString("id-ID")}</span>
+                              </div>
+                            )}
+                            <div className="text-[10px] text-slate-400 flex flex-wrap gap-1">
+                              <span>Voucher aktif:</span>
+                              <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("HEMAT10")}>HEMAT10</span>,
+                              <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("PROMO20")}>PROMO20</span>,
+                              <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("DISKON10K")}>DISKON10K</span>,
+                              <span className="font-mono font-bold text-indigo-500 cursor-pointer" onClick={() => setVoucherCodeInput("KASIRKU")}>KASIRKU</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between font-medium" style={{ color: textSecondary }}>
-                  <span>Subtotal</span>
-                  <span>Rp {cartSubtotal.toLocaleString("id-ID")}</span>
-                </div>
-                {discountAmount > 0 && (
-                  <div className="flex items-center justify-between font-bold text-emerald-600">
-                    <span className="flex items-center gap-1">
-                      <Tag className="w-3 h-3" /> Potongan Diskon
-                    </span>
-                    <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
-                  </div>
-                )}
-                {barberTip > 0 && (
-                  <div className="flex items-center justify-between font-bold text-amber-600">
-                    <span>Tip Stylist</span>
-                    <span>+ Rp {barberTip.toLocaleString("id-ID")}</span>
-                  </div>
-                )}
-                <div
-                  className="flex items-center justify-between font-black text-sm pt-1.5 border-t"
-                  style={{
-                    borderColor: cardBorder,
-                    color: textPrimary,
-                  }}
-                >
-                  <span>Total Tagihan:</span>
-                  <span className="text-lg font-black" style={{ color: primaryColor }}>
-                    Rp {grandTotalWithTip.toLocaleString("id-ID")}
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Cash Buttons */}
-              {grandTotalWithTip > 0 && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      onClick={() => setAmountPaid(grandTotalWithTip)}
-                      className="py-1.5 rounded-xl border text-[11px] font-bold"
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between font-medium" style={{ color: textSecondary }}>
+                      <span>Subtotal</span>
+                      <span>Rp {cartSubtotal.toLocaleString("id-ID")}</span>
+                    </div>
+                    {discountAmount > 0 && (
+                      <div className="flex items-center justify-between font-bold text-emerald-600">
+                        <span className="flex items-center gap-1">
+                          <Tag className="w-3 h-3" /> Potongan Diskon
+                        </span>
+                        <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
+                      </div>
+                    )}
+                    {barberTip > 0 && (
+                      <div className="flex items-center justify-between font-bold text-amber-600">
+                        <span>Tip Stylist</span>
+                        <span>+ Rp {barberTip.toLocaleString("id-ID")}</span>
+                      </div>
+                    )}
+                    <div
+                      className="flex items-center justify-between font-black text-sm pt-1.5 border-t"
                       style={{
-                        backgroundColor: `${primaryColor}20`,
-                        color: primaryColor,
-                        borderColor: primaryColor,
-                      }}
-                    >
-                      Uang Pas
-                    </button>
-                    <button
-                      onClick={() => setAmountPaid(50000)}
-                      className="py-1.5 rounded-xl border text-[11px] font-semibold"
-                      style={{
-                        backgroundColor: cardBg,
                         borderColor: cardBorder,
                         color: textPrimary,
                       }}
                     >
-                      Rp 50.000
-                    </button>
-                    <button
-                      onClick={() => setAmountPaid(100000)}
-                      className="py-1.5 rounded-xl border text-[11px] font-semibold"
-                      style={{
-                        backgroundColor: cardBg,
-                        borderColor: cardBorder,
-                        color: textPrimary,
-                      }}
-                    >
-                      Rp 100.000
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: textSecondary }}>
-                      Uang Tunai Diterima
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder="Masukkan nominal bayar..."
-                      className="w-full px-3 py-2.5 border rounded-xl text-xs font-mono font-bold focus:outline-none"
-                      style={{
-                        backgroundColor: inputBg,
-                        borderColor: cardBorder,
-                        color: textPrimary,
-                      }}
-                    />
-                  </div>
-
-                  {parsedPaid >= grandTotalWithTip && grandTotalWithTip > 0 && (
-                    <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 text-xs flex items-center justify-between font-bold">
-                      <span>Kembalian:</span>
-                      <span className="text-sm font-black">
-                        Rp {Math.max(0, parsedPaid - grandTotalWithTip).toLocaleString("id-ID")}
+                      <span>Total Tagihan:</span>
+                      <span className="text-lg font-black" style={{ color: primaryColor }}>
+                        Rp {grandTotalWithTip.toLocaleString("id-ID")}
                       </span>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
 
-              <button
-                onClick={handleCheckout}
-                disabled={
-                  cart.length === 0 ||
-                  parsedPaid < (totalAmount + barberTip) ||
-                  totalAmount <= 0 ||
-                  loading
-                }
-                style={{
-                  backgroundColor: primaryColor,
-                  borderRadius: radius,
-                  boxShadow: `0 6px 20px ${primaryColor}40`,
-                }}
-                className="w-full py-3.5 text-white font-extrabold text-xs transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memproses Transaksi...</span>
-                  </>
-                ) : (
-                  <>
-                    <Printer className="w-4 h-4" />
-                    <span>Bayar & Cetak Struk</span>
-                  </>
-                )}
-              </button>
-            </div>
+                  {/* Quick Cash Buttons */}
+                  {grandTotalWithTip > 0 && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          onClick={() => setAmountPaid(grandTotalWithTip)}
+                          className="py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer"
+                          style={{
+                            backgroundColor: `${primaryColor}20`,
+                            color: primaryColor,
+                            borderColor: `${primaryColor}40`,
+                          }}
+                        >
+                          Uang Pas
+                        </button>
+                        <button
+                          onClick={() => setAmountPaid(Math.ceil(grandTotalWithTip / 50000) * 50000 || 50000)}
+                          className="py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer"
+                          style={{
+                            backgroundColor: innerBoxBg,
+                            borderColor: cardBorder,
+                            color: textPrimary,
+                          }}
+                        >
+                          Rp {(Math.ceil(grandTotalWithTip / 50000) * 50000 || 50000).toLocaleString("id-ID")}
+                        </button>
+                        <button
+                          onClick={() => setAmountPaid(Math.ceil(grandTotalWithTip / 100000) * 100000 || 100000)}
+                          className="py-1.5 rounded-xl border text-[11px] font-bold cursor-pointer"
+                          style={{
+                            backgroundColor: innerBoxBg,
+                            borderColor: cardBorder,
+                            color: textPrimary,
+                          }}
+                        >
+                          Rp {(Math.ceil(grandTotalWithTip / 100000) * 100000 || 100000).toLocaleString("id-ID")}
+                        </button>
+                      </div>
+
+                      {/* Cash Input */}
+                      <div>
+                        <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                          Uang Tunai Diterima (Rp):
+                        </label>
+                        <input
+                          type="number"
+                          value={amountPaid}
+                          onChange={(e) => setAmountPaid(e.target.value)}
+                          placeholder="Nominal uang kasir..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border text-sm font-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          style={{
+                            backgroundColor: inputBg,
+                            borderColor: cardBorder,
+                            color: textPrimary,
+                          }}
+                        />
+                      </div>
+
+                      {/* Kembalian */}
+                      {parsedPaid >= grandTotalWithTip && (
+                        <div
+                          className="p-2.5 rounded-xl flex items-center justify-between text-xs font-black border"
+                          style={{
+                            backgroundColor: `${primaryColor}15`,
+                            borderColor: `${primaryColor}30`,
+                            color: primaryColor,
+                          }}
+                        >
+                          <span>Kembalian:</span>
+                          <span className="text-base font-black">
+                            Rp {change.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleCheckout}
+                    disabled={
+                      loading ||
+                      cart.length === 0 ||
+                      parsedPaid < grandTotalWithTip ||
+                      !activeShift
+                    }
+                    style={{
+                      backgroundColor:
+                        cart.length === 0 || parsedPaid < grandTotalWithTip || !activeShift
+                          ? "#94a3b8"
+                          : primaryColor,
+                      borderRadius: radius,
+                      boxShadow: `0 6px 20px ${primaryColor}40`,
+                    }}
+                    className="w-full py-3.5 text-white font-extrabold text-xs transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Memproses Transaksi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="w-4 h-4" />
+                        <span>Bayar & Cetak Struk</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2753,6 +3222,350 @@ export function PosClient({
           </div>
         );
       })()}
+
+      {/* 5. Modal Pilih / Tambah Pelanggan (CRM Fase 4) */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div
+            className="w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 border transition-all animate-in zoom-in-95"
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              color: textPrimary,
+              borderRadius: radius,
+            }}
+          >
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: cardBorder }}>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/15 text-indigo-600">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black" style={{ color: textPrimary }}>
+                    {isCreatingCustomer ? "Daftarkan Pelanggan Baru" : "Pilih Pelanggan (CRM)"}
+                  </h3>
+                  <p className="text-[11px]" style={{ color: textSecondary }}>
+                    {isCreatingCustomer
+                      ? "Input data pelanggan baru langsung dari kasir"
+                      : "Cari data pelanggan tersimpan untuk transaksi ini"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCustomerModal(false);
+                  setIsCreatingCustomer(false);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {!isCreatingCustomer ? (
+              <div className="space-y-3">
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Ketik nama atau no WhatsApp..."
+                    value={customerSearchQuery}
+                    onChange={(e) => handleSearchCustomer(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    style={{
+                      backgroundColor: inputBg,
+                      borderColor: cardBorder,
+                      color: textPrimary,
+                    }}
+                  />
+                  {customerSearchLoading && (
+                    <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-indigo-500" />
+                  )}
+                </div>
+
+                {/* Results List */}
+                <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                  {customerSearchResults.length > 0 ? (
+                    customerSearchResults.map((cust) => (
+                      <button
+                        key={cust.id}
+                        type="button"
+                        onClick={() => handleSelectCustomer(cust)}
+                        className="w-full p-2.5 rounded-xl border text-left flex items-center justify-between hover:border-indigo-500 hover:bg-indigo-50/30 transition group cursor-pointer"
+                        style={{
+                          backgroundColor: innerBoxBg,
+                          borderColor: cardBorder,
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate group-hover:text-indigo-600">
+                            {cust.name}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5">
+                            {cust.phone && <span>{cust.phone}</span>}
+                            {cust.notes && <span className="italic text-amber-600 truncate max-w-[120px]">({cust.notes})</span>}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                            {cust.visits || 0}x hadir
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  ) : customerSearchQuery.trim() !== "" && !customerSearchLoading ? (
+                    <div className="text-center py-6 text-xs text-slate-400">
+                      Pelanggan &quot;{customerSearchQuery}&quot; belum terdaftar.
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-[11px] text-slate-400">
+                      Ketik nama atau nomor kontak pelanggan untuk mencari.
+                    </div>
+                  )}
+                </div>
+
+                {/* Switch to Create New Customer */}
+                <div className="pt-2 border-t flex items-center justify-between" style={{ borderColor: cardBorder }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingCustomer(true);
+                      setNewCustomerForm({
+                        name: customerSearchQuery,
+                        phone: "",
+                        notes: "",
+                        address: "",
+                      });
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>+ Daftarkan &quot;{customerSearchQuery || "Pelanggan Baru"}&quot;</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateCustomerFromPos} className="space-y-3">
+                {newCustomerError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{newCustomerError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                    Nama Pelanggan <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Nama lengkap / panggilan"
+                    value={newCustomerForm.name}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    style={{ backgroundColor: inputBg, borderColor: cardBorder, color: textPrimary }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                    No. WhatsApp / HP
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="08123456789"
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    style={{ backgroundColor: inputBg, borderColor: cardBorder, color: textPrimary }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                    Catatan / Preferensi Khusus (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Misal: Alergi susu, Fade tipis, Parfum lavender"
+                    value={newCustomerForm.notes}
+                    onChange={(e) => setNewCustomerForm({ ...newCustomerForm, notes: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    style={{ backgroundColor: inputBg, borderColor: cardBorder, color: textPrimary }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: cardBorder }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingCustomer(false)}
+                    className="flex-1 py-2 rounded-xl border text-xs font-bold transition cursor-pointer"
+                    style={{ backgroundColor: innerBoxBg, borderColor: cardBorder, color: textPrimary }}
+                  >
+                    Kembali
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={newCustomerLoading}
+                    className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {newCustomerLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Simpan &amp; Pilih</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Modal Terima Bayar Live Order (Fase 5) */}
+      {selectedLiveOrderForPay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div
+            className="rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 border transition-all"
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              borderRadius: radius,
+            }}
+          >
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: cardBorder }}>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600">
+                  Pembayaran Live Order
+                </span>
+                <h3 className="font-black text-sm" style={{ color: textPrimary }}>
+                  {selectedLiveOrderForPay.orderNumber} ({selectedLiveOrderForPay.tableNumber || selectedLiveOrderForPay.customerName})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedLiveOrderForPay(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmLiveOrderPayment} className="space-y-3.5 text-xs">
+              {/* Ringkasan Item */}
+              <div className="p-2.5 rounded-xl border space-y-1" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                <div className="text-[11px] font-bold text-slate-500 mb-1">Rincian Pesanan:</div>
+                {selectedLiveOrderForPay.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-[11px]">
+                    <span className="text-slate-700 dark:text-slate-300">
+                      {item.qty}x {item.name}
+                    </span>
+                    <span className="font-mono text-slate-500">
+                      Rp {(item.price * item.qty).toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                ))}
+                <div className="border-t pt-1 mt-1 flex justify-between font-black text-xs" style={{ borderColor: cardBorder }}>
+                  <span style={{ color: textPrimary }}>Total Tagihan:</span>
+                  <span className="text-indigo-600">
+                    Rp {selectedLiveOrderForPay.totalAmount.toLocaleString("id-ID")}
+                  </span>
+                </div>
+              </div>
+
+              {/* Metode Pembayaran */}
+              <div>
+                <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                  Metode Pembayaran:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLiveOrderPaymentMethod("CASH")}
+                    className={`py-2 rounded-xl font-bold border text-xs flex items-center justify-center gap-1 transition cursor-pointer ${
+                      liveOrderPaymentMethod === "CASH"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                    }`}
+                    style={{ borderColor: cardBorder }}
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>Tunai (Cash)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLiveOrderPaymentMethod("QRIS")}
+                    className={`py-2 rounded-xl font-bold border text-xs flex items-center justify-center gap-1 transition cursor-pointer ${
+                      liveOrderPaymentMethod === "QRIS"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                    }`}
+                    style={{ borderColor: cardBorder }}
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>QRIS Dinamis</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Input Uang Kasir */}
+              <div>
+                <label className="block text-[11px] font-bold mb-1" style={{ color: textSecondary }}>
+                  Nominal Diterima Kasir (Rp):
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={selectedLiveOrderForPay.totalAmount}
+                  value={liveOrderPaidInput}
+                  onChange={(e) => setLiveOrderPaidInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm font-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  style={{ backgroundColor: inputBg, borderColor: cardBorder, color: textPrimary }}
+                />
+              </div>
+
+              {/* Kembalian Preview */}
+              {Number(liveOrderPaidInput) >= selectedLiveOrderForPay.totalAmount && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs font-black text-emerald-600">
+                  <span>Kembalian Kasir:</span>
+                  <span className="font-mono text-sm">
+                    Rp {(Number(liveOrderPaidInput) - selectedLiveOrderForPay.totalAmount).toLocaleString("id-ID")}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t" style={{ borderColor: cardBorder }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLiveOrderForPay(null)}
+                  className="flex-1 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer"
+                  style={{ backgroundColor: innerBoxBg, borderColor: cardBorder, color: textPrimary }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingLiveOrder || Number(liveOrderPaidInput) < selectedLiveOrderForPay.totalAmount}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {processingLiveOrder ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Memproses...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Lunas &amp; Cetak</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

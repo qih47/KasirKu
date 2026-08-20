@@ -1,8 +1,12 @@
 import { getProductsData } from "@/modules/product/actions";
+import { getVouchersData } from "@/modules/voucher/actions";
 import { ProductClient } from "./product-client";
 
 export default async function ProductsPage() {
-  const data = await getProductsData();
+  const [productsData, vouchersData] = await Promise.all([
+    getProductsData(),
+    getVouchersData(),
+  ]);
 
-  return <ProductClient initialData={data} />;
+  return <ProductClient initialData={productsData} vouchersData={vouchersData} />;
 }

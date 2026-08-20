@@ -90,6 +90,13 @@ async function main() {
       priceMonthly: 29000,
       priceAnnual: 290000,
     },
+    {
+      code: "self_order",
+      name: "QR Self-Order & Live Order",
+      description: "Pemesanan mandiri pelanggan via scan QR meja/area dengan sinkronisasi Live Order real-time ke POS kasir.",
+      priceMonthly: 75000,
+      priceAnnual: 747000,
+    },
   ];
 
   for (const plugin of plugins) {

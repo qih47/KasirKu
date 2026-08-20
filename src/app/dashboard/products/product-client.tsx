@@ -28,13 +28,16 @@ import {
   Layers,
   FileSpreadsheet,
   SlidersHorizontal,
+  Ticket,
 } from "lucide-react";
 import { ImportProductModal } from "@/components/products/import-product-modal";
 import { StockManagementModal } from "@/components/products/stock-management-modal";
+import { VouchersClient } from "@/app/dashboard/vouchers/vouchers-client";
 import { useTranslation } from "@/lib/i18n/language-context";
 
 export function ProductClient({
   initialData,
+  vouchersData,
 }: {
   initialData: {
     products: any[];
@@ -48,8 +51,13 @@ export function ProductClient({
       lowStockCount: number;
     };
   };
+  vouchersData?: {
+    vouchers: any[];
+    stats: any;
+  };
 }) {
   const { locale, tr } = useTranslation();
+  const [activeTab, setActiveTab] = useState<"PRODUCTS" | "VOUCHERS">("PRODUCTS");
   const [data, setData] = useState(initialData);
   const [filterType, setFilterType] = useState<"ALL" | "BARANG" | "JASA">("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -259,16 +267,63 @@ export function ProductClient({
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
-          {tr("Daftar Produk & Layanan")}
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          {tr("Kelola inventori barang fisik dan layanan jasa bisnis Anda.")}
-        </p>
+      {/* Top Header & Sub-Tab Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+            {activeTab === "PRODUCTS" ? tr("Daftar Produk & Layanan") : "Kupon & Voucher Promo"}
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {activeTab === "PRODUCTS"
+              ? tr("Kelola inventori barang fisik dan layanan jasa bisnis Anda.")
+              : "Kelola kupon diskon, batas kuota pemakaian, dan promo khusus kasir toko Anda."}
+          </p>
+        </div>
+
+        {/* Sub-tab Pills */}
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab("PRODUCTS")}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeTab === "PRODUCTS"
+                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Katalog Produk ({data.metrics.totalItems})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("VOUCHERS")}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeTab === "VOUCHERS"
+                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <Ticket className="w-4 h-4" />
+            <span>Voucher Promo ({vouchersData?.stats?.activeVouchers ?? 0})</span>
+          </button>
+        </div>
       </div>
 
+      {activeTab === "VOUCHERS" ? (
+        <div className="pt-2">
+          <VouchersClient
+            hideHeader={true}
+            initialData={
+              vouchersData || {
+                vouchers: [],
+                stats: { totalVouchers: 0, activeVouchers: 0, totalRedeemed: 0, expiredVouchers: 0 },
+              }
+            }
+          />
+        </div>
+      ) : (
+        <>
       {/* Metric Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -861,6 +916,8 @@ export function ProductClient({
           onClose={() => setStockModalProductId(null)}
           onStockUpdated={refreshProducts}
         />
+      )}
+        </>
       )}
     </div>
   );

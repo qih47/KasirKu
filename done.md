@@ -156,6 +156,52 @@ Dokumen ini mencatat seluruh modul, fitur, dan task yang telah selesai dieksekus
 
 ---
 
+### NEXT WAVES (Fase Lanjutan)
+
+#### Wave 1: Core Operations & Cash Control (SELESAI 100% 🎉)
+- [x] **W1.1** Mode Shift ("FAST" auto-shift vs "STRICT" wajib modal awal) di `/dashboard/settings`
+- [x] **W1.2** Modal Rekap Kas Tutup Shift (Z-Report) dengan rekonsiliasi selisih kas fisik (+/- Discrepancy) di `/pos`
+
+#### Wave 2: Inventory Alert & Promo Engine (SELESAI 100% 🎉)
+- [x] **W2.1** Low Stock Alert (`minStockAlert` di DB + badge visual produk + widget alert di `/dashboard`)
+- [x] **W2.2** Engine Diskon Manual (% & Rp) + Sistem Kupon/Voucher promo di POS checkout
+
+#### Wave 3: Staff Advance (Kasbon) & Payroll Integration (SELESAI 100% 🎉)
+- [x] **W3.1** Model DB `StaffAdvance` + form CRUD kasbon karyawan di `/dashboard/payroll`
+- [x] **W3.2** Auto-deduct kasbon ke slip gaji & perubahan status `PAID_OFF` saat periode penggajian dikunci
+
+#### Wave 4: Customer Database & CRM Multi-Vertikal (SELESAI 100% 🎉)
+- [x] **W4.1** Model DB `Customer` di `schema.prisma` (nama, phone unik per tenant, email, alamat, notes preferensi, visits, totalSpent, lastVisitAt)
+- [x] **W4.2** Relasi `customerId` ke `Transaction`, `Booking`, dan `LaundryOrder`
+- [x] **W4.3** Modul Server Actions CRM di `src/modules/customer/actions.ts` (CRUD, filter, LTV stats, quick search < 50ms)
+- [x] **W4.4** Dashboard CRM di `/dashboard/customers` (Stat cards LTV, tabel interaktif, direct chat WA, drawer profil 360° dengan histori belanja, barbershop, dan laundry)
+- [x] **W4.5** Integrasi POS Kasir di `/pos`: Quick search & selector pelanggan di keranjang belanja + modal pendaftaran pelanggan baru inline + auto-akumulasi kunjungan & nominal belanja saat checkout
+- [x] **W4.6** Navigasi link "Pelanggan" di header dashboard seluruh tenant
+
+#### Wave 5: QR Self-Order & Live Order Plugin Modular (SELESAI 100% 🎉)
+- [x] **W5.1** Registrasi plugin premium `self_order` di seeder & katalog add-ons DB (`prisma/seed.ts`)
+- [x] **W5.2** Model DB `LiveOrder` di `prisma/schema.prisma` (`orderNumber`, `verticalType`, `tableNumber`, `queueNumber`, `serviceType`, `fragrance`, `status`, `paymentStatus`, `items`, `subtotal`, `totalAmount`, `customerNotes`, `transactionId`)
+- [x] **W5.3** Server Actions `src/modules/self-order/actions.ts` (`getLiveOrdersAction`, `submitSelfOrderAction`, `updateLiveOrderStatusAction`, `checkoutLiveOrderAction`, `getPublicSelfOrderMenuData`, `hasSelfOrderPlugin`)
+- [x] **W5.4** Tab Switcher Dinamis di Header Keranjang POS Kasir: `[ 🛒 Kasir Manual ] [ 📱 Live Order (N) 🔴 ]` (Hanya muncul untuk tenant dengan plugin `self_order` aktif)
+- [x] **W5.5** Vertical Adapters Feed Live Order (Cafe, Barbershop, Laundry, Retail)
+- [x] **W5.6** Halaman Publik Menu Digital & Self-Order Pelanggan (`/menu/[tenantId]`)
+- [x] **W5.7** Modal Kasir Terima Bayar & Atomic Transaction
+
+#### Wave 6: Tenant Voucher & Promo Management (SELESAI 100% 🎉)
+- [x] **W6.1** Model DB `Voucher` di `prisma/schema.prisma` (unique `(tenantId, code)`, `discountType`, `discountValue`, `minOrder`, `maxDiscount`, `usageLimit`, `usedCount`, `startDate`, `endDate`, `isActive`)
+- [x] **W6.2** Server Actions `src/modules/voucher/actions.ts` (`getVouchersData`, `createVoucherAction`, `updateVoucherAction`, `toggleVoucherStatusAction`, `deleteVoucherAction`, `verifyVoucherAction`)
+- [x] **W6.3** Penyatuan Manajemen Voucher ke Halaman Produk (`/dashboard/products`):
+  - Sub-tab switcher elegan di header Produk: `[ 📦 Katalog Produk (N) ] [ 🎫 Voucher Promo (N) ]`
+  - 4 Stat Cards: Total Voucher, Voucher Aktif, Total Digunakan (Redeemed), Kedaluwarsa.
+  - Search & filter tabs (Semua, Aktif, Kedaluwarsa, Nonaktif).
+  - Modal form Buat/Edit Voucher: input kode kupon, tipe % atau nominal Rp, max discount cap, min belanja, batas kuota penggunaan, masa berlaku (start & expired date), dan toggle status aktif.
+  - Quick copy kode voucher, toggle on/off, edit, dan hapus dengan dialog konfirmasi.
+- [x] **W6.4** Integrasi Real-Time Kasir POS: Verifikasi kode kupon voucher langsung membaca dari database tenant, memvalidasi minimum order, kuota penggunaan, dan tanggal expired secara otomatis.
+- [x] **W6.5** Auto-Increment Kuota Penggunaan: Setiap transaksi kasir atau Live Order yang menggunakan kupon otomatis menambah counter `usedCount`.
+- [x] **W6.6** Navigasi bar dashboard tetap bersih dan ringkas tanpa tab terpisah (terintegrasi langsung di menu **"Produk"**).
+
+---
+
 ## 2. Struktur Rute Aplikasi POS Universal Lengkap
 
 ### A. Layar Publik & Guest Demo Bebas Akun (Zero Database Sandbox)

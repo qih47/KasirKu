@@ -216,6 +216,9 @@ model Tenant {
   cafeTables       CafeTable[]
   payrollRecords   PayrollRecord[]
   staffAdvances    StaffAdvance[]
+  customers        Customer[]
+  liveOrders       LiveOrder[]
+  vouchers         Voucher[]
 
   @@map("tenants")
 }
@@ -242,6 +245,7 @@ model Outlet {
   laundryOrders LaundryOrder[]
   cafeTables    CafeTable[]
   staffAdvances StaffAdvance[]
+  liveOrders    LiveOrder[]
 
   @@index([tenantId])
   @@map("outlets")
@@ -457,6 +461,8 @@ model Transaction {
   serviceCharge     Decimal?           @default(0) @db.Decimal(12, 2)
   totalAmount       Decimal            @db.Decimal(12, 2)
   status            TransactionStatus  @default(PENDING)
+  customerId        String?
+  customer          Customer?          @relation(fields: [customerId], references: [id])
   createdAt         DateTime           @default(now())
 
   items    TransactionItem[]
@@ -465,6 +471,7 @@ model Transaction {
   @@index([outletId, createdAt])
   @@index([status, createdAt])
   @@index([shiftId])
+  @@index([customerId])
   @@map("transactions")
 }
 
@@ -508,6 +515,8 @@ model Booking {
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
   outletId      String
   outlet        Outlet        @relation(fields: [outletId], references: [id])
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id])
   customerName  String
   customerPhone String?
   barberId      String?
@@ -562,6 +571,8 @@ model LaundryOrder {
   outletId             String
   outlet               Outlet        @relation(fields: [outletId], references: [id])
   orderNumber          String        @unique // LND-YYYYMMDD-XXXX
+  customerId           String?
+  customer             Customer?     @relation(fields: [customerId], references: [id])
   customerName         String
   customerPhone        String?
   serviceType          String        @default("KILOAN") // "KILOAN" | "SATUAN"
@@ -687,3 +698,114 @@ model BroadcastMessage {
 
   @@map("broadcast_messages")
 }
+
+// ============================================================
+// UNIVERSAL CUSTOMER & CRM ENGINE (FASE 4)
+// ============================================================
+
+model Customer {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?   // Preferensi pelanggan (misal: alergi, model cukur, parfum fav)
+  visits      Int       @default(0)
+  totalSpent  Decimal   @default(0) @db.Decimal(14, 2)
+  lastVisitAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  transactions  Transaction[]
+  bookings      Booking[]
+  laundryOrders LaundryOrder[]
+  liveOrders    LiveOrder[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([tenantId, phone])
+  @@map("customers")
+}
+
+// ============================================================
+// PLUGIN PREMIUM: QR SELF-ORDER & LIVE ORDER (FASE 5)
+// ============================================================
+
+enum LiveOrderStatus {
+  PENDING     // Pesanan baru masuk dari pelanggan via QR
+  CONFIRMED   // Dikonfirmasi oleh kasir/dapur
+  PREPARING   // Sedang disiapkan / dikerjakan di kursi
+  READY       // Pesanan siap disajikan / diambil
+  COMPLETED   // Selesai & Lunas
+  CANCELLED   // Dibatalkan
+}
+
+enum LiveOrderPaymentStatus {
+  UNPAID_CASH // Pelanggan memilih bayar tunai di kasir
+  PAID_ONLINE // Pelanggan sudah lunas (QRIS / Payment Gateway)
+}
+
+model LiveOrder {
+  id              String                 @id @default(uuid())
+  tenantId        String
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  outletId        String
+  outlet          Outlet                 @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  orderNumber     String                 @unique // ORD-YYYYMMDD-XXXX
+  verticalType    String                 @default("CAFE") // "CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL"
+  customerName    String
+  customerPhone   String?
+  customerId      String?
+  customer        Customer?              @relation(fields: [customerId], references: [id])
+  tableNumber     String?                // e.g. "Meja 03"
+  queueNumber     String?                // e.g. "A-05" (Barbershop)
+  serviceType     String?                // e.g. "KILOAN" | "SATUAN" (Laundry)
+  fragrance       String?                // e.g. "Lavender" (Laundry)
+  assignedStaffId String?                // Kapster / Staf penanggung jawab
+  status          LiveOrderStatus        @default(PENDING)
+  paymentStatus   LiveOrderPaymentStatus @default(UNPAID_CASH)
+  items           Json                   // [{ productId, name, qty, price, notes }]
+  subtotal        Decimal                @db.Decimal(12, 2)
+  totalAmount     Decimal                @db.Decimal(12, 2)
+  customerNotes   String?                // e.g. "Less ice, jangan terlalu manis"
+  transactionId   String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([tenantId, status])
+  @@index([outletId, status])
+  @@index([createdAt])
+  @@map("live_orders")
+}
+
+// ============================================================
+// TENANT VOUCHER & PROMO ENGINE
+// ============================================================
+
+model Voucher {
+  id            String    @id @default(uuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code          String    // e.g. "HEMAT10", "PROMO20"
+  description   String?   // e.g. "Diskon Spesial Kemerdekaan 10%"
+  discountType  String    @default("PERCENT") // "PERCENT" | "FIXED"
+  discountValue Decimal   @db.Decimal(12, 2)  // e.g. 10 (%) or 15000 (Rp)
+  minOrder      Decimal   @default(0) @db.Decimal(12, 2)
+  maxDiscount   Decimal?  @db.Decimal(12, 2)  // Maksimal nominal potongan (untuk PERCENT)
+  usageLimit    Int?      // Batas kuota total pemakaian voucher (null = tak terbatas)
+  usedCount     Int       @default(0)
+  startDate     DateTime? @default(now())
+  endDate       DateTime? // Tanggal kedaluwarsa (Expired)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([code])
+  @@map("vouchers")
+}
+
+

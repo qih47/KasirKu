@@ -39,8 +39,73 @@ export interface VoucherValidationResult {
 }
 
 export async function verifyVoucherAction(code: string, subtotal: number): Promise<VoucherValidationResult> {
-  const normalized = code.trim().toUpperCase();
+  const session = await getServerSession(authOptions);
+  const tenantId = (session?.user as any)?.tenantId;
+  const normalized = code.trim().toUpperCase().replace(/\s+/g, "");
+  const now = new Date();
 
+  // 1. Cek di Database Voucher milik Tenant
+  if (tenantId) {
+    const dbVoucher = await prisma.voucher.findUnique({
+      where: {
+        tenantId_code: {
+          tenantId,
+          code: normalized,
+        },
+      },
+    });
+
+    if (dbVoucher) {
+      if (!dbVoucher.isActive) {
+        throw new Error(`Voucher "${normalized}" sedang dinonaktifkan.`);
+      }
+      if (dbVoucher.startDate && new Date(dbVoucher.startDate) > now) {
+        throw new Error(
+          `Voucher "${normalized}" baru aktif mulai ${new Date(dbVoucher.startDate).toLocaleDateString("id-ID")}.`
+        );
+      }
+      if (dbVoucher.endDate && new Date(dbVoucher.endDate) < now) {
+        throw new Error(`Voucher "${normalized}" sudah kedaluwarsa pada ${new Date(dbVoucher.endDate).toLocaleDateString("id-ID")}.`);
+      }
+      if (dbVoucher.usageLimit !== null && dbVoucher.usedCount >= dbVoucher.usageLimit) {
+        throw new Error(`Kuota penggunaan voucher "${normalized}" telah habis (${dbVoucher.usedCount}/${dbVoucher.usageLimit} digunakan).`);
+      }
+
+      const minOrderNum = Number(dbVoucher.minOrder || 0);
+      if (subtotal < minOrderNum) {
+        throw new Error(
+          `Voucher "${normalized}" membutuhkan minimum belanja Rp ${minOrderNum.toLocaleString("id-ID")}. (Subtotal: Rp ${subtotal.toLocaleString("id-ID")})`
+        );
+      }
+
+      const discountValNum = Number(dbVoucher.discountValue);
+      const maxDiscountNum = dbVoucher.maxDiscount ? Number(dbVoucher.maxDiscount) : undefined;
+      let discountAmount = 0;
+
+      if (dbVoucher.discountType === "PERCENT") {
+        discountAmount = Math.round((subtotal * discountValNum) / 100);
+        if (maxDiscountNum && discountAmount > maxDiscountNum) {
+          discountAmount = maxDiscountNum;
+        }
+      } else {
+        discountAmount = discountValNum;
+      }
+
+      discountAmount = Math.min(subtotal, Math.max(0, discountAmount));
+
+      return {
+        valid: true,
+        code: normalized,
+        discountType: dbVoucher.discountType as DiscountType,
+        discountValue: discountValNum,
+        discountAmount,
+        description: dbVoucher.description || `Diskon Voucher ${normalized}`,
+        minOrder: minOrderNum,
+      };
+    }
+  }
+
+  // 2. Fallback Builtin Demo Presets
   const VOUCHERS: Record<
     string,
     { type: DiscountType; value: number; maxDiscount?: number; minOrder?: number; description: string }
@@ -102,6 +167,7 @@ export async function createTransactionAction(data: {
   voucherCode?: string | null;
   taxAmount?: number;
   serviceCharge?: number;
+  customerId?: string | null;
   tableId?: string | null;
   orderType?: "DINE_IN" | "TAKEAWAY" | "STANDARD";
   laundryDetails?: {
@@ -126,6 +192,7 @@ export async function createTransactionAction(data: {
     voucherCode,
     taxAmount = 0,
     serviceCharge = 0,
+    customerId,
     tableId,
     orderType,
     laundryDetails,
@@ -190,6 +257,7 @@ export async function createTransactionAction(data: {
       data: {
         outletId,
         shiftId,
+        customerId: customerId || null,
         transactionNumber,
         subtotalAmount,
         discountAmount: finalDiscountAmount,
@@ -202,6 +270,37 @@ export async function createTransactionAction(data: {
         status: "PAID",
       },
     });
+
+    // 2b. Jika ada customerId, akumulasikan statistik pelanggan (visits & totalSpent)
+    if (customerId) {
+      await (tx as any).customer.update({
+        where: { id: customerId },
+        data: {
+          visits: { increment: 1 },
+          totalSpent: { increment: totalAmount },
+          lastVisitAt: new Date(),
+        },
+      });
+    }
+
+    // 2c. Jika menggunakan voucherCode, increment usedCount pada voucher
+    if (voucherCode) {
+      const outletData = await tx.outlet.findUnique({
+        where: { id: outletId },
+        select: { tenantId: true },
+      });
+      if (outletData?.tenantId) {
+        await (tx as any).voucher.updateMany({
+          where: {
+            tenantId: outletData.tenantId,
+            code: voucherCode.trim().toUpperCase().replace(/\s+/g, ""),
+          },
+          data: {
+            usedCount: { increment: 1 },
+          },
+        });
+      }
+    }
 
     // 3. Batch Pre-fetch produk, outlet stock, dan staf penanggung jawab
     const productIds = Array.from(new Set(items.map((i) => i.productId)));
@@ -404,6 +503,7 @@ export async function createTransactionAction(data: {
         items: {
           include: { product: true },
         },
+        customer: true,
         payments: true,
       },
     });
@@ -419,6 +519,7 @@ export async function createTransactionAction(data: {
   revalidatePath("/pos/history");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/customers");
 
   return { success: true, ...result };
 }

@@ -26,6 +26,10 @@ export default async function PosPage() {
               where: { isActive: true },
               include: {
                 theme: { include: { theme: true } },
+                plugins: {
+                  where: { isActive: true },
+                  include: { plugin: true },
+                },
               },
               take: 1,
             },
@@ -72,6 +76,11 @@ export default async function PosPage() {
   const receiptConfig = (tenant?.receiptConfig as any) || {};
   const posThemeCode = receiptConfig.posThemeCode || receiptConfig.posLayout;
 
+  // Cek apakah plugin 'self_order' aktif untuk tenant ini
+  const isSelfOrderActive = activeSub?.plugins?.some(
+    (tp) => tp.plugin.code === "self_order" && tp.isActive
+  ) ?? false;
+
   // Resolve custom POS theme if explicitly chosen in Store "Tema POS", otherwise use master UI theme
   let appliedPosTheme = masterUiTheme;
   if (posThemeCode && posThemeCode !== "DEFAULT" && posThemeCode !== "STANDARD") {
@@ -94,7 +103,9 @@ export default async function PosPage() {
       cafeTables={cafeTables}
       staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
+      hasSelfOrderPlugin={isSelfOrderActive}
       tenantInfo={{
+        tenantId: user.tenantId,
         businessName: tenant?.businessName || "POS Universal",
         logoUrl: tenant?.logoUrl || null,
         receiptConfig: tenant?.receiptConfig || null,

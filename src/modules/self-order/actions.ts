@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LiveOrderStatus, LiveOrderPaymentStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { calculateItemCommission } from "@/modules/commission/commission-engine";
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -159,6 +160,29 @@ export async function submitSelfOrderAction(data: {
     throw new Error("Keranjang pesanan masih kosong.");
   }
 
+  if (!customerName || !customerName.trim()) {
+    throw new Error("Nama pemesan wajib diisi.");
+  }
+
+  // Validasi outlet aktif dan milik tenant
+  const outlet = await prisma.outlet.findFirst({
+    where: { id: outletId, tenantId, isActive: true },
+  });
+
+  if (!outlet) {
+    throw new Error("Outlet cabang tidak ditemukan atau sedang tidak aktif.");
+  }
+
+  // Validasi meja jika disediakan
+  if (tableNumber) {
+    const table = await prisma.cafeTable.findFirst({
+      where: { outletId, tableNumber },
+    });
+    if (!table) {
+      throw new Error(`Meja "${tableNumber}" tidak terdaftar pada cabang ini.`);
+    }
+  }
+
   // Cek apakah tenant berhak atas plugin self_order
   const isEnabled = await hasSelfOrderPlugin(tenantId);
   if (!isEnabled) {
@@ -193,7 +217,7 @@ export async function submitSelfOrderAction(data: {
     }
   }
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
   const totalAmount = subtotal;
 
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -310,10 +334,10 @@ export async function checkoutLiveOrderAction(data: {
       },
     });
 
-    // 2. Buat TransactionItems & kurangi stok
+    // 2. Buat TransactionItems & kurangi stok (Legacy & OutletStock)
     for (const item of items) {
       if (item.productId) {
-        await tx.transactionItem.create({
+        const trxItem = await tx.transactionItem.create({
           data: {
             transactionId: transaction.id,
             productId: item.productId,
@@ -328,13 +352,102 @@ export async function checkoutLiveOrderAction(data: {
           where: { id: item.productId },
         });
 
-        if (product && product.type === "BARANG" && product.stockQty !== null) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQty: { decrement: item.qty },
+        if (product && product.type === "BARANG") {
+          // 1. Kurangi legacy stockQty jika ada
+          if (product.stockQty !== null) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stockQty: { decrement: item.qty },
+              },
+            });
+          }
+
+          // 2. Kurangi stok OutletStock spesifik cabang
+          const outletStock = await tx.outletStock.findUnique({
+            where: {
+              outletId_productId: {
+                outletId: order.outletId,
+                productId: item.productId,
+              },
             },
           });
+
+          if (outletStock) {
+            await tx.outletStock.update({
+              where: {
+                outletId_productId: {
+                  outletId: order.outletId,
+                  productId: item.productId,
+                },
+              },
+              data: {
+                stockQty: { decrement: item.qty },
+              },
+            });
+
+            await tx.stockMovement.create({
+              data: {
+                outletStockId: outletStock.id,
+                type: "OUT",
+                qty: item.qty,
+                note: `Live Order Checkout: ${transactionNumber}`,
+              },
+            });
+          }
+        }
+
+        // 3. Perhitungan Komisi Staf jika ada penugasan staf
+        if (item.staffId && product) {
+          const staffUser = await tx.user.findUnique({
+            where: { id: item.staffId },
+          });
+
+          if (staffUser && staffUser.tenantId === user.tenantId) {
+            const isEligible =
+              staffUser.isCommissionActive !== false &&
+              (Number(staffUser.commissionPercent || 0) > 0 ||
+                Number(staffUser.commissionFlat || 0) > 0 ||
+                Object.keys((staffUser.attributes as any) || {}).length > 0 ||
+                Object.keys((product.attributes as any) || {}).length > 0);
+
+            if (isEligible) {
+              const calcResult = calculateItemCommission({
+                item: {
+                  productId: item.productId,
+                  qty: item.qty,
+                  price: item.price,
+                  staffId: item.staffId,
+                },
+                product: {
+                  type: product.type as any,
+                  price: Number(product.price),
+                  attributes: (product.attributes as any) || {},
+                },
+                staffUser: {
+                  id: staffUser.id,
+                  name: staffUser.name,
+                  commissionPercent: staffUser.commissionPercent,
+                  commissionFlat: staffUser.commissionFlat,
+                  attributes: (staffUser.attributes as any) || {},
+                },
+              });
+
+              if (calcResult && calcResult.amount > 0) {
+                await tx.staffCommission.create({
+                  data: {
+                    tenantId: user.tenantId,
+                    outletId: order.outletId,
+                    staffId: item.staffId,
+                    transactionItemId: trxItem.id,
+                    commissionType: calcResult.commissionType,
+                    rate: calcResult.rate,
+                    amount: calcResult.amount,
+                  },
+                });
+              }
+            }
+          }
         }
       }
     }
@@ -388,31 +501,38 @@ export async function checkoutLiveOrderAction(data: {
     return {
       transaction,
       change: amountPaid - totalAmount,
+      amountPaid,
     };
   });
 
   revalidatePath("/pos");
   revalidatePath("/pos/history");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/dashboard/reports");
 
   return { success: true, ...result };
 }
 
 // 6. Ambil Data Menu Digital & Tenant untuk Halaman Publik Self-Order Pelanggan
-export async function getPublicSelfOrderMenuData(tenantId: string, tableQuery?: string) {
+export async function getPublicSelfOrderMenuData(
+  tenantId: string,
+  tableQuery?: string,
+  explicitOutletId?: string
+) {
+  const whereOutlet: any = { isActive: true };
+  if (explicitOutletId) {
+    whereOutlet.id = explicitOutletId;
+  }
+
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
       outlets: {
-        where: { isActive: true },
+        where: whereOutlet,
         take: 1,
-      },
-      cafeTables: {
-        orderBy: { tableNumber: "asc" },
-      },
-      products: {
-        where: { isActive: true },
-        orderBy: { name: "asc" },
       },
       subscriptions: {
         where: { isActive: true },
@@ -437,10 +557,32 @@ export async function getPublicSelfOrderMenuData(tenantId: string, tableQuery?: 
     (tp) => tp.plugin.code === "self_order"
   ) ?? false;
 
-  const defaultOutlet = tenant.outlets[0] || null;
+  const targetOutlet = tenant.outlets[0] || null;
+  const targetOutletId = targetOutlet?.id;
+
+  // Ambil meja spesifik outlet
+  const cafeTables = targetOutletId
+    ? await prisma.cafeTable.findMany({
+        where: { tenantId, outletId: targetOutletId },
+        orderBy: { tableNumber: "asc" },
+      })
+    : [];
+
+  // Ambil produk aktif yang tersedia di tenant / outlet
+  const products = await prisma.product.findMany({
+    where: {
+      tenantId,
+      isActive: true,
+      OR: [
+        { outletId: null },
+        { outletId: targetOutletId || undefined },
+      ],
+    },
+    orderBy: { name: "asc" },
+  });
 
   const categories = Array.from(
-    new Set(tenant.products.map((p) => p.category || "Umum"))
+    new Set(products.map((p) => p.category || "Umum"))
   );
 
   return {
@@ -450,18 +592,18 @@ export async function getPublicSelfOrderMenuData(tenantId: string, tableQuery?: 
       id: tenant.id,
       businessName: tenant.businessName,
       logoUrl: tenant.logoUrl,
-      outletId: defaultOutlet?.id || null,
-      outletName: defaultOutlet?.name || "Outlet Utama",
+      outletId: targetOutlet?.id || null,
+      outletName: targetOutlet?.name || "Outlet Utama",
     },
-    tables: tenant.cafeTables.map((t) => ({
+    tables: cafeTables.map((t) => ({
       id: t.id,
       tableNumber: t.tableNumber,
       capacity: t.capacity,
       areaZone: t.areaZone,
       status: t.status,
     })),
-    selectedTable: tableQuery || tenant.cafeTables[0]?.tableNumber || "Meja 01",
-    products: tenant.products.map((p) => ({
+    selectedTable: tableQuery || cafeTables[0]?.tableNumber || "Meja 01",
+    products: products.map((p) => ({
       id: p.id,
       name: p.name,
       price: Number(p.price),

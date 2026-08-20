@@ -372,9 +372,10 @@ model Product {
   bookings         Booking[]
   outletStocks     OutletStock[]
 
-  @@index([tenantId])
+  @@index([tenantId, category])
+  @@index([tenantId, barcode])
+  @@index([tenantId, isActive])
   @@index([outletId])
-  @@index([barcode])
   @@map("products")
 }
 
@@ -616,7 +617,8 @@ model CafeTable {
 
   @@unique([outletId, tableNumber])
   @@index([tenantId])
-  @@index([outletId])
+  @@index([outletId, status])
+  @@index([tenantId, outletId])
   @@map("cafe_tables")
 }
 

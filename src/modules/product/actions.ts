@@ -241,6 +241,34 @@ export async function updateProductAction(
     },
   });
 
+  // Pastikan record OutletStock tersedia di semua outlet aktif tenant
+  const activeOutlets = await prisma.outlet.findMany({
+    where: { tenantId: user.tenantId, isActive: true },
+  });
+
+  for (const outlet of activeOutlets) {
+    const existingStock = await prisma.outletStock.findUnique({
+      where: {
+        outletId_productId: {
+          outletId: outlet.id,
+          productId: id,
+        },
+      },
+    });
+
+    if (!existingStock) {
+      await prisma.outletStock.create({
+        data: {
+          outletId: outlet.id,
+          productId: id,
+          stockQty: finalStock ?? 0,
+          isAvailable: true,
+          priceOverride: null,
+        },
+      });
+    }
+  }
+
   revalidatePath("/dashboard/products");
   revalidatePath("/dashboard");
   revalidatePath("/pos");

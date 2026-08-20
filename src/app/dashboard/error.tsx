@@ -26,12 +26,20 @@ export default function DashboardError({
   }, [error]);
 
   const errorMsg = error?.message || "";
+  const isTenantSuspended =
+    errorMsg.toLowerCase().includes("dinonaktifkan") ||
+    errorMsg.toLowerCase().includes("dikunci") ||
+    errorMsg.toLowerCase().includes("frozen") ||
+    errorMsg.toLowerCase().includes("trial telah berakhir");
+
   const isRoleRestricted =
-    errorMsg.toLowerCase().includes("hanya owner") ||
-    errorMsg.toLowerCase().includes("hanya admin") ||
-    errorMsg.toLowerCase().includes("izin khusus");
+    !isTenantSuspended &&
+    (errorMsg.toLowerCase().includes("hanya owner") ||
+      errorMsg.toLowerCase().includes("hanya admin") ||
+      errorMsg.toLowerCase().includes("izin khusus"));
 
   const isSessionExpired =
+    !isTenantSuspended &&
     !isRoleRestricted &&
     (errorMsg.toLowerCase().includes("akses ditolak") ||
       errorMsg.toLowerCase().includes("login") ||
@@ -42,14 +50,19 @@ export default function DashboardError({
       <div className="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 animate-fadeIn">
         {/* Icon */}
         <div
-          className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-sm ${isRoleRestricted
+          className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-sm ${
+            isTenantSuspended
+              ? "bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400"
+              : isRoleRestricted
               ? "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-600 dark:text-amber-400"
               : isSessionExpired
-                ? "bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400"
-                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-            }`}
+              ? "bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+          }`}
         >
-          {isRoleRestricted ? (
+          {isTenantSuspended ? (
+            <Lock className="w-8 h-8 animate-pulse text-rose-600" />
+          ) : isRoleRestricted ? (
             <Lock className="w-8 h-8" />
           ) : isSessionExpired ? (
             <ShieldAlert className="w-8 h-8 animate-bounce" />
@@ -61,26 +74,33 @@ export default function DashboardError({
         {/* Title & Description */}
         <div className="space-y-1.5">
           <span
-            className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${isRoleRestricted
+            className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+              isTenantSuspended
+                ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                : isRoleRestricted
                 ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
                 : isSessionExpired
-                  ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-              }`}
+                ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+            }`}
           >
-            {isRoleRestricted
+            {isTenantSuspended
+              ? "Akun Ditangguhkan (Suspended/Expired)"
+              : isRoleRestricted
               ? "Hak Akses Terbatas (Role Restriction)"
               : isSessionExpired
-                ? "Sesi Login Berakhir (403)"
-                : "Terjadi Kendala"}
+              ? "Sesi Login Berakhir (403)"
+              : "Terjadi Kendala"}
           </span>
 
           <h2 className="text-xl font-black text-slate-900 dark:text-white">
-            {isRoleRestricted
+            {isTenantSuspended
+              ? "Status Akun Bisnis Terkunci"
+              : isRoleRestricted
               ? "Akses Fitur Terbatas"
               : isSessionExpired
-                ? "Perlu Login Ke Akun Bisnis"
-                : "Halaman Tidak Dapat Dimuat"}
+              ? "Perlu Login Ke Akun Bisnis"
+              : "Halaman Tidak Dapat Dimuat"}
           </h2>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
@@ -90,7 +110,24 @@ export default function DashboardError({
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-2 pt-2">
-          {isRoleRestricted ? (
+          {isTenantSuspended ? (
+            <>
+              <Link
+                href="/dashboard/subscription"
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-1.5"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Perpanjang / Kelola Langganan</span>
+              </Link>
+              <Link
+                href="/login"
+                className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Ganti Akun Login</span>
+              </Link>
+            </>
+          ) : isRoleRestricted ? (
             <>
               <Link
                 href="/dashboard"

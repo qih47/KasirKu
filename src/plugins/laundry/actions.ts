@@ -108,14 +108,41 @@ export async function createLaundryOrderAction(data: {
   const orderNumber = `LND-${todayStr}-${randomSuffix}`;
 
   const estimatedCompletedAt = addDays(new Date(), estimatedDays);
+  const cleanName = customerName.trim();
+  const cleanPhone = customerPhone?.trim() || null;
+
+  // Cari atau auto-create Customer di CRM tenant
+  let customerId: string | null = null;
+  if (cleanPhone) {
+    let customer = await prisma.customer.findUnique({
+      where: {
+        tenantId_phone: {
+          tenantId: user.tenantId,
+          phone: cleanPhone,
+        },
+      },
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          tenantId: user.tenantId,
+          name: cleanName,
+          phone: cleanPhone,
+        },
+      });
+    }
+    customerId = customer.id;
+  }
 
   const order = await prisma.laundryOrder.create({
     data: {
       tenantId: user.tenantId,
       outletId,
+      customerId,
       orderNumber,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone?.trim() || null,
+      customerName: cleanName,
+      customerPhone: cleanPhone,
       serviceType,
       weightKg: weightKg ? Number(weightKg) : null,
       unitQty: unitQty || null,
@@ -129,6 +156,7 @@ export async function createLaundryOrderAction(data: {
   });
 
   revalidatePath("/dashboard/laundry/orders");
+  revalidatePath("/dashboard/customers");
   return { success: true, order };
 }
 
@@ -149,6 +177,19 @@ export async function updateLaundryStatusAction(
   const updateData: any = { status };
   if (status === "COMPLETED") {
     updateData.completedAt = new Date();
+    updateData.paidStatus = "PAID";
+
+    // Update akumulasi LTV Customer jika terkait pelanggan CRM
+    if (order.customerId) {
+      await prisma.customer.update({
+        where: { id: order.customerId },
+        data: {
+          visits: { increment: 1 },
+          totalSpent: { increment: Number(order.totalAmount || 0) },
+          lastVisitAt: new Date(),
+        },
+      });
+    }
   }
 
   const updated = await prisma.laundryOrder.update({
@@ -157,5 +198,8 @@ export async function updateLaundryStatusAction(
   });
 
   revalidatePath("/dashboard/laundry/orders");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard");
   return { success: true, order: updated };
 }

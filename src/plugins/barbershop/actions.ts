@@ -134,12 +134,40 @@ export async function createQueueBookingAction(data: {
   const nextSeq = countToday + 1;
   const queueNumber = `B-${String(nextSeq).padStart(2, "0")}`;
 
+  const cleanName = customerName.trim();
+  const cleanPhone = customerPhone?.trim() || null;
+
+  // Cari atau auto-create Customer di CRM tenant
+  let customerId: string | null = null;
+  if (cleanPhone) {
+    let customer = await prisma.customer.findUnique({
+      where: {
+        tenantId_phone: {
+          tenantId: user.tenantId,
+          phone: cleanPhone,
+        },
+      },
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          tenantId: user.tenantId,
+          name: cleanName,
+          phone: cleanPhone,
+        },
+      });
+    }
+    customerId = customer.id;
+  }
+
   const booking = await prisma.booking.create({
     data: {
       tenantId: user.tenantId,
       outletId,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone?.trim() || null,
+      customerId,
+      customerName: cleanName,
+      customerPhone: cleanPhone,
       barberId: barberId || null,
       serviceId: serviceId || null,
       queueNumber,
@@ -150,10 +178,12 @@ export async function createQueueBookingAction(data: {
     include: {
       barber: true,
       service: true,
+      customer: true,
     },
   });
 
   revalidatePath("/dashboard/barbershop/queue");
+  revalidatePath("/dashboard/customers");
   return { success: true, booking };
 }
 

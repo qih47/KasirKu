@@ -240,3 +240,72 @@ export async function updateTableStatusAction(data: {
   revalidatePath("/pos");
   return { success: true, table: updated };
 }
+
+export async function transferTableAction(data: {
+  sourceTableId: string;
+  targetTableId: string;
+}) {
+  const user = await requireTenantCafeUser();
+  const { sourceTableId, targetTableId } = data;
+
+  if (sourceTableId === targetTableId) {
+    throw new Error("Meja asal dan meja tujuan tidak boleh sama.");
+  }
+
+  const [sourceTable, targetTable] = await Promise.all([
+    prisma.cafeTable.findUnique({ where: { id: sourceTableId } }),
+    prisma.cafeTable.findUnique({ where: { id: targetTableId } }),
+  ]);
+
+  if (!sourceTable || sourceTable.tenantId !== user.tenantId) {
+    throw new Error("Meja asal tidak ditemukan.");
+  }
+  if (!targetTable || targetTable.tenantId !== user.tenantId) {
+    throw new Error("Meja tujuan tidak ditemukan.");
+  }
+
+  if (targetTable.status === "OCCUPIED") {
+    throw new Error(`Meja tujuan (${targetTable.tableNumber}) sedang terisi. Pilih meja yang kosong.`);
+  }
+
+  // Atomic swap in transaction
+  await prisma.$transaction(async (tx) => {
+    // 1. Move guest info to target table and set to OCCUPIED
+    await tx.cafeTable.update({
+      where: { id: targetTableId },
+      data: {
+        status: "OCCUPIED",
+        currentGuestName: sourceTable.currentGuestName,
+        currentOrderNotes: sourceTable.currentOrderNotes,
+      },
+    });
+
+    // 2. Clear source table and set to AVAILABLE
+    await tx.cafeTable.update({
+      where: { id: sourceTableId },
+      data: {
+        status: "AVAILABLE",
+        currentGuestName: null,
+        currentOrderNotes: null,
+      },
+    });
+
+    // 3. If there are active LiveOrders on the source table, update their tableNumber
+    if (sourceTable.outletId) {
+      await tx.liveOrder.updateMany({
+        where: {
+          outletId: sourceTable.outletId,
+          tableNumber: sourceTable.tableNumber,
+          status: { in: ["PENDING", "PREPARING", "READY"] },
+        },
+        data: {
+          tableNumber: targetTable.tableNumber,
+        },
+      });
+    }
+  });
+
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
+  return { success: true };
+}

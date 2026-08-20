@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toastSuccess, toastError, swalConfirm } from "@/lib/swal";
 import {
   createCafeTableAction,
@@ -234,6 +235,14 @@ export function CafeTablesClient({
               <span>Kelola Denah</span>
             </button>
           </div>
+
+          <Link
+            href="/dashboard/cafe/commissions"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Laporan Komisi</span>
+          </Link>
 
           <button
             onClick={() => {

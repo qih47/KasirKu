@@ -39,8 +39,10 @@ export interface VoucherStats {
 }
 
 export interface VoucherValidationResult {
+  valid?: boolean;
   code: string;
   type: "PERCENT" | "FIXED";
+  discountType?: "PERCENT" | "FIXED" | "VOUCHER";
   discountValue: number;
   discountAmount: number;
   description: string;
@@ -421,8 +423,10 @@ export async function verifyVoucherAction(
   }
 
   return {
+    valid: true,
     code: voucher.code,
     type: voucher.discountType as "PERCENT" | "FIXED",
+    discountType: voucher.discountType as "PERCENT" | "FIXED",
     discountValue: discountValNum,
     discountAmount,
     description: voucher.description || `Diskon ${voucher.code}`,

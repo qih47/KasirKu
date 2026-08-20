@@ -17,11 +17,23 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
   const user = await requireCashierOrOwner();
   const outletId = explicitOutletId || user.outletId;
 
-  // Ambil tenant untuk membaca setting shiftMode ("FAST" | "STRICT")
+  // Ambil tenant untuk membaca status langganan dan setting shiftMode ("FAST" | "STRICT")
   const tenant = await prisma.tenant.findUnique({
     where: { id: user.tenantId },
-    select: { shiftMode: true, businessName: true },
+    select: { shiftMode: true, businessName: true, status: true, trialEndAt: true },
   });
+
+  if (!tenant) {
+    throw new Error("Bisnis tidak ditemukan.");
+  }
+
+  if (tenant.status === "LOCKED" || tenant.status === "FROZEN") {
+    throw new Error("Akun Bisnis Anda sedang dinonaktifkan/dikunci. Silakan hubungi Super Admin.");
+  }
+
+  if (tenant.status === "TRIAL" && tenant.trialEndAt && new Date(tenant.trialEndAt) < new Date()) {
+    throw new Error("Masa percobaan (Trial) bisnis Anda telah berakhir. Silakan upgrade paket langganan Anda.");
+  }
 
   const shiftMode = tenant?.shiftMode || "FAST";
 
@@ -111,6 +123,20 @@ export async function openShiftAction(data: {
 
   if (openingCash === undefined || openingCash < 0) {
     throw new Error("Modal kas awal harus diisi dengan angka valid (>= 0).");
+  }
+
+  // Validasi status langganan tenant
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { status: true, trialEndAt: true },
+  });
+
+  if (tenant?.status === "LOCKED" || tenant?.status === "FROZEN") {
+    throw new Error("Akun Bisnis Anda sedang dinonaktifkan/dikunci. Silakan hubungi Super Admin.");
+  }
+
+  if (tenant?.status === "TRIAL" && tenant?.trialEndAt && new Date(tenant.trialEndAt) < new Date()) {
+    throw new Error("Masa percobaan (Trial) bisnis Anda telah berakhir. Silakan upgrade paket langganan Anda.");
   }
 
   // Cek apakah ada shift yang masih aktif di outlet ini
@@ -360,6 +386,9 @@ export async function closeShiftAction(data: {
   });
 
   revalidatePath("/pos");
+  revalidatePath("/pos/history");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/reports");
   return {
     success: true,
     summary: {

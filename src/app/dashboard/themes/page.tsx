@@ -1,8 +1,5 @@
-import { getTenantThemesMarketplaceData } from "@/modules/tenant/theme-actions";
-import { TenantThemesClient } from "./themes-client";
+import { redirect } from "next/navigation";
 
-export default async function TenantThemesPage() {
-  const data = await getTenantThemesMarketplaceData();
-
-  return <TenantThemesClient initialData={data} />;
+export default function TenantThemesPage() {
+  redirect("/dashboard/settings?tab=THEMES");
 }

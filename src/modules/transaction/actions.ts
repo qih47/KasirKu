@@ -126,6 +126,7 @@ export async function createTransactionAction(data: {
   customerId?: string | null;
   tableId?: string | null;
   orderType?: "DINE_IN" | "TAKEAWAY" | "STANDARD";
+  splitPayments?: { method: PaymentMethod; amount: number }[];
   laundryDetails?: {
     customerName?: string;
     customerPhone?: string;
@@ -151,6 +152,7 @@ export async function createTransactionAction(data: {
     customerId,
     tableId,
     orderType,
+    splitPayments,
     laundryDetails,
   } = data;
 
@@ -406,11 +408,15 @@ export async function createTransactionAction(data: {
       }
     }
 
-    // 4. Update status Meja Cafe jika Dine-In
-    if (tableId && orderType === "DINE_IN") {
+    // 4. Update status Meja Cafe jika Dine-In (setelah transaksi lunas, meja kembali AVAILABLE)
+    if (tableId) {
       await tx.cafeTable.update({
         where: { id: tableId },
-        data: { status: "OCCUPIED" },
+        data: {
+          status: "AVAILABLE",
+          currentGuestName: null,
+          currentOrderNotes: null,
+        },
       });
     }
 
@@ -436,24 +442,41 @@ export async function createTransactionAction(data: {
       });
     }
 
-    // 4. Catat record Pembayaran
-    const payment = await tx.payment.create({
-      data: {
-        transactionId: newTransaction.id,
-        method: paymentMethod,
-        amount: totalAmount,
-        status: "SUCCESS",
-      },
-    });
+    // 6. Catat record Pembayaran (Mendukung Split Payment / Multi-Method)
+    if (splitPayments && splitPayments.length > 0) {
+      for (const sp of splitPayments) {
+        if (Number(sp.amount) > 0) {
+          await tx.payment.create({
+            data: {
+              transactionId: newTransaction.id,
+              method: sp.method,
+              amount: Number(sp.amount),
+              status: "SUCCESS",
+            },
+          });
+        }
+      }
+    } else {
+      await tx.payment.create({
+        data: {
+          transactionId: newTransaction.id,
+          method: paymentMethod,
+          amount: totalAmount,
+          status: "SUCCESS",
+        },
+      });
+    }
 
-    // 4. Hitung nomor antrean harian berurutan (Sequential Daily Queue)
+    // 7. Hitung nomor antrean harian berurutan (Sequential Daily Queue)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const dailyCount = await tx.transaction.count({
       where: { outletId, createdAt: { gte: todayStart } },
     });
-    const seq = dailyCount + 1;
-    const prefix = orderType === "TAKEAWAY" ? "B" : "A";
+    const seq = dailyCount; // newTransaction sudah tercatat sebelum query count ini
+    let prefix = "A";
+    if (orderType === "TAKEAWAY") prefix = "B";
+    else if ((orderType as string) === "DELIVERY") prefix = "C";
     const queueNumber = `${prefix}-${String(seq).padStart(2, "0")}`;
 
     // Ambil data transaksi lengkap untuk dicetak struk
@@ -479,7 +502,7 @@ export async function createTransactionAction(data: {
         ...(fullTransaction as any),
         receiptNumber: fullTransaction?.transactionNumber,
         queueNumber,
-        orderType: orderType === "TAKEAWAY" ? "Take Away" : "Dine In",
+        orderType: orderType === "TAKEAWAY" ? "Take Away" : (orderType as string) === "DELIVERY" ? "Delivery" : "Dine In",
       },
       queueNumber,
       change: amountPaid - totalAmount,
@@ -492,6 +515,8 @@ export async function createTransactionAction(data: {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/dashboard/reports");
 
   return { success: true, ...result };
 }
@@ -525,8 +550,148 @@ export async function getTransactionHistoryAction(params: {
       shift: { include: { kasir: true } },
       items: { include: { product: true } },
       payments: true,
+      customer: true,
     },
   });
 
   return transactions;
+}
+
+export async function voidTransactionAction(data: {
+  transactionId: string;
+  reason: string;
+}) {
+  const user = await requireCashierOrOwner();
+  const { transactionId, reason } = data;
+
+  if (!reason || !reason.trim()) {
+    throw new Error("Alasan void / refund transaksi wajib diisi.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const trx = await tx.transaction.findUnique({
+      where: { id: transactionId },
+      include: {
+        outlet: true,
+        items: { include: { product: true } },
+        payments: true,
+      },
+    });
+
+    if (!trx || trx.outlet.tenantId !== user.tenantId) {
+      throw new Error("Transaksi tidak ditemukan.");
+    }
+
+    if (trx.status === "CANCELLED") {
+      throw new Error("Transaksi ini sudah berstatus CANCELLED / Dibatalkan.");
+    }
+
+    // 1. Ubah status transaksi menjadi CANCELLED
+    await tx.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: "CANCELLED",
+      },
+    });
+
+    // 2. Kembalikan stok untuk setiap produk BARANG & catat StockMovement (IN)
+    for (const item of trx.items) {
+      if (item.product && item.product.type === "BARANG") {
+        // Increment legacy stockQty jika ada
+        if (item.product.stockQty !== null) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stockQty: { increment: item.qty },
+            },
+          });
+        }
+
+        // Increment OutletStock cabang
+        const outletStock = await tx.outletStock.findUnique({
+          where: {
+            outletId_productId: {
+              outletId: trx.outletId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        if (outletStock) {
+          await tx.outletStock.update({
+            where: {
+              outletId_productId: {
+                outletId: trx.outletId,
+                productId: item.productId,
+              },
+            },
+            data: {
+              stockQty: { increment: item.qty },
+            },
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              outletStockId: outletStock.id,
+              type: "IN",
+              qty: item.qty,
+              note: `Void Transaksi (${trx.transactionNumber}): ${reason.trim()}`,
+            },
+          });
+        }
+      }
+
+      // 3. Batalkan komisi staf terkait jika ada
+      await tx.staffCommission.deleteMany({
+        where: { transactionItemId: item.id },
+      });
+    }
+
+    // 4. Catat pengeluaran kas refund pada shift aktif jika transaksi dibayar secara CASH
+    const cashPaid = trx.payments
+      .filter((p) => p.method === "CASH" && p.status === "SUCCESS")
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+
+    if (cashPaid > 0) {
+      const activeShift = await tx.shift.findFirst({
+        where: {
+          outletId: trx.outletId,
+          closedAt: null,
+        },
+      });
+
+      if (activeShift) {
+        await tx.cashMovement.create({
+          data: {
+            shiftId: activeShift.id,
+            type: "OUT",
+            amount: cashPaid,
+            note: `Refund Void Transaksi ${trx.transactionNumber}: ${reason.trim()}`,
+          },
+        });
+      }
+    }
+
+    // 5. Update LTV Customer jika ada
+    if (trx.customerId) {
+      await tx.customer.update({
+        where: { id: trx.customerId },
+        data: {
+          visits: { decrement: 1 },
+          totalSpent: { decrement: Number(trx.totalAmount) },
+        },
+      });
+    }
+
+    return { transactionNumber: trx.transactionNumber };
+  });
+
+  revalidatePath("/pos");
+  revalidatePath("/pos/history");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/reports");
+
+  return { success: true, message: `Transaksi ${result.transactionNumber} berhasil di-void.` };
 }

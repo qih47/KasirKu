@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toastError } from "@/lib/swal";
 import {
   createLaundryOrderAction,
@@ -148,13 +149,23 @@ export function LaundryOrdersClient({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 transition flex items-center gap-1.5"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Terima Cucian Baru</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard/laundry/commissions"
+            className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+            <span>Laporan Komisi</span>
+          </Link>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 transition flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Terima Cucian Baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Orders Table */}

@@ -96,8 +96,27 @@ export async function createOutletAction(data: {
     },
   });
 
+  // Otomatis buatkan record OutletStock untuk semua produk existing di outlet baru ini
+  const existingProducts = await prisma.product.findMany({
+    where: { tenantId: user.tenantId },
+  });
+
+  for (const prod of existingProducts) {
+    await prisma.outletStock.create({
+      data: {
+        outletId: newOutlet.id,
+        productId: prod.id,
+        stockQty: prod.stockQty ?? 0,
+        isAvailable: prod.isActive,
+        priceOverride: null,
+      },
+    });
+  }
+
   revalidatePath("/dashboard/outlets");
+  revalidatePath("/dashboard/products");
   revalidatePath("/dashboard");
+  revalidatePath("/pos");
   return { success: true, outlet: newOutlet };
 }
 

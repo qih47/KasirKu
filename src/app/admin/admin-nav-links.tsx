@@ -38,6 +38,11 @@ export function AdminNavLinks() {
       icon: Tags,
     },
     {
+      name: locale === "en" ? "Theme Presets" : "Tema & UI Builder",
+      href: "/admin/themes",
+      icon: Palette,
+    },
+    {
       name: locale === "en" ? "Broadcast Message" : "Pesan Broadcast",
       href: "/admin/broadcast",
       icon: Radio,

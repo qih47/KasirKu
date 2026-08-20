@@ -147,16 +147,19 @@ export default async function SuperAdminDashboardPage() {
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800/80 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Estimasi MRR
+              Estimasi MRR / ARR
             </span>
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white">
+          <p className="text-xl font-black text-white">
             Rp {metrics.estimatedMRR.toLocaleString("id-ID")}
+            <span className="text-xs font-normal text-slate-400">/bln</span>
           </p>
-          <p className="text-xs text-slate-500 mt-1">Pendapatan bulanan aktif</p>
+          <p className="text-[11px] text-indigo-400 font-semibold mt-1">
+            ARR: Rp {(metrics.estimatedARR || metrics.estimatedMRR * 12).toLocaleString("id-ID")}/thn
+          </p>
         </div>
       </div>
 

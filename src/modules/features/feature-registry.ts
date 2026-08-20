@@ -215,10 +215,39 @@ export const DEFAULT_FEATURE_ENTITLEMENTS: FeatureEntitlement[] = [
   {
     key: "RETAIL_REPORT_ANALYTICS",
     name: "Analisis Pareto Fast-Moving vs Dead-Stock",
-    category: "RETAIL",
+    category: "REPORTS",
     description: "Laporan perputaran inventori SKU cepat laku vs barang mengendap di rak lebih dari 30 hari.",
     allowedTiers: ["pro", "enterprise"],
     requiredPlugin: "retail",
+    isPublicPreview: true,
+  },
+
+  // ── 8. KATEGORI PENGGAJIAN & KOMISI (PAYROLL) ──
+  {
+    key: "PAYROLL_CORE_CALCULATION",
+    name: "Perhitungan Gaji Pokok & Komisi Karyawan",
+    category: "STAFF",
+    description: "Kalkulasi otomatis take-home-pay staf, tunjangan tetap, dan komisi dari transaksi kasir.",
+    allowedTiers: ["basic", "starter", "pro", "enterprise"],
+    requiredPlugin: null,
+    isPublicPreview: true,
+  },
+  {
+    key: "PAYROLL_ADVANCE_SALARY",
+    name: "Manajemen Kasbon & Cicilan Karyawan",
+    category: "STAFF",
+    description: "Pencatatan pinjaman kasbon staf dan pemotongan otomatis pada saat tutup periode gaji.",
+    allowedTiers: ["pro", "enterprise"],
+    requiredPlugin: null,
+    isPublicPreview: true,
+  },
+  {
+    key: "PAYROLL_EXPORT_SLIP",
+    name: "Export Slip Gaji & Rekap Payroll Excel",
+    category: "STAFF",
+    description: "Unduh rekapitulasi penggajian bulanan ke Excel (.xlsx) dan cetak slip gaji karyawan.",
+    allowedTiers: ["pro", "enterprise"],
+    requiredPlugin: null,
     isPublicPreview: true,
   },
 ];

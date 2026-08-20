@@ -22,27 +22,48 @@ export async function getSuperAdminDashboardData() {
   // Inisialisasi seeder default catalog jika belum ada
   await ensureDefaultCatalogSeeded();
 
-  const [totalTenants, trialTenants, activeTenants, lockedTenants, frozenTenants, tenants] =
-    await Promise.all([
-      prisma.tenant.count(),
-      prisma.tenant.count({ where: { status: "TRIAL" } }),
-      prisma.tenant.count({ where: { status: "ACTIVE" } }),
-      prisma.tenant.count({ where: { status: "LOCKED" } }),
-      prisma.tenant.count({ where: { status: "FROZEN" } }),
-      prisma.tenant.findMany({
-        take: 5,
-        orderBy: { createdAt: "desc" },
-        include: {
-          users: { where: { role: "OWNER" }, take: 1 },
-          subscriptions: {
-            where: { isActive: true },
-            include: { licenseTier: true, plugins: { include: { plugin: true } } },
-          },
-        },
-      }),
-    ]);
+  const now = new Date();
 
-  // Hitung estimasi Monthly Recurring Revenue (MRR) dari tenant ACTIVE
+  // 1. Auto-Lock tenant dengan masa Trial yang sudah expired
+  await prisma.tenant.updateMany({
+    where: {
+      status: "TRIAL",
+      trialEndAt: { lt: now },
+    },
+    data: {
+      status: "LOCKED",
+    },
+  });
+
+  const [
+    totalTenants,
+    trialTenants,
+    activeTenants,
+    lockedTenants,
+    frozenTenants,
+    tenants,
+    totalActiveVouchers,
+  ] = await Promise.all([
+    prisma.tenant.count(),
+    prisma.tenant.count({ where: { status: "TRIAL" } }),
+    prisma.tenant.count({ where: { status: "ACTIVE" } }),
+    prisma.tenant.count({ where: { status: "LOCKED" } }),
+    prisma.tenant.count({ where: { status: "FROZEN" } }),
+    prisma.tenant.findMany({
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      include: {
+        users: { where: { role: "OWNER" }, take: 1 },
+        subscriptions: {
+          where: { isActive: true },
+          include: { licenseTier: true, plugins: { include: { plugin: true } } },
+        },
+      },
+    }),
+    prisma.voucher.count({ where: { isActive: true } }),
+  ]);
+
+  // 2. Hitung estimasi Monthly Recurring Revenue (MRR) & ARR dari tenant ACTIVE
   const activeSubs = await prisma.tenantSubscription.findMany({
     where: { isActive: true, tenant: { status: "ACTIVE" } },
     include: {
@@ -53,13 +74,17 @@ export async function getSuperAdminDashboardData() {
 
   let estimatedMRR = 0;
   for (const sub of activeSubs) {
-    estimatedMRR += Number(sub.licenseTier.priceMonthly);
-    for (const p of sub.plugins) {
-      estimatedMRR += Number(p.plugin.priceMonthly);
-    }
+    const tierMonthly = Number(sub.licenseTier.priceMonthly || 0);
+    const pluginsMonthly = sub.plugins.reduce(
+      (sum, p) => sum + Number(p.plugin.priceMonthly || 0),
+      0
+    );
+    estimatedMRR += (tierMonthly + pluginsMonthly);
   }
 
-  // Distribusi plugin terpasang
+  const estimatedARR = estimatedMRR * 12;
+
+  // 3. Distribusi plugin terpasang
   const plugins = await prisma.plugin.findMany({
     include: {
       _count: {
@@ -76,6 +101,8 @@ export async function getSuperAdminDashboardData() {
       lockedTenants,
       frozenTenants,
       estimatedMRR,
+      estimatedARR,
+      totalActiveVouchers,
     },
     recentTenants: tenants,
     pluginsDistribution: plugins,
@@ -342,11 +369,24 @@ export async function updateThemeAction(
   return { success: true };
 }
 
-export async function getAuditLogsList() {
+export async function getAuditLogsList(params?: { search?: string; limit?: number }) {
   await requireSuperAdmin();
 
+  const take = params?.limit ? Math.min(200, Math.max(10, params.limit)) : 100;
+  const where: any = {};
+
+  if (params?.search && params.search.trim()) {
+    const q = params.search.trim();
+    where.OR = [
+      { action: { contains: q, mode: "insensitive" } },
+      { targetType: { contains: q, mode: "insensitive" } },
+      { targetId: { contains: q, mode: "insensitive" } },
+    ];
+  }
+
   return prisma.auditLog.findMany({
-    take: 50,
+    where,
+    take,
     orderBy: { createdAt: "desc" },
     include: {
       superAdmin: {

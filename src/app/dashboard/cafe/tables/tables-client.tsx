@@ -172,43 +172,46 @@ export function CafeTablesClient({
   return (
     <div className="space-y-6">
       {/* Header Cafe Tables */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            <Coffee className="w-3.5 h-3.5" />
-            Modul Cafe &amp; F&amp;B
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">
+              <Coffee className="w-3.5 h-3.5" />
+              Modul Cafe &amp; F&amp;B
+            </span>
+
+            {/* Multi-Outlet Switcher for Owner */}
+            {data.outlets && data.outlets.length > 1 && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <select
+                  value={data.currentOutletId}
+                  onChange={(e) => {
+                    window.location.href = `/dashboard/cafe/tables?outletId=${e.target.value}`;
+                  }}
+                  className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-0 cursor-pointer p-0 pr-1"
+                >
+                  {data.outlets.map((o: any) => (
+                    <option key={o.id} value={o.id} className="dark:bg-slate-900">
+                      Cabang: {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
-            Denah Meja &amp; Manajemen Tata Letak
+
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+            Denah Meja &amp; Tata Letak
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Pantau status meja real-time, ubah kapasitas kursi, ganti nama meja, serta kelola zona indoor/outdoor.
+          <p className="text-xs text-slate-500">
+            Pantau status meja real-time, atur kapasitas kursi, dan cetak QR standee meja.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Multi-Outlet Switcher for Owner */}
-          {data.outlets && data.outlets.length > 1 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <select
-                value={data.currentOutletId}
-                onChange={(e) => {
-                  window.location.href = `/dashboard/cafe/tables?outletId=${e.target.value}`;
-                }}
-                className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-0 cursor-pointer pr-2"
-              >
-                {data.outlets.map((o: any) => (
-                  <option key={o.id} value={o.id} className="dark:bg-slate-900">
-                    Cabang: {o.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Mode Switcher Toggle */}
-          <div className="p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center gap-1">
+          <div className="p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center gap-0.5">
             <button
               onClick={() => setMode("POS_BILLING")}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
@@ -217,7 +220,7 @@ export function CafeTablesClient({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              Mode Kasir / Tamu
+              Mode Kasir
             </button>
             <button
               onClick={() => setMode("MANAGE_LAYOUT")}

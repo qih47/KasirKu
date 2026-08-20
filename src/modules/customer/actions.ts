@@ -24,6 +24,7 @@ export interface CustomerSummaryItem {
   totalSpent: number;
   lastVisitAt: string | null;
   createdAt: string;
+  lastOutletName?: string | null;
   _count?: {
     transactions: number;
     bookings: number;
@@ -39,6 +40,8 @@ export interface CustomersPageData {
     totalSpentAll: number;
     averageSpentPerCustomer: number;
   };
+  outlets?: { id: string; name: string }[];
+  selectedOutletId?: string | null;
   totalCount: number;
 }
 
@@ -46,6 +49,7 @@ export async function getCustomersData(params?: {
   search?: string;
   sortBy?: "name" | "visits" | "totalSpent" | "lastVisitAt" | "recent";
   limit?: number;
+  outletId?: string;
 }): Promise<CustomersPageData> {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
@@ -57,6 +61,8 @@ export async function getCustomersData(params?: {
         totalSpentAll: 0,
         averageSpentPerCustomer: 0,
       },
+      outlets: [],
+      selectedOutletId: null,
       totalCount: 0,
     };
   }
@@ -76,6 +82,14 @@ export async function getCustomersData(params?: {
     ];
   }
 
+  if (params?.outletId && params.outletId !== "ALL") {
+    whereClause.OR = [
+      { transactions: { some: { outletId: params.outletId } } },
+      { bookings: { some: { outletId: params.outletId } } },
+      { laundryOrders: { some: { outletId: params.outletId } } },
+    ];
+  }
+
   let orderBy: any = { createdAt: "desc" };
   if (params?.sortBy === "visits") {
     orderBy = { visits: "desc" };
@@ -87,12 +101,19 @@ export async function getCustomersData(params?: {
     orderBy = { name: "asc" };
   }
 
-  const [rawCustomers, allCustomersStats] = await Promise.all([
+  const [rawCustomers, allCustomersStats, allOutlets] = await Promise.all([
     prisma.customer.findMany({
       where: whereClause,
       orderBy: orderBy,
       take: params?.limit || 100,
       include: {
+        transactions: {
+          take: 1,
+          orderBy: { createdAt: "desc" },
+          select: {
+            outlet: { select: { name: true } },
+          },
+        },
         _count: {
           select: {
             transactions: true,
@@ -109,6 +130,11 @@ export async function getCustomersData(params?: {
         totalSpent: true,
         lastVisitAt: true,
       },
+    }),
+    prisma.outlet.findMany({
+      where: { tenantId: user.tenantId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -139,6 +165,7 @@ export async function getCustomersData(params?: {
     totalSpent: Number(c.totalSpent || 0),
     lastVisitAt: c.lastVisitAt ? c.lastVisitAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
+    lastOutletName: c.transactions?.[0]?.outlet?.name || null,
     _count: c._count,
   }));
 
@@ -150,6 +177,8 @@ export async function getCustomersData(params?: {
       totalSpentAll,
       averageSpentPerCustomer,
     },
+    outlets: allOutlets,
+    selectedOutletId: params?.outletId || "ALL",
     totalCount: rawCustomers.length,
   };
 }

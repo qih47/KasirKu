@@ -243,6 +243,12 @@ export const OFFICIAL_RECEIPT_BLOCKS: Record<ReceiptBlockType, ReceiptBlockDefin
     description: "Nama produk, qty, harga satuan, varian modifier, dan subtotal.",
     defaultAlign: "left",
   },
+  DISCOUNT_VOUCHER: {
+    type: "DISCOUNT_VOUCHER",
+    name: "Potongan Diskon & Voucher Promo",
+    description: "Baris potongan diskon kode voucher promo atau diskon manual kasir.",
+    defaultAlign: "right",
+  },
   TOTAL_SUMMARY: {
     type: "TOTAL_SUMMARY",
     name: "Ringkasan Total & Pajak",
@@ -271,6 +277,12 @@ export const OFFICIAL_RECEIPT_BLOCKS: Record<ReceiptBlockType, ReceiptBlockDefin
     type: "WIFI_INFO",
     name: "Informasi WiFi Kafe",
     description: "SSID dan Password WiFi untuk pelanggan.",
+    defaultAlign: "center",
+  },
+  CUSTOM_NOTE: {
+    type: "CUSTOM_NOTE",
+    name: "Teks / Catatan Kustom",
+    description: "Baris teks pengumuman atau promosi kustom.",
     defaultAlign: "center",
   },
   FOOTER_NOTES: {

@@ -66,6 +66,10 @@ export interface ReceiptConfig {
   pb1Percent: number;
   showServiceCharge: boolean;
   servicePercent: number;
+  showAdminFee?: boolean; // Biaya Admin Transaksi Flat
+  adminFeeAmount?: number;
+  taxCalculationType?: "EXCLUSIVE" | "INCLUSIVE";
+  autoPrintReceipt?: boolean;
   showRounding: boolean; // Pembulatan (Rounding Adjustment)
   roundingAmount?: number;
   showPaymentDetail: boolean;

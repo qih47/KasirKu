@@ -237,5 +237,6 @@ export async function updateTableStatusAction(data: {
   });
 
   revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
   return { success: true, table: updated };
 }

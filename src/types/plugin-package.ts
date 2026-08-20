@@ -189,11 +189,13 @@ export type ReceiptBlockType =
   | "QUEUE_NUMBER"
   | "TABLE_META"
   | "ITEMS_TABLE"
+  | "DISCOUNT_VOUCHER"
   | "TOTAL_SUMMARY"
   | "PAYMENT_DETAILS"
   | "QRIS_CODE"
   | "COUPON_PROMO"
   | "WIFI_INFO"
+  | "CUSTOM_NOTE"
   | "FOOTER_NOTES"
   | "POWERED_BY";
 
@@ -207,11 +209,13 @@ export const ReceiptBlockSchema = z.object({
     "QUEUE_NUMBER",
     "TABLE_META",
     "ITEMS_TABLE",
+    "DISCOUNT_VOUCHER",
     "TOTAL_SUMMARY",
     "PAYMENT_DETAILS",
     "QRIS_CODE",
     "COUPON_PROMO",
     "WIFI_INFO",
+    "CUSTOM_NOTE",
     "FOOTER_NOTES",
     "POWERED_BY",
   ]),

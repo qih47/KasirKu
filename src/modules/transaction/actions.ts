@@ -446,6 +446,16 @@ export async function createTransactionAction(data: {
       },
     });
 
+    // 4. Hitung nomor antrean harian berurutan (Sequential Daily Queue)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dailyCount = await tx.transaction.count({
+      where: { outletId, createdAt: { gte: todayStart } },
+    });
+    const seq = dailyCount + 1;
+    const prefix = orderType === "TAKEAWAY" ? "B" : "A";
+    const queueNumber = `${prefix}-${String(seq).padStart(2, "0")}`;
+
     // Ambil data transaksi lengkap untuk dicetak struk
     const fullTransaction = await tx.transaction.findUnique({
       where: { id: newTransaction.id },
@@ -465,7 +475,13 @@ export async function createTransactionAction(data: {
     });
 
     return {
-      transaction: fullTransaction,
+      transaction: {
+        ...(fullTransaction as any),
+        receiptNumber: fullTransaction?.transactionNumber,
+        queueNumber,
+        orderType: orderType === "TAKEAWAY" ? "Take Away" : "Dine In",
+      },
+      queueNumber,
       change: amountPaid - totalAmount,
       amountPaid,
     };

@@ -370,6 +370,21 @@ export async function checkoutLiveOrderAction(data: {
       },
     });
 
+    // 6. Jika Live Order terkait nomor meja resto, otomatis kembalikan status meja ke AVAILABLE (Kosong)
+    if (order.tableNumber && order.outletId) {
+      await tx.cafeTable.updateMany({
+        where: {
+          outletId: order.outletId,
+          tableNumber: order.tableNumber,
+        },
+        data: {
+          status: "AVAILABLE",
+          currentGuestName: null,
+          currentOrderNotes: null,
+        },
+      });
+    }
+
     return {
       transaction,
       change: amountPaid - totalAmount,

@@ -34,12 +34,17 @@ import {
   Zap,
   Clock,
   ShieldCheck,
+  Ticket,
 } from "lucide-react";
 import {
   updateTenantBrandingAction,
   updateTenantShiftModeAction,
 } from "@/modules/tenant/settings-actions";
 import { ReceiptConfig, defaultReceiptConfig } from "@/types/receipt";
+import {
+  DynamicReceiptRenderer,
+  TransactionReceiptData,
+} from "@/components/receipt/dynamic-receipt-renderer";
 import Link from "next/link";
 
 interface SettingsClientProps {
@@ -246,18 +251,58 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     }
   };
 
-  // Sample items for thermal live preview
-  const sampleItems = [
-    { name: "Kopi Susu Gula Aren", qty: 1, price: 22000, mods: ["Normal Ice", "Less Sweet"] },
-    { name: "Iced Caramel Macchiato", qty: 1, price: 28000, mods: ["Extra Shot"] },
-    { name: "Butter Croissant", qty: 1, price: 24000 },
-  ];
-  const subtotal = sampleItems.reduce((acc, i) => acc + i.qty * i.price, 0);
-  const taxAmount = receiptConfig.showTax ? Math.round((subtotal * (receiptConfig.taxPercent || 11)) / 100) : 0;
-  const pb1Amount = receiptConfig.showPb1 ? Math.round((subtotal * (receiptConfig.pb1Percent || 10)) / 100) : 0;
-  const serviceAmount = receiptConfig.showServiceCharge ? Math.round((subtotal * (receiptConfig.servicePercent || 5)) / 100) : 0;
-  const discountAmount = receiptConfig.showDiscount ? Math.round((subtotal * (receiptConfig.discountPercent || 10)) / 100) : 0;
-  const totalBill = subtotal + taxAmount + pb1Amount + serviceAmount - discountAmount;
+  // Sample transaction data for 100% unified thermal live preview
+  const sampleTransactionData: TransactionReceiptData = {
+    storeName: businessName || "KAFEKU",
+    legalName: receiptConfig.legalName,
+    npwp: receiptConfig.npwp,
+    outletName: initialData.primaryOutlet?.name || "Cabang Utama",
+    address: address || "Jl. Sudirman No. 45, Jakarta",
+    phone: phone || "0812-3456-7890",
+    headerNote: receiptConfig.headerText || "Selamat Menikmati",
+    logoUrl: receiptConfig.logoUrl || logoUrl || null,
+    invoiceNo: "#INV-5078",
+    dateTime: "14:30 WIB",
+    cashierName: "Rian (Kasir)",
+    queueNumber: "#A-24",
+    tableNumber: "Meja 08",
+    orderType: "Dine In",
+    items: [
+      { name: "Kopi Susu Gula Aren", qty: 1, price: 22000, subtotal: 22000, notes: "Normal Ice, Less Sweet" },
+      { name: "Iced Caramel Macchiato", qty: 1, price: 28000, subtotal: 28000, notes: "Extra Shot" },
+      { name: "Butter Croissant", qty: 1, price: 24000, subtotal: 24000 },
+    ],
+    subtotal: 74000,
+    discountAmount: receiptConfig.showDiscount ? Math.round((74000 * (receiptConfig.discountPercent || 10)) / 100) : 0,
+    taxPb1Amount: receiptConfig.showPb1 ? Math.round((74000 * (receiptConfig.pb1Percent || 10)) / 100) : 0,
+    taxPpnAmount: receiptConfig.showTax ? Math.round((74000 * (receiptConfig.taxPercent || 11)) / 100) : 0,
+    serviceChargeAmount: receiptConfig.showServiceCharge ? Math.round((74000 * (receiptConfig.servicePercent || 5)) / 100) : 0,
+    adminFeeAmount: receiptConfig.showAdminFee ? Number(receiptConfig.adminFeeAmount || 1000) : 0,
+    grandTotal:
+      74000 +
+      (receiptConfig.showTax ? Math.round((74000 * (receiptConfig.taxPercent || 11)) / 100) : 0) +
+      (receiptConfig.showPb1 ? Math.round((74000 * (receiptConfig.pb1Percent || 10)) / 100) : 0) +
+      (receiptConfig.showServiceCharge ? Math.round((74000 * (receiptConfig.servicePercent || 5)) / 100) : 0) +
+      (receiptConfig.showAdminFee ? Number(receiptConfig.adminFeeAmount || 1000) : 0) -
+      (receiptConfig.showDiscount ? Math.round((74000 * (receiptConfig.discountPercent || 10)) / 100) : 0),
+    paymentMethod: "QRIS",
+    amountPaid: 74000,
+    changeAmount: 0,
+    coupon: receiptConfig.dynamicCoupon?.enabled
+      ? {
+          code: receiptConfig.dynamicCoupon.couponCode || "DISKON10",
+          text: receiptConfig.dynamicCoupon.discountText || "Diskon 10% kunjungan berikutnya",
+          expiryDate: `${receiptConfig.dynamicCoupon.expiryDays || 30} Hari`,
+        }
+      : undefined,
+    wifi: receiptConfig.showWifi
+      ? {
+          ssid: receiptConfig.wifiSsid || "KAFEKU_Guest",
+          password: receiptConfig.wifiPassword || "kopienak",
+        }
+      : undefined,
+    footerNote: receiptConfig.footerText || "Terima kasih atas kunjungan Anda!",
+  };
 
   // Active Receipt Theme Blueprint Helper
   const isRetailTheme = activeReceiptTemplate.toLowerCase().includes("retail") || activeReceiptTemplate.toLowerCase().includes("barcode") || activeReceiptTemplate.toLowerCase().includes("58mm");
@@ -719,66 +764,80 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
               {/* Mode Cepat (Fast POS) */}
               <div
                 onClick={() => !savingShiftMode && handleShiftModeChange("FAST")}
-                className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${shiftMode === "FAST"
-                    ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
-                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
+                className={`p-5 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-200 relative flex flex-col justify-between space-y-3 active:scale-[0.99] ${
+                  shiftMode === "FAST"
+                    ? "border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20 shadow-md"
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 hover:shadow-sm"
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
-                      <Zap className="w-4 h-4" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                      <Zap className="w-5 h-5" />
                     </div>
-                    <div>
-                      <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                        ⚡ Mode Cepat (Fast POS)
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        Mode Cepat (Fast POS)
                       </h3>
-                      <span className="text-[10px] font-bold text-emerald-600">Rekomendasi Solo Owner / Cepat</span>
+                      <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[10px] font-extrabold border border-emerald-500/20">
+                        ⚡ Rekomendasi Solo Owner / Cepat
+                      </span>
                     </div>
                   </div>
-                  {shiftMode === "FAST" && (
-                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
-                      ✓
-                    </span>
-                  )}
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition ${
+                      shiftMode === "FAST"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "border-2 border-slate-300 dark:border-slate-700"
+                    }`}
+                  >
+                    {shiftMode === "FAST" && "✓"}
+                  </div>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                  Kasir langsung masuk ke katalog menu dan siap transaksi. Shift aktif dibuat otomatis di background (modal Rp 0). Kasir tetap bisa melihat rekap kas kapan saja.
+                  Kasir langsung masuk ke katalog menu dan siap melayani transaksi. Shift kasir dibuat otomatis di background (modal Rp 0). Kasir tetap dapat melihat rekap uang kas kapan saja.
                 </p>
               </div>
 
               {/* Mode Ketat (Strict Shift) */}
               <div
                 onClick={() => !savingShiftMode && handleShiftModeChange("STRICT")}
-                className={`p-4.5 rounded-2xl border-2 cursor-pointer transition relative space-y-2 ${shiftMode === "STRICT"
-                    ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 shadow-sm"
-                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
-                  }`}
+                className={`p-5 sm:p-6 rounded-2xl border-2 cursor-pointer transition-all duration-200 relative flex flex-col justify-between space-y-3 active:scale-[0.99] ${
+                  shiftMode === "STRICT"
+                    ? "border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20 shadow-md"
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 hover:shadow-sm"
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold">
-                      <ShieldCheck className="w-4 h-4" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                      <ShieldCheck className="w-5 h-5" />
                     </div>
-                    <div>
-                      <h3 className="text-xs font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                        🔒 Mode Ketat (Strict Shift)
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        Mode Ketat (Strict Shift)
                       </h3>
-                      <span className="text-[10px] font-bold text-rose-600">Kontrol Laci Kasir Ketat</span>
+                      <span className="inline-block px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400 text-[10px] font-extrabold border border-rose-500/20">
+                        🔒 Kontrol Laci Kasir Ketat
+                      </span>
                     </div>
                   </div>
-                  {shiftMode === "STRICT" && (
-                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black">
-                      ✓
-                    </span>
-                  )}
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition ${
+                      shiftMode === "STRICT"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "border-2 border-slate-300 dark:border-slate-700"
+                    }`}
+                  >
+                    {shiftMode === "STRICT" && "✓"}
+                  </div>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                  Kasir wajib memasukkan uang modal awal kembalian sebelum bisa melayani transaksi. Selisih uang fisik vs catatan sistem akan dihitung saat tutup shift.
+                  Kasir wajib memasukkan uang modal awal kembalian laci sebelum bisa melayani transaksi. Selisih uang fisik kasir vs catatan sistem akan dihitung secara rinci saat tutup shift.
                 </p>
               </div>
             </div>
@@ -985,9 +1044,9 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               </select>
             </div>
 
-            {/* Kartu 2: Konfigurasi Komponen Sesuai Tema (Dasar) */}
+            {/* Kartu 2: 🏪 KOMPONEN BAWAAN TEMA STRUK (CHECKLIST KONTROL) */}
             <div
-              className="p-5 sm:p-6 border shadow-sm space-y-4"
+              className="p-6 sm:p-7 border shadow-sm space-y-5 transition-all"
               style={{
                 backgroundColor: "var(--theme-card-bg, #ffffff)",
                 borderColor: "var(--theme-card-border, #e2e8f0)",
@@ -995,65 +1054,135 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               }}
             >
               <div className="border-b pb-3 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                <h3 className="font-black text-sm flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                  <Store className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                  <Store className="w-4 h-4 text-emerald-600" />
                   <span>Komponen Bawaan Tema Struk</span>
                 </h3>
-                <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                  Aktifkan atau sembunyikan elemen visual pada struk cetak belanja.
+                <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  Aktifkan atau sembunyikan elemen visual pada struk cetak belanja. Seluruh pengaturan di sini tersinkron otomatis ke Kasir POS.
                 </p>
               </div>
 
-              {/* Toggles Kop & Identitas */}
-              <div className="space-y-2.5 text-xs">
-                <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                  <div>
-                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Logo</p>
-                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Cetak logo brand di bagian atas struk</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={receiptConfig.showLogo}
-                    onChange={(e) => handleConfigChange("showLogo", e.target.checked)}
-                    className="w-4 h-4 rounded text-indigo-600"
-                  />
-                </label>
+              {/* 1. KOP & IDENTITAS TOKO */}
+              <div className="space-y-2 text-xs">
+                <span className="text-[11px] font-bold block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
+                  1. Kop &amp; Identitas Usaha:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Logo</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Cetak logo brand di bagian atas struk</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showLogo}
+                      onChange={(e) => handleConfigChange("showLogo", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
 
-                <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                  <div>
-                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Alamat Outlet</p>
-                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak lokasi outlet / cabang</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={receiptConfig.showAddress}
-                    onChange={(e) => handleConfigChange("showAddress", e.target.checked)}
-                    className="w-4 h-4 rounded text-indigo-600"
-                  />
-                </label>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nama Legal PT / Usaha</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak nama badan hukum usaha</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showLegalName}
+                      onChange={(e) => handleConfigChange("showLegalName", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
 
-                <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                  <div>
-                    <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tampilkan Nomor Kontak / Telepon</p>
-                    <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Nomor WhatsApp atau call center</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={receiptConfig.showPhone}
-                    onChange={(e) => handleConfigChange("showPhone", e.target.checked)}
-                    className="w-4 h-4 rounded text-indigo-600"
-                  />
-                </label>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nama Cabang / Outlet</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak identitas cabang toko</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showOutletName ?? true}
+                      onChange={(e) => handleConfigChange("showOutletName", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>NPWP / Tax ID Usaha</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak nomor pokok wajib pajak</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showNpwp}
+                      onChange={(e) => handleConfigChange("showNpwp", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Alamat Outlet</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Mencetak lokasi outlet / cabang</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showAddress}
+                      onChange={(e) => handleConfigChange("showAddress", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer sm:col-span-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nomor Kontak / Telepon</p>
+                      <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Nomor WhatsApp atau call center</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showPhone}
+                      onChange={(e) => handleConfigChange("showPhone", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+                </div>
               </div>
 
-              {/* Toggles Transaksi Kasir POS (Otomatis realtime, hanya toggle) */}
+              {/* 2. DATA TRANSAKSI KASIR POS */}
               <div className="pt-2 border-t space-y-2 text-xs" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                 <span className="text-[11px] font-bold block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
-                  Data Transaksi Kasir POS (Otomatis Terisi saat Transaksi):
+                  2. Data Transaksi Kasir POS:
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>No. Struk (Invoice)</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Nomor unik faktur transaksi</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showInvoiceNo ?? true}
+                      onChange={(e) => handleConfigChange("showInvoiceNo", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tanggal &amp; Waktu</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Jam transaksi real-time kasir</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showDateTime ?? true}
+                      onChange={(e) => handleConfigChange("showDateTime", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <div>
                       <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nama Kasir</p>
                       <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Otomatis nama operator login</p>
@@ -1066,15 +1195,15 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                     />
                   </label>
 
-                  <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <div>
-                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Rincian Pembayaran</p>
-                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Otomatis QRIS/Tunai &amp; Kembalian</p>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nomor Antrean (Box)</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Kotak antrean besar terpusat</p>
                     </div>
                     <input
                       type="checkbox"
-                      checked={receiptConfig.showPaymentDetail}
-                      onChange={(e) => handleConfigChange("showPaymentDetail", e.target.checked)}
+                      checked={receiptConfig.showQueueNumber}
+                      onChange={(e) => handleConfigChange("showQueueNumber", e.target.checked)}
                       className="w-4 h-4 rounded text-indigo-600"
                     />
                   </label>
@@ -1082,7 +1211,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                   {/* Cafe / Resto specific toggles */}
                   {isCafeTheme && (
                     <>
-                      <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                      <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                         <div>
                           <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nomor Meja</p>
                           <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Otomatis dari meja pesanan</p>
@@ -1095,7 +1224,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                         />
                       </label>
 
-                      <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                      <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                         <div>
                           <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Tipe Pesanan</p>
                           <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Dine In / Take Away</p>
@@ -1110,23 +1239,10 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                     </>
                   )}
 
-                  <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer sm:col-span-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <div>
-                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Nomor Antrean</p>
-                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Nomor urut antrean harian</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={receiptConfig.showQueueNumber}
-                      onChange={(e) => handleConfigChange("showQueueNumber", e.target.checked)}
-                      className="w-4 h-4 rounded text-indigo-600"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-2 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                    <div>
-                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Varian &amp; Modifiers</p>
-                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Catatan es, gula, rasa</p>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Varian &amp; Catatan Menu</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Catatan es, gula, request khusus</p>
                     </div>
                     <input
                       type="checkbox"
@@ -1138,23 +1254,54 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 </div>
               </div>
 
-              {/* Pajak & Biaya F&B */}
-              {isCafeTheme && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t text-xs" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+              {/* 3. DISKON, PAJAK & BIAYA TRANSAKSI TOKO */}
+              <div className="pt-2 border-t space-y-2.5 text-xs" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
+                    3. Diskon, Pajak &amp; Biaya Transaksi Toko:
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    * Otomatis dihitung di kasir POS &amp; dicetak
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Potongan Diskon & Voucher Promo (STANDAR FITUR) */}
+                  <div className="p-3 rounded-xl border space-y-2 sm:col-span-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <label className="flex items-center justify-between cursor-pointer font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <div className="flex items-center gap-1.5">
+                        <Ticket className="w-4 h-4 text-amber-600" />
+                        <span>Potongan Diskon &amp; Voucher Promo (Fitur Standar)</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={receiptConfig.showDiscount ?? true}
+                        onChange={(e) => handleConfigChange("showDiscount", e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-600 cursor-pointer"
+                      />
+                    </label>
+                    <p className="text-[10px] text-slate-500">
+                      Mencetak baris potongan harga jika kasir menerapkan voucher promo, diskon persentase (%), atau diskon nominal (Rp).
+                    </p>
+                  </div>
+
+                  {/* PB1 Resto */}
                   <div className="p-3 rounded-xl border space-y-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <label className="flex items-center justify-between cursor-pointer font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      <span>PB1 Pajak Resto (%)</span>
+                      <span>PB1 Pajak Resto / Daerah (%)</span>
                       <input
                         type="checkbox"
                         checked={receiptConfig.showPb1}
                         onChange={(e) => handleConfigChange("showPb1", e.target.checked)}
-                        className="w-4 h-4 rounded text-indigo-600"
+                        className="w-4 h-4 rounded text-indigo-600 cursor-pointer"
                       />
                     </label>
                     {receiptConfig.showPb1 && (
                       <input
                         type="number"
-                        value={receiptConfig.pb1Percent || 10}
+                        min={0}
+                        max={100}
+                        value={receiptConfig.pb1Percent ?? 10}
                         onChange={(e) => handleConfigChange("pb1Percent", Number(e.target.value))}
                         placeholder="Tarif % (Contoh: 10)"
                         className="w-full px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none"
@@ -1163,20 +1310,48 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                     )}
                   </div>
 
+                  {/* PPN Umum */}
                   <div className="p-3 rounded-xl border space-y-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <label className="flex items-center justify-between cursor-pointer font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                      <span>Service Charge Resto (%)</span>
+                      <span>PPN (Pajak Pertambahan Nilai) (%)</span>
+                      <input
+                        type="checkbox"
+                        checked={receiptConfig.showTax}
+                        onChange={(e) => handleConfigChange("showTax", e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-600 cursor-pointer"
+                      />
+                    </label>
+                    {receiptConfig.showTax && (
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={receiptConfig.taxPercent ?? 11}
+                        onChange={(e) => handleConfigChange("taxPercent", Number(e.target.value))}
+                        placeholder="Tarif % (Contoh: 11 atau 12)"
+                        className="w-full px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none"
+                        style={{ backgroundColor: "var(--theme-card-bg, #ffffff)", borderColor: "var(--theme-card-border, #e2e8f0)" }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Service Charge */}
+                  <div className="p-3 rounded-xl border space-y-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <label className="flex items-center justify-between cursor-pointer font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <span>Service Charge / Layanan (%)</span>
                       <input
                         type="checkbox"
                         checked={receiptConfig.showServiceCharge}
                         onChange={(e) => handleConfigChange("showServiceCharge", e.target.checked)}
-                        className="w-4 h-4 rounded text-indigo-600"
+                        className="w-4 h-4 rounded text-indigo-600 cursor-pointer"
                       />
                     </label>
                     {receiptConfig.showServiceCharge && (
                       <input
                         type="number"
-                        value={receiptConfig.servicePercent || 5}
+                        min={0}
+                        max={100}
+                        value={receiptConfig.servicePercent ?? 5}
                         onChange={(e) => handleConfigChange("servicePercent", Number(e.target.value))}
                         placeholder="Tarif % (Contoh: 5)"
                         className="w-full px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none"
@@ -1184,20 +1359,106 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                       />
                     )}
                   </div>
-                </div>
-              )}
 
-              {/* Footer Penutup */}
-              <div className="pt-2 border-t space-y-1.5 text-xs" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                <label className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Pesan Footer Penutup Struk</label>
-                <input
-                  type="text"
-                  value={receiptConfig.footerText || ""}
-                  onChange={(e) => handleConfigChange("footerText", e.target.value)}
-                  placeholder="Terima kasih atas kunjungan Anda!"
-                  className="w-full px-3.5 py-2 rounded-xl border text-xs font-semibold focus:outline-none"
-                  style={{ backgroundColor: "var(--theme-input-bg, #ffffff)", borderColor: "var(--theme-card-border, #e2e8f0)" }}
-                />
+                  {/* Biaya Admin Transaksi Flat */}
+                  <div className="p-3 rounded-xl border space-y-2" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <label className="flex items-center justify-between cursor-pointer font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      <span>Biaya Admin Transaksi (Rp Flat)</span>
+                      <input
+                        type="checkbox"
+                        checked={receiptConfig.showAdminFee ?? false}
+                        onChange={(e) => handleConfigChange("showAdminFee", e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-600 cursor-pointer"
+                      />
+                    </label>
+                    {receiptConfig.showAdminFee && (
+                      <input
+                        type="number"
+                        min={0}
+                        value={receiptConfig.adminFeeAmount ?? 1000}
+                        onChange={(e) => handleConfigChange("adminFeeAmount", Number(e.target.value))}
+                        placeholder="Nominal Rp (Contoh: 1000)"
+                        className="w-full px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none"
+                        style={{ backgroundColor: "var(--theme-card-bg, #ffffff)", borderColor: "var(--theme-card-border, #e2e8f0)" }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. PEMBAYARAN & PENUTUP */}
+              <div className="pt-2 border-t space-y-2 text-xs" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <span className="text-[11px] font-bold block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
+                  4. Pembayaran &amp; Catatan Penutup:
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Rincian Pembayaran</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Metode (Tunai/QRIS), nominal bayar &amp; kembalian</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showPaymentDetail}
+                      onChange={(e) => handleConfigChange("showPaymentDetail", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Informasi WiFi Toko</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Cetak SSID &amp; password WiFi untuk tamu</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showWifi}
+                      onChange={(e) => handleConfigChange("showWifi", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Pesan Footer Penutup</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Ucapan terima kasih &amp; catatan retur</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showFooter ?? true}
+                      onChange={(e) => handleConfigChange("showFooter", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                    <div>
+                      <p className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Watermark Powered by Qassa</p>
+                      <p className="text-[9px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>Tanda sistem di bagian paling bawah</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={receiptConfig.showPoweredBy ?? true}
+                      onChange={(e) => handleConfigChange("showPoweredBy", e.target.checked)}
+                      className="w-4 h-4 rounded text-indigo-600"
+                    />
+                  </label>
+                </div>
+
+                {receiptConfig.showFooter && (
+                  <div className="pt-2 space-y-1 text-xs">
+                    <label className="font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>Isi Pesan Footer Penutup Struk</label>
+                    <input
+                      type="text"
+                      value={receiptConfig.footerText || ""}
+                      onChange={(e) => handleConfigChange("footerText", e.target.value)}
+                      placeholder="Terima kasih atas kunjungan Anda!"
+                      className="w-full px-3.5 py-2 rounded-xl border text-xs font-semibold focus:outline-none"
+                      style={{ backgroundColor: "var(--theme-input-bg, #ffffff)", borderColor: "var(--theme-card-border, #e2e8f0)" }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 border-t flex justify-end" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
@@ -1205,7 +1466,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                   type="button"
                   onClick={() => handleSave()}
                   disabled={saving}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1557,8 +1818,15 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
             {/* Thermal Simulation Surface */}
             <div
-              className={`bg-[#FFFDF9] border border-dashed border-stone-300 rounded-3xl p-6 font-mono text-stone-900 shadow-2xl space-y-3 select-none transition-all ${receiptConfig.fontScale === "COMPACT" ? "text-[10px]" : receiptConfig.fontScale === "SPACIOUS" ? "text-sm" : "text-xs"
-                } ${receiptConfig.paperSize === "80mm" ? "max-w-full" : "max-w-[360px] mx-auto"}`}
+              className={`bg-[#FFFDF9] border border-dashed border-stone-300 rounded-3xl p-6 font-mono text-stone-900 shadow-2xl space-y-3 select-none transition-all ${
+                receiptConfig.fontScale === "COMPACT"
+                  ? "text-[10px]"
+                  : receiptConfig.fontScale === "SPACIOUS"
+                  ? "text-sm"
+                  : "text-xs"
+              } ${
+                receiptConfig.paperSize === "80mm" ? "max-w-full" : "max-w-[360px] mx-auto"
+              }`}
             >
               {/* Logo & Kop Header */}
               <div className="text-center space-y-1">
@@ -1577,6 +1845,9 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 <h4 className="font-black text-sm uppercase tracking-tight text-stone-950">
                   {businessName || "NAMA BISNIS ANDA"}
                 </h4>
+                {receiptConfig.showOutletName !== false && (
+                  <p className="text-[10px] text-stone-700 font-bold">{initialData.selectedOutlet?.name || "Cabang Utama"}</p>
+                )}
                 {receiptConfig.showLegalName && (
                   <p className="text-[9px] text-stone-500 font-semibold">{receiptConfig.legalName || "PT. Kuliner Nusantara Sejahtera"}</p>
                 )}
@@ -1595,46 +1866,58 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 )}
               </div>
 
-              {/* Divider Style */}
-              <div className="my-2">
-                {receiptConfig.dividerStyle === "DOUBLE" ? (
-                  <div className="border-b-2 border-stone-800 border-double" />
-                ) : receiptConfig.dividerStyle === "SOLID" ? (
-                  <div className="border-b border-stone-800" />
-                ) : receiptConfig.dividerStyle === "ASTERISK" ? (
-                  <p className="text-center tracking-widest text-[9px] text-stone-400">********************************</p>
-                ) : receiptConfig.dividerStyle === "MINIMAL" ? (
-                  <div className="h-2" />
-                ) : (
-                  <div className="border-b border-stone-400 border-dashed" />
-                )}
-              </div>
-
-              {/* Order Meta */}
-              <div className="space-y-1 text-[10px]">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold">No. Struk: #5078</span>
-                  <span>14:30 WIB</span>
-                </div>
-                <div className="flex justify-between text-stone-600">
-                  {receiptConfig.showCashier && <span>Kasir: Rian</span>}
-                  {receiptConfig.showOrderType && isCafeTheme && <span className="font-bold">Dine In</span>}
-                </div>
-                {receiptConfig.showTableNumber && isCafeTheme && (
-                  <div className="flex justify-between font-bold text-stone-950">
-                    <span>MEJA / STATION:</span>
-                    <span>MEJA 08</span>
+              {/* Order Meta & Dynamic Divider (Only show divider + meta if there is active order meta) */}
+              {Boolean(
+                receiptConfig.showInvoiceNo ||
+                receiptConfig.showDateTime ||
+                receiptConfig.showCashier ||
+                receiptConfig.showOrderType ||
+                receiptConfig.showTableNumber ||
+                receiptConfig.showQueueNumber
+              ) && (
+                <>
+                  <div className="my-2">
+                    {receiptConfig.dividerStyle === "DOUBLE" ? (
+                      <div className="border-b-2 border-stone-800 border-double" />
+                    ) : receiptConfig.dividerStyle === "SOLID" ? (
+                      <div className="border-b border-stone-800" />
+                    ) : receiptConfig.dividerStyle === "ASTERISK" ? (
+                      <p className="text-center tracking-widest text-[9px] text-stone-400">********************************</p>
+                    ) : receiptConfig.dividerStyle === "MINIMAL" ? (
+                      <div className="h-2" />
+                    ) : (
+                      <div className="border-b border-stone-400 border-dashed" />
+                    )}
                   </div>
-                )}
-                {receiptConfig.showQueueNumber && (
-                  <div className="text-center p-1.5 border border-dashed border-stone-400 rounded-lg my-1">
-                    <span className="text-[9px] block text-stone-600">NOMOR ANTREAN</span>
-                    <span className="text-xl font-black tracking-widest text-stone-950">A-24</span>
-                  </div>
-                )}
-              </div>
 
-              {/* Divider Style */}
+                  <div className="space-y-1 text-[10px]">
+                    {Boolean(receiptConfig.showInvoiceNo || receiptConfig.showDateTime) && (
+                      <div className="flex justify-between items-center">
+                        {receiptConfig.showInvoiceNo && <span className="font-bold">No. Struk: #5078</span>}
+                        {receiptConfig.showDateTime && <span>20/08/2026 14:30 WIB</span>}
+                      </div>
+                    )}
+                    <div className="flex justify-between text-stone-600">
+                      {receiptConfig.showCashier && <span>Kasir: Rian</span>}
+                      {receiptConfig.showOrderType && <span className="font-bold">{receiptConfig.orderType || "Dine In"}</span>}
+                    </div>
+                    {receiptConfig.showTableNumber && (
+                      <div className="flex justify-between font-bold text-stone-950">
+                        <span>MEJA / STATION:</span>
+                        <span>{receiptConfig.tableNumberText || "MEJA 08"}</span>
+                      </div>
+                    )}
+                    {receiptConfig.showQueueNumber && (
+                      <div className="text-center p-1.5 border border-dashed border-stone-400 rounded-lg my-1">
+                        <span className="text-[9px] block text-stone-600">NOMOR ANTREAN</span>
+                        <span className="text-xl font-black tracking-widest text-stone-950">A-01</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Divider Style before Items */}
               <div className="my-2">
                 {receiptConfig.dividerStyle === "DOUBLE" ? (
                   <div className="border-b-2 border-stone-800 border-double" />
@@ -1651,17 +1934,15 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
 
               {/* Items List */}
               <div className="space-y-2 text-[11px]">
-                {sampleItems.map((item, idx) => (
+                {sampleTransactionData.items.map((item, idx) => (
                   <div key={idx}>
                     <div className="flex justify-between font-semibold">
                       <span>{item.qty}x {item.name}</span>
                       <span>Rp {(item.qty * item.price).toLocaleString("id-ID")}</span>
                     </div>
-                    {receiptConfig.showItemModifiers && item.mods && (
+                    {receiptConfig.showItemModifiers && item.notes && (
                       <div className="pl-3 text-[9px] text-stone-500">
-                        {item.mods.map((m, mIdx) => (
-                          <p key={mIdx}>• {m}</p>
-                        ))}
+                        <p>• {item.notes}</p>
                       </div>
                     )}
                   </div>
@@ -1687,35 +1968,41 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between text-stone-600 text-[11px]">
                   <span>Subtotal</span>
-                  <span>Rp {subtotal.toLocaleString("id-ID")}</span>
+                  <span>Rp {sampleTransactionData.subtotal.toLocaleString("id-ID")}</span>
                 </div>
                 {receiptConfig.showTax && (
                   <div className="flex justify-between text-stone-600 text-[11px]">
                     <span>PPN ({receiptConfig.taxPercent || 11}%)</span>
-                    <span>Rp {taxAmount.toLocaleString("id-ID")}</span>
+                    <span>Rp {sampleTransactionData.taxPpnAmount?.toLocaleString("id-ID")}</span>
                   </div>
                 )}
                 {receiptConfig.showPb1 && isCafeTheme && (
                   <div className="flex justify-between text-stone-600 text-[11px]">
                     <span>PB1 Resto ({receiptConfig.pb1Percent || 10}%)</span>
-                    <span>Rp {pb1Amount.toLocaleString("id-ID")}</span>
+                    <span>Rp {sampleTransactionData.taxPb1Amount?.toLocaleString("id-ID")}</span>
                   </div>
                 )}
                 {receiptConfig.showServiceCharge && isCafeTheme && (
                   <div className="flex justify-between text-stone-600 text-[11px]">
                     <span>Service Charge ({receiptConfig.servicePercent || 5}%)</span>
-                    <span>Rp {serviceAmount.toLocaleString("id-ID")}</span>
+                    <span>Rp {sampleTransactionData.serviceChargeAmount?.toLocaleString("id-ID")}</span>
+                  </div>
+                )}
+                {receiptConfig.showAdminFee && (
+                  <div className="flex justify-between text-stone-600 text-[11px]">
+                    <span>Biaya Admin Transaksi</span>
+                    <span>Rp {sampleTransactionData.adminFeeAmount?.toLocaleString("id-ID")}</span>
                   </div>
                 )}
                 {receiptConfig.showDiscount && (
                   <div className="flex justify-between text-emerald-700 text-[11px] font-bold">
-                    <span>Diskon Promosi</span>
-                    <span>-Rp {discountAmount.toLocaleString("id-ID")}</span>
+                    <span>Diskon &amp; Voucher Promo</span>
+                    <span>-Rp {sampleTransactionData.discountAmount?.toLocaleString("id-ID")}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-black text-stone-950 text-sm pt-1.5 border-t border-stone-300">
                   <span>TOTAL BILL</span>
-                  <span>Rp {totalBill.toLocaleString("id-ID")}</span>
+                  <span>Rp {sampleTransactionData.grandTotal.toLocaleString("id-ID")}</span>
                 </div>
                 {receiptConfig.showPaymentDetail && (
                   <div className="pt-1 text-[10px] text-stone-600 space-y-0.5">
@@ -1741,26 +2028,21 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                 </div>
               )}
 
-              {/* Divider Style */}
-              <div className="my-2">
-                {receiptConfig.dividerStyle === "DOUBLE" ? (
-                  <div className="border-b-2 border-stone-800 border-double" />
-                ) : receiptConfig.dividerStyle === "SOLID" ? (
-                  <div className="border-b border-stone-800" />
-                ) : receiptConfig.dividerStyle === "ASTERISK" ? (
-                  <p className="text-center tracking-widest text-[9px] text-stone-400">********************************</p>
-                ) : receiptConfig.dividerStyle === "MINIMAL" ? (
-                  <div className="h-2" />
-                ) : (
-                  <div className="border-b border-stone-400 border-dashed" />
-                )}
-              </div>
+              {/* WiFi Info */}
+              {receiptConfig.showWifi && (
+                <div className="text-center text-[9px] text-stone-500 py-1 border-t border-stone-200 border-dashed">
+                  📶 WiFi: <span className="font-bold text-stone-700">{receiptConfig.wifiSsid || "Artisan_WiFi"}</span> | Pass:{" "}
+                  <span className="font-mono text-stone-700">{receiptConfig.wifiPassword || "kopienak"}</span>
+                </div>
+              )}
 
               {/* Footer */}
               <div className="text-center text-[10px] space-y-1 pt-1 text-stone-600">
-                <p className="font-semibold text-stone-800">
-                  {receiptConfig.footerText || "Terima kasih atas kunjungan Anda!"}
-                </p>
+                {receiptConfig.showFooter && (
+                  <p className="font-semibold text-stone-800 italic">
+                    {receiptConfig.footerText || "Terima kasih atas kunjungan Anda!"}
+                  </p>
+                )}
 
                 {/* Multi-Social Media on Receipt */}
                 {receiptConfig.showSocialMedia && (

@@ -16,7 +16,7 @@ export default async function PosPage() {
   const shiftData = await getCurrentShiftData();
   const targetOutletId = user.outletId || shiftData?.currentOutletId || shiftData?.outlets?.[0]?.id;
 
-  const [productsData, tenant, cafeTables, staffList] = await Promise.all([
+  const [productsData, tenant, cafeTables, staffList, rawVouchers] = await Promise.all([
     getProductsData(targetOutletId),
     user.tenantId
       ? prisma.tenant.findUnique({
@@ -69,7 +69,24 @@ export default async function PosPage() {
           },
         })
       : [],
+    user.tenantId
+      ? prisma.voucher.findMany({
+          where: {
+            tenantId: user.tenantId,
+            isActive: true,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : [],
   ]);
+
+  const now = new Date();
+  const activeVouchers = (rawVouchers || []).filter((v: any) => {
+    if (v.startDate && new Date(v.startDate) > now) return false;
+    if (v.endDate && new Date(v.endDate) < now) return false;
+    if (v.usageLimit !== null && v.usedCount >= v.usageLimit) return false;
+    return true;
+  });
 
   const activeSub = tenant?.subscriptions?.[0];
   const masterUiTheme = activeSub?.theme?.theme || null;
@@ -104,6 +121,7 @@ export default async function PosPage() {
       staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
       hasSelfOrderPlugin={isSelfOrderActive}
+      activeVouchers={activeVouchers ? JSON.parse(JSON.stringify(activeVouchers)) : []}
       tenantInfo={{
         tenantId: user.tenantId,
         businessName: tenant?.businessName || "POS Universal",

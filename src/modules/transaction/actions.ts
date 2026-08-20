@@ -21,6 +21,7 @@ export interface CartItemInput {
   qty: number;
   price: number;
   name: string;
+  imageUrl?: string | null;
   staffId?: string;
   bookingId?: string;
   notes?: string;
@@ -44,102 +45,57 @@ export async function verifyVoucherAction(code: string, subtotal: number): Promi
   const normalized = code.trim().toUpperCase().replace(/\s+/g, "");
   const now = new Date();
 
-  // 1. Cek di Database Voucher milik Tenant
-  if (tenantId) {
-    const dbVoucher = await prisma.voucher.findUnique({
-      where: {
-        tenantId_code: {
-          tenantId,
-          code: normalized,
-        },
-      },
-    });
+  if (!tenantId) {
+    throw new Error("Sesi tidak valid atau tenant tidak ditemukan.");
+  }
 
-    if (dbVoucher) {
-      if (!dbVoucher.isActive) {
-        throw new Error(`Voucher "${normalized}" sedang dinonaktifkan.`);
-      }
-      if (dbVoucher.startDate && new Date(dbVoucher.startDate) > now) {
-        throw new Error(
-          `Voucher "${normalized}" baru aktif mulai ${new Date(dbVoucher.startDate).toLocaleDateString("id-ID")}.`
-        );
-      }
-      if (dbVoucher.endDate && new Date(dbVoucher.endDate) < now) {
-        throw new Error(`Voucher "${normalized}" sudah kedaluwarsa pada ${new Date(dbVoucher.endDate).toLocaleDateString("id-ID")}.`);
-      }
-      if (dbVoucher.usageLimit !== null && dbVoucher.usedCount >= dbVoucher.usageLimit) {
-        throw new Error(`Kuota penggunaan voucher "${normalized}" telah habis (${dbVoucher.usedCount}/${dbVoucher.usageLimit} digunakan).`);
-      }
-
-      const minOrderNum = Number(dbVoucher.minOrder || 0);
-      if (subtotal < minOrderNum) {
-        throw new Error(
-          `Voucher "${normalized}" membutuhkan minimum belanja Rp ${minOrderNum.toLocaleString("id-ID")}. (Subtotal: Rp ${subtotal.toLocaleString("id-ID")})`
-        );
-      }
-
-      const discountValNum = Number(dbVoucher.discountValue);
-      const maxDiscountNum = dbVoucher.maxDiscount ? Number(dbVoucher.maxDiscount) : undefined;
-      let discountAmount = 0;
-
-      if (dbVoucher.discountType === "PERCENT") {
-        discountAmount = Math.round((subtotal * discountValNum) / 100);
-        if (maxDiscountNum && discountAmount > maxDiscountNum) {
-          discountAmount = maxDiscountNum;
-        }
-      } else {
-        discountAmount = discountValNum;
-      }
-
-      discountAmount = Math.min(subtotal, Math.max(0, discountAmount));
-
-      return {
-        valid: true,
+  // Cek di Database Voucher milik Tenant Owner
+  const dbVoucher = await prisma.voucher.findUnique({
+    where: {
+      tenantId_code: {
+        tenantId,
         code: normalized,
-        discountType: dbVoucher.discountType as DiscountType,
-        discountValue: discountValNum,
-        discountAmount,
-        description: dbVoucher.description || `Diskon Voucher ${normalized}`,
-        minOrder: minOrderNum,
-      };
-    }
+      },
+    },
+  });
+
+  if (!dbVoucher) {
+    throw new Error(`Kode voucher "${normalized}" tidak terdaftar di sistem bisnis Anda.`);
   }
 
-  // 2. Fallback Builtin Demo Presets
-  const VOUCHERS: Record<
-    string,
-    { type: DiscountType; value: number; maxDiscount?: number; minOrder?: number; description: string }
-  > = {
-    HEMAT10: { type: "PERCENT", value: 10, description: "Diskon 10% Semua Menu" },
-    PROMO10: { type: "PERCENT", value: 10, description: "Diskon Promo 10%" },
-    PROMO20: { type: "PERCENT", value: 20, minOrder: 30000, description: "Diskon 20% (Min Belanja Rp 30.000)" },
-    DISKON5K: { type: "FIXED", value: 5000, minOrder: 15000, description: "Potongan Langsung Rp 5.000" },
-    DISKON10K: { type: "FIXED", value: 10000, minOrder: 35000, description: "Potongan Langsung Rp 10.000" },
-    DISKON20K: { type: "FIXED", value: 20000, minOrder: 60000, description: "Potongan Langsung Rp 20.000" },
-    KASIRKU: { type: "PERCENT", value: 15, maxDiscount: 30000, description: "Diskon Spesial KasirKu 15% (Maks Rp 30.000)" },
-    MERDEKA: { type: "PERCENT", value: 17, maxDiscount: 45000, description: "Promo Spesial 17% (Maks Rp 45.000)" },
-    VIPMEMBER: { type: "PERCENT", value: 25, maxDiscount: 50000, minOrder: 50000, description: "Voucher Pelanggan VIP 25%" },
-  };
-
-  const matched = VOUCHERS[normalized];
-  if (!matched) {
-    throw new Error(`Kode voucher "${normalized}" tidak valid atau sudah kadaluarsa.`);
+  if (!dbVoucher.isActive) {
+    throw new Error(`Voucher "${normalized}" sedang dinonaktifkan oleh Owner.`);
   }
-
-  if (matched.minOrder && subtotal < matched.minOrder) {
+  if (dbVoucher.startDate && new Date(dbVoucher.startDate) > now) {
     throw new Error(
-      `Voucher "${normalized}" membutuhkan minimum belanja Rp ${matched.minOrder.toLocaleString("id-ID")}.`
+      `Voucher "${normalized}" baru dapat digunakan mulai tanggal ${new Date(dbVoucher.startDate).toLocaleDateString("id-ID")}.`
+    );
+  }
+  if (dbVoucher.endDate && new Date(dbVoucher.endDate) < now) {
+    throw new Error(`Voucher "${normalized}" sudah kedaluwarsa pada tanggal ${new Date(dbVoucher.endDate).toLocaleDateString("id-ID")}.`);
+  }
+  if (dbVoucher.usageLimit !== null && dbVoucher.usedCount >= dbVoucher.usageLimit) {
+    throw new Error(`Kuota voucher "${normalized}" telah habis (${dbVoucher.usedCount}/${dbVoucher.usageLimit} digunakan).`);
+  }
+
+  const minOrderNum = Number(dbVoucher.minOrder || 0);
+  if (subtotal < minOrderNum) {
+    throw new Error(
+      `Voucher "${normalized}" membutuhkan minimum belanja Rp ${minOrderNum.toLocaleString("id-ID")}. (Subtotal saat ini: Rp ${subtotal.toLocaleString("id-ID")})`
     );
   }
 
+  const discountValNum = Number(dbVoucher.discountValue);
+  const maxDiscountNum = dbVoucher.maxDiscount ? Number(dbVoucher.maxDiscount) : undefined;
   let discountAmount = 0;
-  if (matched.type === "PERCENT") {
-    discountAmount = Math.round((subtotal * matched.value) / 100);
-    if (matched.maxDiscount && discountAmount > matched.maxDiscount) {
-      discountAmount = matched.maxDiscount;
+
+  if (dbVoucher.discountType === "PERCENT") {
+    discountAmount = Math.round((subtotal * discountValNum) / 100);
+    if (maxDiscountNum && discountAmount > maxDiscountNum) {
+      discountAmount = maxDiscountNum;
     }
   } else {
-    discountAmount = matched.value;
+    discountAmount = discountValNum;
   }
 
   discountAmount = Math.min(subtotal, Math.max(0, discountAmount));
@@ -147,11 +103,11 @@ export async function verifyVoucherAction(code: string, subtotal: number): Promi
   return {
     valid: true,
     code: normalized,
-    discountType: matched.type,
-    discountValue: matched.value,
+    discountType: dbVoucher.discountType as DiscountType,
+    discountValue: discountValNum,
     discountAmount,
-    description: matched.description,
-    minOrder: matched.minOrder,
+    description: dbVoucher.description || `Voucher ${normalized}`,
+    minOrder: minOrderNum,
   };
 }
 

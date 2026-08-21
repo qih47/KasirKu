@@ -20,6 +20,8 @@ interface TableManagementModalProps {
   }>;
   onClearTable: (tableId: string, tableNumber: string) => Promise<void>;
   onRefreshTables?: () => Promise<void>;
+  onLoadTableBill?: (table: any, orderData: any) => void;
+  onPrintKitchenTicket?: (table: any, orderData: any) => void;
   themeStyles: {
     cardBg: string;
     cardBorder: string;
@@ -37,6 +39,8 @@ export function TableManagementModal({
   tables,
   onClearTable,
   onRefreshTables,
+  onLoadTableBill,
+  onPrintKitchenTicket,
   themeStyles,
 }: TableManagementModalProps) {
   const [filterZone, setFilterZone] = useState<string>("ALL");
@@ -271,15 +275,29 @@ export function TableManagementModal({
               <p className="text-xs">Tidak ada data meja pada area ini.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
               {filteredTables.map((table) => {
                 const isOccupied = table.status === "OCCUPIED";
+
+                let parsedOrder: any = null;
+                if (table.currentOrderNotes) {
+                  try {
+                    parsedOrder = JSON.parse(table.currentOrderNotes);
+                  } catch {
+                    parsedOrder = null;
+                  }
+                }
+
+                const cartItems = parsedOrder?.cart || [];
+                const totalItemCount = cartItems.reduce((acc: number, item: any) => acc + (item.qty || 1), 0);
+                const subtotal = parsedOrder?.subtotal || 0;
+
                 return (
                   <div
                     key={table.id}
-                    className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all relative overflow-hidden ${
+                    className={`p-4 rounded-2xl border flex flex-col justify-between transition-all relative overflow-hidden space-y-3 ${
                       isOccupied
-                        ? "border-rose-500/40 bg-rose-500/5 shadow-xs"
+                        ? "border-rose-500/50 bg-rose-500/5 shadow-sm ring-1 ring-rose-500/20"
                         : "border-slate-200 dark:border-slate-800"
                     }`}
                     style={{
@@ -287,52 +305,97 @@ export function TableManagementModal({
                       borderColor: isOccupied ? undefined : cardBorder,
                     }}
                   >
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm font-black tracking-tight" style={{ color: textPrimary }}>
+                        <span className="font-mono text-base font-black tracking-tight" style={{ color: textPrimary }}>
                           {table.tableNumber}
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                             isOccupied
-                              ? "bg-rose-500 text-white"
+                              ? "bg-rose-500 text-white shadow-xs"
                               : "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                           }`}
                         >
-                          {isOccupied ? "Terisi" : "Kosong"}
+                          {isOccupied ? "Terisi (Open Bill)" : "Kosong"}
                         </span>
                       </div>
 
-                      <div className="text-[10.5px] text-slate-400 flex items-center justify-between">
+                      <div className="text-[11px] text-slate-400 flex items-center justify-between">
                         <span>{table.areaZone || "INDOOR"}</span>
                         <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          <span>{table.capacity} Org</span>
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Kapasitas {table.capacity} Org</span>
                         </span>
                       </div>
 
-                      {isOccupied && table.currentGuestName && (
-                        <div className="p-1.5 rounded-lg bg-rose-500/10 text-[10px] text-rose-700 dark:text-rose-300 font-bold truncate">
-                          👤 {table.currentGuestName}
+                      {isOccupied && (
+                        <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-rose-700 dark:text-rose-300 truncate">
+                              👤 {table.currentGuestName || "Tamu Meja"}
+                            </span>
+                            {subtotal > 0 && (
+                              <span className="font-black font-mono text-rose-700 dark:text-rose-300">
+                                Rp {Number(subtotal).toLocaleString("id-ID")}
+                              </span>
+                            )}
+                          </div>
+
+                          {cartItems.length > 0 ? (
+                            <div className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-2 pt-0.5 border-t border-rose-500/20">
+                              {cartItems.map((c: any) => `${c.qty}x ${c.name}`).join(", ")}
+                            </div>
+                          ) : (
+                            <p className="text-[10.5px] text-slate-400 italic">
+                              {table.currentOrderNotes?.startsWith("{") ? "Pesanan tersimpan" : table.currentOrderNotes || "Belum ada rincian"}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <div className="pt-3 mt-2 border-t flex items-center justify-end" style={{ borderColor: cardBorder }}>
+                    <div className="pt-2 border-t space-y-1.5" style={{ borderColor: cardBorder }}>
                       {isOccupied ? (
-                        <button
-                          type="button"
-                          onClick={() => onClearTable(table.id, table.tableNumber)}
-                          className="w-full py-1.5 px-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10.5px] transition flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Kosongkan Meja</span>
-                        </button>
+                        <>
+                          {onLoadTableBill && parsedOrder && (
+                            <button
+                              type="button"
+                              onClick={() => onLoadTableBill(table, parsedOrder)}
+                              className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer"
+                            >
+                              <span>⚡ Buka Tagihan Meja</span>
+                            </button>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {onPrintKitchenTicket && (
+                              <button
+                                type="button"
+                                onClick={() => onPrintKitchenTicket(table, parsedOrder)}
+                                className="py-1.5 px-2 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-700 hover:text-slate-950 font-bold text-[10.5px] transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Cetak Tiket Pesanan Dapur"
+                              >
+                                <span>🍽️ KOT Dapur</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onClearTable(table.id, table.tableNumber)}
+                              className="py-1.5 px-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-600 dark:text-slate-300 font-bold text-[10.5px] transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Kosongkan</span>
+                            </button>
+                          </div>
+                        </>
                       ) : (
-                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Siap Dipakai</span>
-                        </span>
+                        <div className="flex items-center justify-between text-[11px] py-1 text-emerald-600 font-bold">
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Siap Digunakan</span>
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -27,12 +27,18 @@ import {
   checkoutLiveOrderAction,
   LiveOrderSummary,
 } from "@/modules/self-order/actions";
-import { updateTableStatusAction } from "@/plugins/cafe/actions";
+import {
+  updateTableStatusAction,
+  saveTableOpenBillAction,
+  clearTableOpenBillAction,
+} from "@/plugins/cafe/actions";
 import { TableManagementModal } from "./components/table-management-modal";
 import { ShiftCashModal } from "./components/shift-cash-modal";
 import { CustomerCrmModal } from "./components/customer-crm-modal";
 import { PaymentModal, SplitPaymentLine } from "./components/payment-modal";
 import { PosHistoryModal } from "./components/history-modal";
+import { BarberQueueModal } from "./components/barber-queue-modal";
+import { getTodayBarbershopQueueAction } from "@/plugins/barbershop/actions";
 import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import { useTranslation } from "@/lib/i18n/language-context";
 import {
@@ -118,6 +124,8 @@ interface PosClientProps {
   staffList?: any[];
   appliedTheme?: any;
   hasSelfOrderPlugin?: boolean;
+  hasBarbershopPlugin?: boolean;
+  initialBarberBookings?: any[];
   activeVouchers?: any[];
   tenantInfo?: {
     tenantId?: string;
@@ -135,6 +143,8 @@ export function PosClient({
   staffList = [],
   appliedTheme,
   hasSelfOrderPlugin = false,
+  hasBarbershopPlugin = false,
+  initialBarberBookings = [],
   activeVouchers = [],
   tenantInfo,
 }: PosClientProps) {
@@ -299,6 +309,98 @@ export function PosClient({
   const [liveOrderPaymentMethod, setLiveOrderPaymentMethod] = useState<"CASH" | "QRIS">("CASH");
   const [processingLiveOrder, setProcessingLiveOrder] = useState(false);
 
+  // Barbershop Queue Integration (Fase 1)
+  const [barberBookings, setBarberBookings] = useState<any[]>(initialBarberBookings || []);
+  const [showBarberQueueModal, setShowBarberQueueModal] = useState<boolean>(false);
+  const [loadingBarberBookings, setLoadingBarberBookings] = useState<boolean>(false);
+
+  const refreshBarberBookings = async () => {
+    if (!hasBarbershopPlugin) return;
+    setLoadingBarberBookings(true);
+    try {
+      const res = await getTodayBarbershopQueueAction(shiftData.currentOutletId);
+      setBarberBookings(res);
+    } catch (err) {
+      console.error("Gagal memuat antrean barbershop:", err);
+    } finally {
+      setLoadingBarberBookings(false);
+    }
+  };
+
+  const handleLoadBarberBooking = (booking: any) => {
+    // 1. Bind Customer CRM
+    if (booking.customer) {
+      setSelectedCustomer(booking.customer);
+    } else if (booking.customerName) {
+      setSelectedCustomer({
+        id: booking.customerId || undefined,
+        name: booking.customerName,
+        phone: booking.customerPhone || undefined,
+      });
+    }
+
+    // 2. Add Service item to Cart
+    let targetProduct = products.find((p) => p.id === booking.serviceId);
+    if (!targetProduct && booking.service) {
+      targetProduct = booking.service;
+    }
+
+    const noteText = `Antrean #${booking.queueNumber}${booking.chairNumber ? ` (Kursi #${booking.chairNumber})` : ""}${booking.notes ? ` - ${booking.notes}` : ""}`;
+
+    if (targetProduct) {
+      const newItem: CartItemInput = {
+        productId: targetProduct.id,
+        name: targetProduct.name,
+        price: Number(targetProduct.price),
+        qty: 1,
+        imageUrl: targetProduct.imageUrl || null,
+        staffId: booking.barberId || undefined,
+        bookingId: booking.id,
+        notes: noteText,
+      };
+
+      setCart((prev) => {
+        // Cek jika booking ini sudah ada di cart
+        const filtered = prev.filter((it) => it.bookingId !== booking.id);
+        return [...filtered, newItem];
+      });
+    } else {
+      // Fallback virtual item
+      const fallbackItem: CartItemInput = {
+        productId: booking.serviceId || "custom-barber-treatment",
+        name: booking.service?.name || "Layanan Pangkas Rambut",
+        price: Number(booking.service?.price || 50000),
+        qty: 1,
+        imageUrl: null,
+        staffId: booking.barberId || undefined,
+        bookingId: booking.id,
+        notes: noteText,
+      };
+      setCart((prev) => [...prev.filter((it) => it.bookingId !== booking.id), fallbackItem]);
+    }
+
+    setShowBarberQueueModal(false);
+    setSuccessMsg(`✓ Antrean ${booking.queueNumber} (${booking.customerName}) dimuat ke kasir!`);
+    setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  // URL Auto-load check for ?barberBookingId=...
+  useEffect(() => {
+    if (typeof window !== "undefined" && hasBarbershopPlugin) {
+      const params = new URLSearchParams(window.location.search);
+      const targetBookingId = params.get("barberBookingId");
+      if (targetBookingId) {
+        if (barberBookings.length > 0) {
+          const found = barberBookings.find((b) => b.id === targetBookingId);
+          if (found) {
+            handleLoadBarberBooking(found);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+      }
+    }
+  }, [barberBookings, hasBarbershopPlugin]);
+
   // Multi-Payment Method States (Cash, Dynamic QRIS, Transfer, EDC Card)
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -370,10 +472,137 @@ export function PosClient({
         setSelectedTable("NO_TABLE");
       }
 
-      toastSuccess(`Meja ${tableNumber} kini telah KOSONG!`);
+      setSuccessMsg(`Status ${tableNumber} berhasil dikosongkan.`);
+      setTimeout(() => setSuccessMsg(null), 2500);
     } catch (err: any) {
       toastError(err.message || "Gagal mengosongkan meja.");
     }
+  };
+
+  // Open Bill Handlers (Fase 2)
+  const handleSaveTableOpenBill = async () => {
+    if (cart.length === 0) {
+      toastError("Keranjang belanja masih kosong.");
+      return;
+    }
+
+    if (!selectedTable || selectedTable === "NO_TABLE") {
+      await swalWarning(
+        "Pilih Meja Terlebih Dahulu",
+        "Pilih nomor meja pelanggan untuk menyimpan pesanan (Open Bill)."
+      );
+      setShowTableManagementModal(true);
+      return;
+    }
+
+    const targetTableObj = localCafeTables.find((t) => t.tableNumber === selectedTable);
+    if (!targetTableObj) {
+      toastError(`Data untuk meja "${selectedTable}" tidak ditemukan.`);
+      return;
+    }
+
+    try {
+      const guestName = selectedCustomer?.name || "Tamu " + selectedTable;
+      const res = await saveTableOpenBillAction({
+        tableId: targetTableObj.id,
+        guestName,
+        cart,
+        customer: selectedCustomer,
+        subtotal: cartSubtotal,
+        discountType,
+        discountValue: Number(discountPercent || discountFixed || 0),
+        appliedVoucherCode: appliedVoucher?.code,
+      });
+
+      if (res.success) {
+        setLocalCafeTables((prev) =>
+          prev.map((t) =>
+            t.id === targetTableObj.id
+              ? {
+                  ...t,
+                  status: "OCCUPIED",
+                  currentGuestName: guestName,
+                  currentOrderNotes: JSON.stringify({
+                    cart,
+                    customer: selectedCustomer,
+                    subtotal: cartSubtotal,
+                    savedAt: new Date().toISOString(),
+                  }),
+                }
+              : t
+          )
+        );
+
+        clearCart();
+        setSelectedCustomer(null);
+        setAppliedVoucher(null);
+        setSelectedTable("NO_TABLE");
+        toastSuccess(`✓ Pesanan ${selectedTable} berhasil disimpan (Open Bill)!`);
+      }
+    } catch (err: any) {
+      toastError(err.message || "Gagal menyimpan open bill meja.");
+    }
+  };
+
+  const handleLoadTableBill = async (table: any, orderData: any) => {
+    if (cart.length > 0) {
+      const confirmed = await swalConfirm(
+        "Ganti Keranjang Kasir?",
+        `Ada transaksi aktif di keranjang saat ini. Timpa dengan pesanan meja ${table.tableNumber}?`
+      );
+      if (!confirmed) return;
+    }
+
+    setCart(orderData.cart || []);
+    setSelectedTable(table.tableNumber);
+    setIsDineIn(true);
+    if (orderData.customer) {
+      setSelectedCustomer(orderData.customer);
+    } else if (table.currentGuestName) {
+      setSelectedCustomer({ name: table.currentGuestName });
+    }
+
+    setShowTableManagementModal(false);
+    toastSuccess(`✓ Tagihan ${table.tableNumber} dimuat kembali ke kasir!`);
+  };
+
+  const handlePrintKitchenTicket = (table: any, orderData: any) => {
+    const activeOutlet = shiftData.outlets.find(
+      (o) => o.id === shiftData.currentOutletId
+    );
+
+    const kotItems = (orderData?.cart || []).map((it: any) => ({
+      name: it.name,
+      qty: it.qty,
+      price: 0,
+      subtotal: 0,
+    }));
+
+    const kotData: TransactionReceiptData = {
+      storeName: `${tenantInfo?.businessName || "RESTO & CAFE"} (TIKET DAPUR)`,
+      outletName: activeOutlet?.name || "Outlet Utama",
+      invoiceNo: `KOT-${table.tableNumber}`,
+      dateTime: `${new Date().toLocaleDateString("id-ID")} ${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB`,
+      cashierName: shiftData.currentUser.name,
+      customerName: table.currentGuestName || "Tamu Meja",
+      tableNumber: table.tableNumber,
+      orderType: "DINE-IN (KITCHEN ORDER)",
+      items: kotItems,
+      subtotal: 0,
+      discountAmount: 0,
+      taxPb1Amount: 0,
+      taxPpnAmount: 0,
+      serviceChargeAmount: 0,
+      adminFeeAmount: 0,
+      grandTotal: 0,
+      paymentMethod: "CASH",
+      amountPaid: 0,
+      changeAmount: 0,
+      footerNote: "HARAP SEGERA DIMASAK & DISAJIKAN! 👨‍🍳",
+    };
+
+    setCompletedReceiptData(kotData);
+    setShowReceiptModal(true);
   };
 
   // 2. Barbershop Station Workflow States
@@ -776,6 +1005,21 @@ export function PosClient({
     }
   };
 
+  // Helper kalkulasi harga dinamis (Tiered Wholesale Grosir Retail)
+  const getEffectiveProductPrice = (product: any, qty: number) => {
+    let basePrice = Number(product.price);
+    const tiers = product.attributes?.wholesaleTiers;
+    if (Array.isArray(tiers) && tiers.length > 0) {
+      const sorted = [...tiers].sort((a: any, b: any) => b.minQty - a.minQty);
+      for (const tier of sorted) {
+        if (qty >= tier.minQty && Number(tier.price) > 0) {
+          return Number(tier.price);
+        }
+      }
+    }
+    return basePrice;
+  };
+
   // Tambah item ke keranjang
   const addToCart = async (product: any) => {
     if (!activeShift) {
@@ -804,7 +1048,7 @@ export function PosClient({
       product.name?.toLowerCase().includes("tea") ||
       product.name?.toLowerCase().includes("espresso");
 
-    if (posLayout === "CAFE_QUICK_ORDER" && isDrink) {
+    if ((posLayout === "CAFE_QUICK_ORDER" || localCafeTables.length > 0) && isDrink) {
       setModifierProduct(product);
       return;
     }
@@ -836,19 +1080,22 @@ export function PosClient({
     setCart((prev) => {
       const existingInPrev = prev.find((item) => item.productId === product.id && item.notes === defaultNote);
       if (existingInPrev) {
+        const nextQty = existingInPrev.qty + 1;
+        const newPrice = getEffectiveProductPrice(product, nextQty);
         return prev.map((item) =>
           item.productId === product.id && item.notes === defaultNote
-            ? { ...item, qty: item.qty + 1 }
+            ? { ...item, qty: nextQty, price: newPrice }
             : item
         );
       } else {
+        const initialPrice = getEffectiveProductPrice(product, 1);
         return [
           ...prev,
           {
             productId: product.id,
             name: product.name,
             imageUrl: product.imageUrl,
-            price: Number(product.price),
+            price: initialPrice,
             qty: 1,
             notes: defaultNote,
             staffId: staffIdToAssign,
@@ -860,8 +1107,9 @@ export function PosClient({
 
   const updateCartQty = async (productId: string, delta: number) => {
     const existing = cart.find((item) => item.productId === productId);
+    const product = products.find((p) => p.id === productId);
+
     if (existing && delta > 0) {
-      const product = products.find((p) => p.id === productId);
       if (
         product &&
         product.type === "BARANG" &&
@@ -878,7 +1126,9 @@ export function PosClient({
         .map((item) => {
           if (item.productId === productId) {
             const newQty = item.qty + delta;
-            return newQty > 0 ? { ...item, qty: newQty } : null;
+            if (newQty <= 0) return null;
+            const newPrice = product ? getEffectiveProductPrice(product, newQty) : item.price;
+            return { ...item, qty: newQty, price: newPrice };
           }
           return item;
         })
@@ -1440,6 +1690,34 @@ export function PosClient({
                     {localCafeTables.filter((t) => t.status === "OCCUPIED").length > 0
                       ? `${localCafeTables.filter((t) => t.status === "OCCUPIED").length} Terisi`
                       : `${localCafeTables.length} Meja`}
+                  </span>
+                </button>
+              )}
+
+              {/* Barbershop Queue Button in Top Bar */}
+              {hasBarbershopPlugin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    refreshBarberBookings();
+                    setShowBarberQueueModal(true);
+                  }}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-xs cursor-pointer ${
+                    barberBookings.filter((b) => b.status !== "COMPLETED").length > 0
+                      ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 ring-2 ring-amber-400/20"
+                      : ""
+                  }`}
+                  style={
+                    barberBookings.filter((b) => b.status !== "COMPLETED").length === 0
+                      ? { backgroundColor: innerBoxBg, borderColor: cardBorder, color: textPrimary }
+                      : {}
+                  }
+                  title="Antrean Kursi Barbershop & Muat ke Kasir"
+                >
+                  <Scissors className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden md:inline">Antrean Barber</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                    {barberBookings.filter((b) => b.status !== "COMPLETED").length}
                   </span>
                 </button>
               )}
@@ -2233,8 +2511,13 @@ export function PosClient({
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold truncate" style={{ color: textPrimary }}>
-                              {item.name}
+                            <p className="text-xs font-bold truncate flex items-center gap-1" style={{ color: textPrimary }}>
+                              <span>{item.name}</span>
+                              {productObj && item.price < Number(productObj.price) && (
+                                <span className="px-1 py-0.2 rounded text-[8.5px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                  🏷️ Grosir
+                                </span>
+                              )}
                             </p>
                             <p className="text-[11px] font-semibold" style={{ color: textSecondary }}>
                               Rp {item.price.toLocaleString("id-ID")} &times; {item.qty}
@@ -2277,9 +2560,23 @@ export function PosClient({
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="w-5 text-center text-xs font-black" style={{ color: textPrimary }}>
-                            {item.qty}
-                          </span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.01"
+                            value={item.qty}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val > 0) {
+                                setCart((prev) =>
+                                  prev.map((it) => (it.productId === item.productId ? { ...it, qty: val } : it))
+                                );
+                              }
+                            }}
+                            className="w-12 text-center text-xs font-mono font-black bg-transparent border-b border-dashed focus:outline-none focus:border-indigo-500"
+                            style={{ color: textPrimary, borderColor: cardBorder }}
+                            title="Klik untuk ubah kuantitas / berat kg desimal"
+                          />
                           <button
                             onClick={() => updateCartQty(item.productId, 1)}
                             className="w-6 h-6 rounded-lg border flex items-center justify-center font-bold cursor-pointer"
@@ -2474,6 +2771,18 @@ export function PosClient({
                       </span>
                     </div>
                   </div>
+
+                  {/* Open Bill Action for Cafe & Table */}
+                  {localCafeTables && localCafeTables.length > 0 && isDineIn && (
+                    <button
+                      type="button"
+                      onClick={handleSaveTableOpenBill}
+                      disabled={loading || cart.length === 0}
+                      className="w-full py-2 px-3 rounded-xl border-2 border-dashed border-amber-500/50 hover:border-amber-500 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>💾 Simpan Pesanan Meja (Open Bill &amp; Bayar Nanti)</span>
+                    </button>
+                  )}
 
                   {/* Submit Button to Open Payment Modal */}
                   <button
@@ -4480,6 +4789,46 @@ export function PosClient({
         shiftId={activeShift?.id}
         onReprint={handleReprintFromHistory}
       />
+
+      {/* 10. Modal Manajemen Meja Resto & Open Bill */}
+      {localCafeTables && localCafeTables.length > 0 && (
+        <TableManagementModal
+          isOpen={showTableManagementModal}
+          onClose={() => setShowTableManagementModal(false)}
+          tables={localCafeTables}
+          onClearTable={handleClearTableStatus}
+          onLoadTableBill={handleLoadTableBill}
+          onPrintKitchenTicket={handlePrintKitchenTicket}
+          themeStyles={{
+            cardBg,
+            cardBorder,
+            innerBoxBg,
+            textPrimary,
+            textSecondary,
+            radius,
+            primaryColor,
+          }}
+        />
+      )}
+
+      {/* 11. Modal Antrean Kursi Barbershop */}
+      {hasBarbershopPlugin && (
+        <BarberQueueModal
+          isOpen={showBarberQueueModal}
+          onClose={() => setShowBarberQueueModal(false)}
+          bookings={barberBookings}
+          onRefresh={refreshBarberBookings}
+          onLoadToCart={handleLoadBarberBooking}
+          themeStyles={{
+            cardBg,
+            cardBorder,
+            innerBoxBg,
+            textPrimary,
+            textSecondary,
+            primaryColor,
+          }}
+        />
+      )}
     </div>
   );
 }

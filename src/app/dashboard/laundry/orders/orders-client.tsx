@@ -42,6 +42,7 @@ export function LaundryOrdersClient({
   const [unitQty, setUnitQty] = useState<number | "">(1);
   const [pricePerUnit, setPricePerUnit] = useState<number | "">(8000);
   const [fragrance, setFragrance] = useState("Sakura Blossom");
+  const [rackNumber, setRackNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [estimatedDays, setEstimatedDays] = useState(2);
 
@@ -49,12 +50,46 @@ export function LaundryOrdersClient({
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [activePrintOrder, setActivePrintOrder] = useState<any>(null);
 
+  const handleSendWhatsAppNotification = (order: any) => {
+    if (!order.customerPhone) {
+      toastError("Nomor WhatsApp pelanggan belum diisi.");
+      return;
+    }
+    let phone = order.customerPhone.replace(/[^0-9]/g, "");
+    if (phone.startsWith("0")) phone = "62" + phone.slice(1);
+    else if (!phone.startsWith("62")) phone = "62" + phone;
+
+    const statusText =
+      order.status === "READY"
+        ? "✨ SUDAH SELESAI & SIAP DIAMBIL"
+        : order.status === "IRONING"
+        ? "👔 Sedang Disetrika Rapih"
+        : order.status === "DRYING"
+        ? "☀️ Sedang Dikeringkan"
+        : order.status === "WASHING"
+        ? "🌊 Sedang Dicuci Bersih"
+        : "📥 Sudah Kami Terima";
+
+    const msg =
+      `Halo Kak *${order.customerName}*! 👋\n\n` +
+      `Update cucian Anda di *Qassa Laundry* dengan No. Nota *${order.orderNumber}*:\n` +
+      `• Layanan: ${order.serviceType === "KILOAN" ? `${order.weightKg} Kg` : `${order.unitQty} Pcs`}\n` +
+      `• Aroma: ${order.fragrance || "Wangi Segar"}\n` +
+      `• Status: *${statusText}*\n` +
+      `• Total Tagihan: *Rp ${Number(order.totalAmount).toLocaleString("id-ID")}*\n` +
+      (order.notes ? `• Lokasi/Catatan: ${order.notes}\n\n` : "\n") +
+      `Terima kasih telah mempercayakan pakaian Anda kepada kami! 🙏✨`;
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !pricePerUnit) return;
 
     setLoading(true);
     try {
+      const combinedNotes = [rackNumber ? `[${rackNumber.trim()}]` : "", notes?.trim()].filter(Boolean).join(" ");
       await createLaundryOrderAction({
         outletId: data.currentOutletId,
         customerName,
@@ -64,13 +99,14 @@ export function LaundryOrdersClient({
         unitQty: serviceType === "SATUAN" && unitQty ? Number(unitQty) : undefined,
         pricePerUnit: Number(pricePerUnit),
         fragrance,
-        notes,
+        notes: combinedNotes,
         estimatedDays,
       });
 
       setShowAddModal(false);
       setCustomerName("");
       setCustomerPhone("");
+      setRackNumber("");
       setNotes("");
       window.location.reload();
     } catch (err: any) {
@@ -287,6 +323,17 @@ export function LaundryOrdersClient({
                           </button>
                         )}
 
+                        {o.customerPhone && (
+                          <button
+                            type="button"
+                            onClick={() => handleSendWhatsAppNotification(o)}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                            title="Kirim Notifikasi WhatsApp"
+                          >
+                            <span>📲 WA</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => {
                             setActivePrintOrder(o);
@@ -431,15 +478,27 @@ export function LaundryOrdersClient({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold mb-1">Catatan Pakaian Khusus</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Misal: Baju putih jangan dicampur, noda di kerah"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">No. Rak / Lokasi Simpan</label>
+                  <input
+                    type="text"
+                    value={rackNumber}
+                    onChange={(e) => setRackNumber(e.target.value)}
+                    placeholder="Misal: Rak A-03"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Catatan Pakaian Khusus</label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Misal: Baju putih pisah"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                  />
+                </div>
               </div>
 
               <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl flex justify-between items-center text-xs">

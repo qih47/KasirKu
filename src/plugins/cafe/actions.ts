@@ -309,3 +309,72 @@ export async function transferTableAction(data: {
   revalidatePath("/pos");
   return { success: true };
 }
+
+export async function saveTableOpenBillAction(data: {
+  tableId: string;
+  guestName?: string;
+  cart: any[];
+  customer?: any;
+  subtotal: number;
+  discountType?: string;
+  discountValue?: number;
+  appliedVoucherCode?: string;
+}) {
+  const user = await requireTenantCafeUser();
+  const { tableId, guestName, cart, customer, subtotal, discountType, discountValue, appliedVoucherCode } = data;
+
+  const table = await prisma.cafeTable.findUnique({
+    where: { id: tableId },
+  });
+
+  if (!table || table.tenantId !== user.tenantId) {
+    throw new Error("Meja tidak ditemukan.");
+  }
+
+  const orderPayload = JSON.stringify({
+    cart,
+    customer: customer || null,
+    subtotal,
+    discountType: discountType || null,
+    discountValue: discountValue || 0,
+    appliedVoucherCode: appliedVoucherCode || null,
+    savedAt: new Date().toISOString(),
+  });
+
+  const updated = await prisma.cafeTable.update({
+    where: { id: tableId },
+    data: {
+      status: "OCCUPIED",
+      currentGuestName: guestName || table.currentGuestName || "Tamu Meja",
+      currentOrderNotes: orderPayload,
+    },
+  });
+
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
+  return { success: true, table: updated };
+}
+
+export async function clearTableOpenBillAction(tableId: string) {
+  const user = await requireTenantCafeUser();
+  const table = await prisma.cafeTable.findUnique({
+    where: { id: tableId },
+  });
+
+  if (!table || table.tenantId !== user.tenantId) {
+    throw new Error("Meja tidak ditemukan.");
+  }
+
+  const updated = await prisma.cafeTable.update({
+    where: { id: tableId },
+    data: {
+      status: "AVAILABLE",
+      currentGuestName: null,
+      currentOrderNotes: null,
+    },
+  });
+
+  revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/pos");
+  return { success: true, table: updated };
+}

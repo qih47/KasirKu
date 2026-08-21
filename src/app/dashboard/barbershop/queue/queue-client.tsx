@@ -252,14 +252,21 @@ export function BarbershopQueueClient({
                     </p>
                   </div>
 
-                  <div className="pt-1">
+                  <div className="pt-1 flex flex-col gap-1.5">
                     <button
                       onClick={() => handleStatusChange(item.id, "COMPLETED")}
                       className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>Selesai Pangkas &rarr; Siap Bayar</span>
+                      <span>Selesai Pangkas</span>
                     </button>
+                    <Link
+                      href={`/pos?barberBookingId=${item.id}`}
+                      className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      <span>💳 Bayar di Kasir POS</span>
+                    </Link>
                   </div>
                 </div>
               ))
@@ -287,7 +294,7 @@ export function BarbershopQueueClient({
               data.completedList.map((item: any) => (
                 <div
                   key={item.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2 opacity-90"
+                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
                     <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950 text-[11px] font-black text-emerald-600 dark:text-emerald-400 font-mono">
@@ -303,12 +310,22 @@ export function BarbershopQueueClient({
                     </span>
                   </div>
 
-                  <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                    {item.customerName}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {item.service?.name} &bull; {item.barber?.name}
-                  </p>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      {item.customerName}
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      {item.service?.name} &bull; <span className="font-semibold text-indigo-600 dark:text-indigo-400">{item.barber?.name || "Staff Barber"}</span>
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/pos?barberBookingId=${item.id}`}
+                    className="w-full py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                  >
+                    <ShoppingCart className="w-3 h-3" />
+                    <span>Checkout di POS</span>
+                  </Link>
                 </div>
               ))
             ) : (

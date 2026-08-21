@@ -87,6 +87,9 @@ export function ProductClient({
   const [barcode, setBarcode] = useState("");
   const [stockQty, setStockQty] = useState<number | string>("");
   const [minStockAlert, setMinStockAlert] = useState<number | string>(5);
+  const [unit, setUnit] = useState("Pcs");
+  const [wholesaleMinQty, setWholesaleMinQty] = useState<number | string>("");
+  const [wholesalePrice, setWholesalePrice] = useState<number | string>("");
 
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -104,6 +107,9 @@ export function ProductClient({
     setBarcode("");
     setStockQty(10);
     setMinStockAlert(5);
+    setUnit("Pcs");
+    setWholesaleMinQty("");
+    setWholesalePrice("");
     setError(null);
     setShowModal(true);
   };
@@ -118,6 +124,9 @@ export function ProductClient({
     setBarcode(p.barcode || "");
     setStockQty(p.stockQty ?? "");
     setMinStockAlert(p.minStockAlert ?? 5);
+    setUnit(p.attributes?.unit || "Pcs");
+    setWholesaleMinQty(p.attributes?.wholesaleTiers?.[0]?.minQty || "");
+    setWholesalePrice(p.attributes?.wholesaleTiers?.[0]?.price || "");
     setError(null);
     setShowModal(true);
   };
@@ -143,6 +152,19 @@ export function ProductClient({
     setLoading(true);
 
     try {
+      const attributesPayload = {
+        unit: unit || "Pcs",
+        wholesaleTiers:
+          wholesaleMinQty && wholesalePrice
+            ? [
+                {
+                  minQty: Number(wholesaleMinQty),
+                  price: Number(wholesalePrice),
+                },
+              ]
+            : [],
+      };
+
       if (editItem) {
         // Edit Mode
         const res = await updateProductAction(editItem.id, {
@@ -154,6 +176,7 @@ export function ProductClient({
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
           minStockAlert: type === "BARANG" ? Number(minStockAlert) : 5,
+          attributes: attributesPayload,
         });
 
         setData((prev) => ({
@@ -174,6 +197,7 @@ export function ProductClient({
           category,
           stockQty: type === "BARANG" ? Number(stockQty) : null,
           minStockAlert: type === "BARANG" ? Number(minStockAlert) : 5,
+          attributes: attributesPayload,
         });
 
         setData((prev) => ({
@@ -765,7 +789,7 @@ export function ProductClient({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                         {tr("Tipe Item")}
@@ -775,8 +799,29 @@ export function ProductClient({
                         onChange={(e) => setType(e.target.value as ProductType)}
                         className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       >
-                        <option value="BARANG">{tr("BARANG (Fisik, ada stok)")}</option>
-                        <option value="JASA">{tr("JASA (Layanan/Treatment)")}</option>
+                        <option value="BARANG">{tr("BARANG (Fisik)")}</option>
+                        <option value="JASA">{tr("JASA (Layanan)")}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                        {tr("Satuan (UOM)")}
+                      </label>
+                      <select
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
+                      >
+                        <option value="Pcs">Pcs (Satuan)</option>
+                        <option value="Dus">Dus / Box</option>
+                        <option value="Lusin">Lusin (12 Pcs)</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Botol">Botol</option>
+                        <option value="Bungkus">Bungkus</option>
+                        <option value="Kg">Kg (Kilogram)</option>
+                        <option value="Liter">Liter</option>
+                        <option value="Porsi">Porsi</option>
                       </select>
                     </div>
 
@@ -788,27 +833,69 @@ export function ProductClient({
                         type="text"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        placeholder={tr("Contoh: Haircut / Minuman")}
+                        placeholder={tr("Contoh: Sembako")}
                         className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                        {tr("Harga Jual (Rp)")}
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min={0}
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        placeholder={tr("Contoh: 35000")}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
+                  {/* Pricing and Tiered Wholesale Section */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        💰 Pengaturan Harga &amp; Grosir
+                      </span>
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                        Retail Modern Pricing
+                      </span>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                          Harga Satuan Normal (Rp) *
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          value={price}
+                          onChange={(e) => setPrice(e.target.value)}
+                          placeholder="35000"
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Minimal Beli Grosir">
+                            Min Qty Grosir
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={wholesaleMinQty}
+                            onChange={(e) => setWholesaleMinQty(e.target.value)}
+                            placeholder="Mis: 6"
+                            className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Harga Grosir per Satuan">
+                            Harga Grosir (Rp)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={wholesalePrice}
+                            onChange={(e) => setWholesalePrice(e.target.value)}
+                            placeholder="Mis: 30000"
+                            className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                     {type === "BARANG" ? (
                       <div className="grid grid-cols-2 gap-3">
@@ -850,7 +937,6 @@ export function ProductClient({
                         </div>
                       </div>
                     )}
-                  </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1">

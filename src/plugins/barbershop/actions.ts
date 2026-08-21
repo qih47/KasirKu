@@ -353,3 +353,74 @@ export async function updateStaffBarberRateAction(data: {
   return { success: true };
 }
 
+export async function getTodayBarbershopQueueAction(explicitOutletId?: string) {
+  const user = await requireTenantBarbershopUser();
+  const outletId = explicitOutletId || user.outletId;
+
+  let targetOutletId = outletId;
+  if (!targetOutletId) {
+    const firstOutlet = await prisma.outlet.findFirst({
+      where: { tenantId: user.tenantId, isActive: true },
+    });
+    targetOutletId = firstOutlet?.id;
+  }
+
+  if (!targetOutletId) return [];
+
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      outletId: targetOutletId,
+      createdAt: { gte: todayStart, lte: todayEnd },
+      status: { in: ["WAITING", "IN_PROGRESS", "COMPLETED"] },
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      barber: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          commissionPercent: true,
+          commissionFlat: true,
+          attributes: true,
+        },
+      },
+      service: true,
+      customer: true,
+    },
+  });
+
+  return JSON.parse(JSON.stringify(bookings));
+}
+
+export async function getBarbershopBookingByIdAction(bookingId: string) {
+  const user = await requireTenantBarbershopUser();
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      barber: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          commissionPercent: true,
+          commissionFlat: true,
+          attributes: true,
+        },
+      },
+      service: true,
+      customer: true,
+    },
+  });
+
+  if (!booking || booking.tenantId !== user.tenantId) {
+    throw new Error("Antrian tidak ditemukan.");
+  }
+
+  return JSON.parse(JSON.stringify(booking));
+}
+

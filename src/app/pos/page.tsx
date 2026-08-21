@@ -93,10 +93,47 @@ export default async function PosPage() {
   const receiptConfig = (tenant?.receiptConfig as any) || {};
   const posThemeCode = receiptConfig.posThemeCode || receiptConfig.posLayout;
 
-  // Cek apakah plugin 'self_order' aktif untuk tenant ini
+  // Cek apakah plugin 'self_order' & 'barbershop' aktif untuk tenant ini
   const isSelfOrderActive = activeSub?.plugins?.some(
     (tp) => tp.plugin.code === "self_order" && tp.isActive
   ) ?? false;
+
+  const isBarbershopActive = activeSub?.plugins?.some(
+    (tp) => tp.plugin.code === "barbershop" && tp.isActive
+  ) ?? false;
+
+  let initialBarberBookings: any[] = [];
+  if (isBarbershopActive && user.tenantId) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        tenantId: user.tenantId,
+        ...(targetOutletId ? { outletId: targetOutletId } : {}),
+        createdAt: { gte: todayStart, lte: todayEnd },
+        status: { in: ["WAITING", "IN_PROGRESS", "COMPLETED"] },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        barber: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            commissionPercent: true,
+            commissionFlat: true,
+            attributes: true,
+          },
+        },
+        service: true,
+        customer: true,
+      },
+    });
+    initialBarberBookings = JSON.parse(JSON.stringify(bookings));
+  }
 
   // Resolve custom POS theme if explicitly chosen in Store "Tema POS", otherwise use master UI theme
   let appliedPosTheme = masterUiTheme;
@@ -121,6 +158,8 @@ export default async function PosPage() {
       staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
       hasSelfOrderPlugin={isSelfOrderActive}
+      hasBarbershopPlugin={isBarbershopActive}
+      initialBarberBookings={initialBarberBookings}
       activeVouchers={activeVouchers ? JSON.parse(JSON.stringify(activeVouchers)) : []}
       tenantInfo={{
         tenantId: user.tenantId,

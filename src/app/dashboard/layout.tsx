@@ -47,6 +47,13 @@ export default async function DashboardLayout({
   const isTrial = tenant?.status === "TRIAL";
   const tierName = activeSub?.licenseTier?.name || "Langganan";
   
+  let trialRemainingDays = 0;
+  if (isTrial && tenant?.trialEndAt) {
+    const now = new Date();
+    const end = new Date(tenant.trialEndAt);
+    trialRemainingDays = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  
   // Theme Engine (Fully dynamic from database)
   const appliedTheme = activeSub?.theme?.theme;
   const tokens = (appliedTheme?.tokens as any) || {};
@@ -269,7 +276,7 @@ export default async function DashboardLayout({
 
                 {isTrial ? (
                   <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Trial 30 Hari
+                    Trial {trialRemainingDays > 0 ? `${trialRemainingDays} Hari` : "Aktif"}
                   </span>
                 ) : (
                   <span

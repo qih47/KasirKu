@@ -1,13 +1,15 @@
 import { getCatalogPricingData } from "@/modules/superadmin/actions";
 import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
+import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
 import { getFeatureEntitlementsMatrix } from "@/modules/features/feature-actions";
 import { CatalogClient } from "./catalog-client";
 import { Tags } from "lucide-react";
 
 export default async function AdminCatalogPage() {
-  const [{ licenseTiers, plugins, themes }, durationSettings, featureEntitlements] = await Promise.all([
+  const [{ licenseTiers, plugins, themes }, durationSettings, trialConfig, featureEntitlements] = await Promise.all([
     getCatalogPricingData(),
     getSubscriptionDurationSettingsAction(),
+    getTrialConfigurationAction(),
     getFeatureEntitlementsMatrix(),
   ]);
 
@@ -22,7 +24,7 @@ export default async function AdminCatalogPage() {
           Katalog Lisensi, Plugin, Tema &amp; Matriks Fitur
         </h1>
         <p className="text-xs text-slate-400">
-          Ubah harga live, atur diskon durasi langganan (1B s/d 3T), dan kelola matriks hak akses fitur per tier lisensi secara dinamis.
+          Ubah harga live, atur masa trial pendaftaran, kelola diskon durasi langganan (1B s/d 3T), dan kelola matriks hak akses fitur per tier lisensi secara dinamis.
         </p>
       </div>
 
@@ -31,6 +33,7 @@ export default async function AdminCatalogPage() {
         initialPlugins={plugins}
         initialThemes={themes}
         initialDurationSettings={durationSettings}
+        initialTrialConfig={trialConfig}
         initialFeatureEntitlements={featureEntitlements}
       />
     </div>

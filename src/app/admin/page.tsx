@@ -126,7 +126,7 @@ export default async function SuperAdminDashboardPage() {
           <p className="text-2xl font-black text-amber-400">
             {metrics.trialTenants}
           </p>
-          <p className="text-xs text-slate-500 mt-1">Dalam masa percobaan 30 hari</p>
+          <p className="text-xs text-slate-500 mt-1">Dalam masa percobaan aktif</p>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800/80 shadow-sm">

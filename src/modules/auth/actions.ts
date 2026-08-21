@@ -11,6 +11,11 @@ import {
   BusinessVertical,
 } from "@/types/receipt";
 import { sendOtpToAllChannels } from "@/lib/notifications";
+import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
+import {
+  calculateTrialEndDate,
+  getTrialDurationLabel,
+} from "@/types/trial-configuration";
 
 export interface RegisterInput {
   businessName: string;
@@ -165,7 +170,8 @@ export async function verifyOtpAndRegisterTenant(
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const now = new Date();
-    const trialEnd = addDays(now, 30); // 30 Hari Masa Uji Coba Gratis Full Akses
+    const trialConfig = await getTrialConfigurationAction();
+    const trialEnd = calculateTrialEndDate(trialConfig, now);
 
 
     // Tentukan preset berdasarkan bidang usaha yang dipilih
@@ -447,9 +453,10 @@ export async function verifyOtpAndRegisterTenant(
       return { tenant, user };
     });
 
+    const trialLabel = getTrialDurationLabel(trialConfig, "id");
     return {
       success: true,
-      message: "Selamat datang di Qassa! Akun dan masa Trial Gratis 30 Hari Anda telah aktif.",
+      message: `Selamat datang di Qassa! Akun dan masa Trial Gratis ${trialLabel} Anda telah aktif.`,
       userId: result.user.id,
       tenantId: result.tenant.id,
     };

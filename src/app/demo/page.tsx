@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
 import { DemoClient } from "./demo-client";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const metadata = {
 
 export default async function DemoPage() {
   // Ambil data harga lisensi, plugin, dan tema secara live langsung dari database katalog
-  const [rawTiers, rawPlugins, rawThemes] = await Promise.all([
+  const [rawTiers, rawPlugins, rawThemes, trialConfig] = await Promise.all([
     prisma.licenseTier.findMany({
       where: { isActive: true },
     }),
@@ -22,6 +23,7 @@ export default async function DemoPage() {
       where: { isActive: true },
       orderBy: { priceMonthly: "asc" },
     }),
+    getTrialConfigurationAction(),
   ]);
 
   const tierOrderMap: Record<string, number> = {
@@ -41,6 +43,7 @@ export default async function DemoPage() {
       dbTiers={JSON.parse(JSON.stringify(dbTiers))}
       dbPlugins={JSON.parse(JSON.stringify(rawPlugins))}
       dbThemes={JSON.parse(JSON.stringify(rawThemes))}
+      trialConfig={trialConfig}
     />
   );
 }

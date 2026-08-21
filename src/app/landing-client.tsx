@@ -32,6 +32,13 @@ import {
   DurationSettingItem,
   calculateDurationPrice,
 } from "@/types/subscription-duration";
+import {
+  DEFAULT_TRIAL_CONFIGURATION,
+  TrialConfiguration,
+  getTrialDurationLabel,
+  getTrialCtaLabel,
+  getTrialHeroCtaLabel,
+} from "@/types/trial-configuration";
 import { useTranslation } from "@/lib/i18n/language-context";
 
 export function LandingClient({
@@ -39,13 +46,18 @@ export function LandingClient({
   plugins = [],
   themes = [],
   durationSettings = DEFAULT_DURATION_SETTINGS,
+  trialConfig = DEFAULT_TRIAL_CONFIGURATION,
 }: {
   tiers?: any[];
   plugins?: any[];
   themes?: any[];
   durationSettings?: DurationSettingItem[];
+  trialConfig?: TrialConfiguration;
 }) {
   const { locale, t: translate, tr } = useTranslation();
+  const trialLabel = getTrialDurationLabel(trialConfig, locale);
+  const trialCtaLabel = getTrialCtaLabel(trialConfig, locale);
+  const trialHeroCtaLabel = getTrialHeroCtaLabel(trialConfig, locale);
   const [isDark, setIsDark] = useState(false);
   const activeDurations = durationSettings.filter((d) => d.isActive);
   const [selectedDurationKey, setSelectedDurationKey] = useState<string>(
@@ -194,8 +206,10 @@ export function LandingClient({
 
   const faqs = [
     {
-      q: "Apakah saya bisa mencoba Qassa secara gratis terlebih dahulu?",
-      a: "Ya! Anda dapat langsung mendaftar untuk menikmati masa Uji Coba Gratis (Free Trial) selama 30 Hari dengan akses penuh ke seluruh fitur tanpa perlu memasukkan kartu kredit.",
+      q: locale === "en" ? "Can I try Qassa for free before subscribing?" : "Apakah saya bisa mencoba Qassa secara gratis terlebih dahulu?",
+      a: locale === "en"
+        ? `Yes! You can register instantly for a ${trialLabel} Free Trial with full access to all features without credit card required.`
+        : `Ya! Anda dapat langsung mendaftar untuk menikmati masa Uji Coba Gratis (Free Trial) selama ${trialLabel} dengan akses penuh ke seluruh fitur tanpa perlu memasukkan kartu kredit.`,
     },
     {
       q: "Apakah Qassa cocok untuk bisnis yang memiliki lebih dari satu cabang?",
@@ -319,7 +333,7 @@ export function LandingClient({
               href="/register"
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 transition flex items-center gap-1.5 active:scale-95"
             >
-              <span>{locale === "en" ? "Try Free for 30 Days" : "Coba Gratis 30 Hari"}</span>
+              <span>{trialCtaLabel}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -374,7 +388,7 @@ export function LandingClient({
             href="/register"
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-2xl shadow-indigo-600/35 transition flex items-center justify-center gap-2 active:scale-95"
           >
-            <span>{locale === "en" ? "Start 30-Day Free Trial" : "Mulai Uji Coba Gratis 30 Hari"}</span>
+            <span>{trialHeroCtaLabel}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
@@ -1010,7 +1024,9 @@ export function LandingClient({
             Investasi Terjangkau untuk Pertumbuhan Bisnis
           </h2>
           <p className="text-xs sm:text-sm leading-relaxed" style={{ color: t.textSub }}>
-            Mulai dengan Trial Gratis 30 Hari. Pilih paket yang sesuai saat Anda sudah siap berlangganan.
+            {locale === "en"
+              ? `Start with a ${trialLabel} Free Trial. Choose a plan that fits your business when you're ready.`
+              : `Mulai dengan Trial Gratis ${trialLabel}. Pilih paket yang sesuai saat Anda sudah siap berlangganan.`}
           </p>
 
           {/* Multi-Duration Pill Selector (1 Bulan s/d 3 Tahun) */}
@@ -1351,7 +1367,7 @@ export function LandingClient({
               href="/register"
               className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white text-indigo-950 font-black text-sm shadow-xl hover:bg-slate-100 transition flex items-center justify-center gap-2"
             >
-              <span>Daftar Coba Gratis 30 Hari</span>
+              <span>{locale === "en" ? `Start ${trialLabel} Free Trial` : `Daftar Coba Gratis ${trialLabel}`}</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link

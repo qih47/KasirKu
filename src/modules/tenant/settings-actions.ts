@@ -180,7 +180,7 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       detectedVertical,
       isTrial,
       isPaidActive,
-      tierName: activeSub?.licenseTier?.name || (isTrial ? "Trial 30 Hari" : "Lisensi Aktif"),
+      tierName: activeSub?.licenseTier?.name || (isTrial ? "Trial Aktif" : "Lisensi Aktif"),
       canCustomBrand: true,
       hasReceiptProPlugin,
       outlets,

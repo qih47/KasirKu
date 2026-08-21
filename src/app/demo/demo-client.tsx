@@ -25,14 +25,27 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+import {
+  DEFAULT_TRIAL_CONFIGURATION,
+  TrialConfiguration,
+  getTrialDurationLabel,
+} from "@/types/trial-configuration";
+
 interface SimulatorProps {
   dbTiers: any[];
   dbPlugins: any[];
   dbThemes: any[];
+  trialConfig?: TrialConfiguration;
 }
 
-export function DemoClient({ dbTiers, dbPlugins, dbThemes }: SimulatorProps) {
+export function DemoClient({
+  dbTiers,
+  dbPlugins,
+  dbThemes,
+  trialConfig = DEFAULT_TRIAL_CONFIGURATION,
+}: SimulatorProps) {
   const router = useRouter();
+  const trialLabel = getTrialDurationLabel(trialConfig, "id");
 
   // State Konfigurator
   const [selectedTierCode, setSelectedTierCode] = useState<string>(
@@ -390,7 +403,7 @@ export function DemoClient({ dbTiers, dbPlugins, dbThemes }: SimulatorProps) {
                 href="/register"
                 className="block text-center text-xs font-bold text-indigo-600 hover:text-indigo-700"
               >
-                Atau langsung Mulai Trial 30 Hari &rarr;
+                Atau langsung Mulai Trial {trialLabel} &rarr;
               </Link>
             </div>
           </div>

@@ -18,6 +18,14 @@ import {
 } from "@/types/subscription-duration";
 import { updateSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
 import {
+  DEFAULT_TRIAL_CONFIGURATION,
+  TrialConfiguration,
+  getTrialDurationLabel,
+  getTrialCtaLabel,
+  getTrialHeroCtaLabel,
+} from "@/types/trial-configuration";
+import { updateTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
+import {
   FeatureEntitlement,
   CATEGORY_LABELS,
   FeatureCategory,
@@ -56,6 +64,8 @@ import {
   Percent,
   Sliders,
   Lock,
+  Gift,
+  Eye,
 } from "lucide-react";
 
 
@@ -66,18 +76,20 @@ export function CatalogClient({
   initialPlugins,
   initialThemes,
   initialDurationSettings,
+  initialTrialConfig,
   initialFeatureEntitlements,
 }: {
   initialLicenses: any[];
   initialPlugins: any[];
   initialThemes: any[];
   initialDurationSettings?: DurationSettingItem[];
+  initialTrialConfig?: TrialConfiguration;
   initialFeatureEntitlements?: FeatureEntitlement[];
 }) {
   const searchParams = useSearchParams();
   const { locale, t, tr } = useTranslation();
   const defaultTab = (searchParams.get("tab") as any) || "LICENSES";
-  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "DURATIONS" | "FEATURE_MATRIX">(defaultTab);
+  const [tab, setTab] = useState<"LICENSES" | "PLUGINS" | "THEMES" | "POS_LAYOUTS" | "RECEIPTS" | "TRIAL" | "DURATIONS" | "FEATURE_MATRIX">(defaultTab);
 
 
   const [licenses, setLicenses] = useState(initialLicenses);
@@ -89,6 +101,29 @@ export function CatalogClient({
       : DEFAULT_DURATION_SETTINGS
   );
   const [durationLoading, setDurationLoading] = useState(false);
+
+  // Dynamic Trial Configuration State
+  const [trialConfig, setTrialConfig] = useState<TrialConfiguration>(
+    initialTrialConfig || DEFAULT_TRIAL_CONFIGURATION
+  );
+  const [trialLoading, setTrialLoading] = useState(false);
+
+  const handleSaveTrialConfig = async () => {
+    setTrialLoading(true);
+    try {
+      const res = await updateTrialConfigurationAction(trialConfig);
+      if (res.success) {
+        setTrialConfig(res.config);
+        setSuccessMsg(res.message);
+        toastSuccess("Konfigurasi masa trial berhasil disimpan!");
+        setTimeout(() => setSuccessMsg(null), 4000);
+      }
+    } catch (err: any) {
+      toastError(err.message || "Gagal menyimpan konfigurasi masa trial.");
+    } finally {
+      setTrialLoading(false);
+    }
+  };
 
   // Dynamic Feature Entitlements Matrix State
   const [featureEntitlements, setFeatureEntitlements] = useState<FeatureEntitlement[]>(
@@ -479,6 +514,17 @@ export function CatalogClient({
           >
             <Clock className="w-4 h-4" />
             <span>{locale === "en" ? "Subscription Durations & Discounts ⚙️" : "Diskon Durasi Langganan ⚙️"}</span>
+          </button>
+
+          <button
+            onClick={() => setTab("TRIAL")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${tab === "TRIAL"
+                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30"
+                : "text-slate-400 hover:text-slate-200"
+              }`}
+          >
+            <Gift className="w-4 h-4 text-emerald-300" />
+            <span>{locale === "en" ? "Free Trial Period 🎁" : "Durasi Masa Trial 🎁"}</span>
           </button>
 
           <button
@@ -1520,6 +1566,252 @@ export function CatalogClient({
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 6.5. PENGATURAN MASA TRIAL PENDAFTARAN (HARI / BULAN)    */}
+      {/* ======================================================== */}
+      {tab === "TRIAL" && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-slate-800 text-xs text-slate-300 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <Gift className="w-4 h-4" />
+                </span>
+                <p className="font-bold text-white text-sm">
+                  {locale === "en" ? "Free Trial Period Configuration" : "Pengaturan Durasi Masa Uji Coba Gratis (Free Trial)"}
+                </p>
+              </div>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Tentukan berapa hari atau berapa bulan masa trial gratis yang diberikan ke calon tenant saat pendaftaran akun baru.
+                Perubahan ini langsung disinkronkan secara live di <strong>Landing Page</strong>, <strong>Halaman Registrasi &amp; Login</strong>, dan <strong>Database Tenant Baru</strong>.
+              </p>
+            </div>
+            <button
+              onClick={handleSaveTrialConfig}
+              disabled={trialLoading}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50 flex-shrink-0"
+            >
+              {trialLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Menyimpan...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Pengaturan Trial</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Form Settings */}
+            <div className="lg:col-span-7 space-y-5">
+              <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div>
+                    <h4 className="font-bold text-white text-sm">Status Masa Trial Gratis</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Izinkan pengguna baru mendaftar dengan masa percobaan gratis tanpa kartu kredit.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trialConfig.isEnabled}
+                      onChange={(e) =>
+                        setTrialConfig((prev) => ({ ...prev, isEnabled: e.target.checked }))
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                {/* Preset Cepat */}
+                <div className="space-y-2.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Pilihan Preset Cepat (1-Click)
+                  </label>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[
+                      { val: 7, unit: "DAYS" as const, label: "7 Hari" },
+                      { val: 14, unit: "DAYS" as const, label: "14 Hari" },
+                      { val: 30, unit: "DAYS" as const, label: "30 Hari" },
+                      { val: 1, unit: "MONTHS" as const, label: "1 Bulan" },
+                      { val: 2, unit: "MONTHS" as const, label: "2 Bulan" },
+                      { val: 3, unit: "MONTHS" as const, label: "3 Bulan" },
+                    ].map((preset) => {
+                      const isSelected =
+                        trialConfig.durationValue === preset.val &&
+                        trialConfig.durationUnit === preset.unit;
+                      return (
+                        <button
+                          key={`${preset.val}-${preset.unit}`}
+                          type="button"
+                          onClick={() =>
+                            setTrialConfig((prev) => ({
+                              ...prev,
+                              durationValue: preset.val,
+                              durationUnit: preset.unit,
+                            }))
+                          }
+                          className={`py-2.5 px-3 rounded-xl text-xs font-extrabold border transition text-center ${
+                            isSelected
+                              ? "bg-emerald-600/20 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/30"
+                              : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Input Durasi Custom */}
+                <div className="space-y-3 pt-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Kustomisasi Durasi &amp; Satuan
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <span className="block text-xs text-slate-400 mb-1.5 font-medium">
+                        Jumlah / Angka:
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={trialConfig.durationValue}
+                        onChange={(e) =>
+                          setTrialConfig((prev) => ({
+                            ...prev,
+                            durationValue: Math.max(1, Number(e.target.value) || 1),
+                          }))
+                        }
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                        placeholder="e.g. 14, 30, 2"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="block text-xs text-slate-400 mb-1.5 font-medium">
+                        Satuan Waktu:
+                      </span>
+                      <select
+                        value={trialConfig.durationUnit}
+                        onChange={(e) =>
+                          setTrialConfig((prev) => ({
+                            ...prev,
+                            durationUnit: e.target.value as any,
+                          }))
+                        }
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      >
+                        <option value="DAYS">Hari (Days)</option>
+                        <option value="MONTHS">Bulan (Months)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tagline / Custom Badge */}
+                <div className="space-y-2 pt-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Label Kustom (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={trialConfig.customBadgeText || ""}
+                    onChange={(e) =>
+                      setTrialConfig((prev) => ({
+                        ...prev,
+                        customBadgeText: e.target.value,
+                      }))
+                    }
+                    placeholder={`Contoh: Promo Spesial ${getTrialDurationLabel(trialConfig, "id")}`}
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Biarkan kosong untuk menggunakan teks default otomatis (misal: <em>"{getTrialDurationLabel(trialConfig, "id")}"</em>).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Interactive Previews */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-sm">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                  <Eye className="w-4 h-4" />
+                  <span>Simulasi Live Tampilan Pengguna</span>
+                </div>
+
+                {/* Preview 1: Header CTA Button */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">1. Tombol Navbar Landing Page</span>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Tombol CTA Utama:</span>
+                    <span className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-xs shadow-md">
+                      {getTrialCtaLabel(trialConfig, "id")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview 2: Hero CTA Button */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">2. Tombol Hero Section</span>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Hero CTA:</span>
+                    <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xs shadow-md">
+                      {getTrialHeroCtaLabel(trialConfig, "id")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview 3: Register Page Header Badge */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">3. Badge &amp; Subtitle Registrasi</span>
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm text-white">Qassa</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-extrabold border bg-emerald-500/15 border-emerald-500/30 text-emerald-400 uppercase">
+                        Trial {getTrialDurationLabel(trialConfig, "id")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-300 font-medium">
+                      Coba Gratis {getTrialDurationLabel(trialConfig, "id")} Penuh • Tanpa Kartu Kredit
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preview 4: Login Register Link */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">4. Tautan di Halaman Login</span>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
+                    Belum memiliki akun usaha?{" "}
+                    <span className="font-bold text-indigo-400 underline">
+                      Daftar Coba Gratis {getTrialDurationLabel(trialConfig, "id")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview 5: Success Welcome Message */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">5. Pesan Berhasil Daftar</span>
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300">
+                    Selamat datang di Qassa! Akun dan masa Trial Gratis{" "}
+                    <strong className="text-white">{getTrialDurationLabel(trialConfig, "id")}</strong> Anda telah aktif.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

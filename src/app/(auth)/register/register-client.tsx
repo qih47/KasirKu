@@ -36,14 +36,24 @@ import {
   sendRegistrationOtpAction,
   verifyOtpAndRegisterTenant,
 } from "@/modules/auth/actions";
+import {
+  DEFAULT_TRIAL_CONFIGURATION,
+  TrialConfiguration,
+  getTrialDurationLabel,
+} from "@/types/trial-configuration";
 
 interface RegisterClientProps {
   initialVertical?: string;
+  trialConfig?: TrialConfiguration;
 }
 
-export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps) {
+export function RegisterClient({
+  initialVertical = "cafe",
+  trialConfig = DEFAULT_TRIAL_CONFIGURATION,
+}: RegisterClientProps) {
   const router = useRouter();
   const [isDark, setIsDark] = useState(false);
+  const trialLabel = getTrialDurationLabel(trialConfig, "id");
 
   // Theme Tokens
   const t = {
@@ -366,7 +376,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                   className="text-[10px] px-2 py-0.5 rounded-full font-extrabold border uppercase tracking-wider"
                   style={{ backgroundColor: "rgba(16,185,129,0.15)", borderColor: "rgba(16,185,129,0.3)", color: "#34D399" }}
                 >
-                  Trial 30 Hari
+                  Trial {trialLabel}
                 </span>
               </div>
               <p className="text-[10px] font-medium" style={{ color: t.textMuted }}>Pendaftaran Akun Baru</p>
@@ -411,7 +421,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
               style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Coba Gratis 30 Hari Penuh • Tanpa Kartu Kredit</span>
+              <span>Coba Gratis {trialLabel} Penuh • Tanpa Kartu Kredit</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: t.text }}>
               {step === 1 ? "Mulai Bisnis Lebih Cepat dengan Qassa" : "Verifikasi Akun Usaha Anda"}
@@ -745,7 +755,7 @@ export function RegisterClient({ initialVertical = "cafe" }: RegisterClientProps
                 <div className="flex items-center justify-center gap-4 text-[11px]" style={{ color: t.textMuted }}>
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    Gratis 30 Hari Penuh
+                    Gratis {trialLabel} Penuh
                   </span>
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />

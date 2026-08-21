@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
+import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
 import { LandingClient } from "./landing-client";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const metadata = {
 };
 
 export default async function HomePage() {
-  const [rawTiers, rawPlugins, rawThemes, durationSettings] = await Promise.all([
+  const [rawTiers, rawPlugins, rawThemes, durationSettings, trialConfig] = await Promise.all([
     prisma.licenseTier.findMany({
       where: { isActive: true },
     }),
@@ -24,6 +25,7 @@ export default async function HomePage() {
       orderBy: { priceMonthly: "asc" },
     }),
     getSubscriptionDurationSettingsAction(),
+    getTrialConfigurationAction(),
   ]);
 
   const tierOrderMap: Record<string, number> = {
@@ -44,6 +46,7 @@ export default async function HomePage() {
       plugins={JSON.parse(JSON.stringify(rawPlugins))}
       themes={JSON.parse(JSON.stringify(rawThemes))}
       durationSettings={durationSettings}
+      trialConfig={trialConfig}
     />
   );
 }

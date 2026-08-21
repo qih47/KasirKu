@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
+import { getTrialDurationLabel } from "@/types/trial-configuration";
 import {
   LogIn,
   Mail,
@@ -30,6 +32,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [trialLabel, setTrialLabel] = useState<string>("30 Hari");
+
+  useEffect(() => {
+    getTrialConfigurationAction()
+      .then((cfg) => {
+        if (cfg) {
+          setTrialLabel(getTrialDurationLabel(cfg, "id"));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Theme tokens
   const t = {
@@ -301,7 +314,7 @@ export default function LoginPage() {
             <p className="text-xs" style={{ color: t.textSub }}>
               Belum memiliki akun usaha?{" "}
               <Link href="/register" className="font-bold text-indigo-500 hover:text-indigo-400 underline ml-1">
-                Daftar Coba Gratis 30 Hari
+                Daftar Coba Gratis {trialLabel}
               </Link>
             </p>
           </div>

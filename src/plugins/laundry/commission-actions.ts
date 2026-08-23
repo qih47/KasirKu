@@ -70,8 +70,8 @@ export async function getLaundryCommissionsData(params?: {
     }),
   ]);
 
-  const totalCommissionsPaid = commissions.reduce(
-    (sum, c) => sum + Number(c.amount),
+  const totalCommissionsPaid = (commissions as any[]).reduce(
+    (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
 
@@ -87,7 +87,7 @@ export async function getLaundryCommissionsData(params?: {
     }
   > = {};
 
-  staffList.forEach((s) => {
+  (staffList as any[]).forEach((s: any) => {
     staffSummaryMap[s.id] = {
       id: s.id,
       name: s.name,
@@ -97,18 +97,18 @@ export async function getLaundryCommissionsData(params?: {
     };
   });
 
-  commissions.forEach((c) => {
+  (commissions as any[]).forEach((c: any) => {
     if (staffSummaryMap[c.staffId]) {
       staffSummaryMap[c.staffId].totalTasks += 1;
-      staffSummaryMap[c.staffId].totalCommission += Number(c.amount);
+      staffSummaryMap[c.staffId].totalCommission += Number(c.amount || 0);
     }
   });
 
   const staffSummaryList = Object.values(staffSummaryMap).sort(
-    (a, b) => b.totalCommission - a.totalCommission
+    (a: any, b: any) => Number(b.totalCommission || 0) - Number(a.totalCommission || 0)
   );
 
-  const totalKgProcessed = orders.reduce((sum, o) => sum + (o.weightKg ? Number(o.weightKg) : 0), 0);
+  const totalKgProcessed = (orders as any[]).reduce((sum: number, o: any) => sum + (o.weightKg ? Number(o.weightKg) : 0), 0);
 
   return {
     commissions,

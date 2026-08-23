@@ -38,7 +38,13 @@ import { CustomerCrmModal } from "./components/customer-crm-modal";
 import { PaymentModal, SplitPaymentLine } from "./components/payment-modal";
 import { PosHistoryModal } from "./components/history-modal";
 import { BarberQueueModal } from "./components/barber-queue-modal";
+import { ModularThermalReceiptModal } from "@/components/receipt/modular-thermal-receipt-modal";
 import { getTodayBarbershopQueueAction } from "@/plugins/barbershop/actions";
+import {
+  generatePosDynamicQrisAction,
+  checkPosPaymentStatusAction,
+  simulatePaymentWebhookAction,
+} from "@/modules/payment/actions";
 import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import { useTranslation } from "@/lib/i18n/language-context";
 import {
@@ -87,6 +93,7 @@ import {
   Send,
   QrCode,
   RefreshCw,
+  ShoppingBag,
   Receipt,
   PauseCircle,
   PlayCircle,
@@ -95,6 +102,8 @@ import {
   Building2,
   CreditCard,
   Zap,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { PosLayoutType } from "@/types/pos-layout";
@@ -125,6 +134,9 @@ interface PosClientProps {
   appliedTheme?: any;
   hasSelfOrderPlugin?: boolean;
   hasBarbershopPlugin?: boolean;
+  hasCafePlugin?: boolean;
+  hasLaundryPlugin?: boolean;
+  hasRetailPlugin?: boolean;
   initialBarberBookings?: any[];
   activeVouchers?: any[];
   tenantInfo?: {
@@ -144,6 +156,9 @@ export function PosClient({
   appliedTheme,
   hasSelfOrderPlugin = false,
   hasBarbershopPlugin = false,
+  hasCafePlugin = false,
+  hasLaundryPlugin = false,
+  hasRetailPlugin = false,
   initialBarberBookings = [],
   activeVouchers = [],
   tenantInfo,
@@ -201,7 +216,7 @@ export function PosClient({
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Open Shift Form State
-  const [openingCash, setOpeningCash] = useState<number | string>(100000);
+  const [openingCash, setOpeningCash] = useState<number | string>("");
 
   // Close Shift Form State
   const [closingCash, setClosingCash] = useState<number | string>("");
@@ -365,11 +380,11 @@ export function PosClient({
         return [...filtered, newItem];
       });
     } else {
-      // Fallback virtual item
+      // Fallback virtual item jika produk tidak ada di state lokal
       const fallbackItem: CartItemInput = {
         productId: booking.serviceId || "custom-barber-treatment",
         name: booking.service?.name || "Layanan Pangkas Rambut",
-        price: Number(booking.service?.price || 50000),
+        price: Number(booking.service?.price || 0),
         qty: 1,
         imageUrl: null,
         staffId: booking.barberId || undefined,
@@ -408,6 +423,12 @@ export function PosClient({
   const [qrisDynamicPaid, setQrisDynamicPaid] = useState<boolean>(false);
   const [showDynamicQrisModal, setShowDynamicQrisModal] = useState<boolean>(false);
   const [dynamicQrisDataUrl, setDynamicQrisDataUrl] = useState<string>("");
+  const [dynamicQrisString, setDynamicQrisString] = useState<string>("");
+  const [activeQrisOrderId, setActiveQrisOrderId] = useState<string | null>(null);
+  const [copiedPosKey, setCopiedPosKey] = useState<string | null>(null);
+  const [isQrisGenerating, setIsQrisGenerating] = useState<boolean>(false);
+  const [isQrisVerified, setIsQrisVerified] = useState<boolean>(false);
+  const [isQrisSimulated, setIsQrisSimulated] = useState<boolean>(false);
   const [transferRefInput, setTransferRefInput] = useState<string>("");
 
   // Membaca Konfigurasi Struk & Pajak Tenant
@@ -418,9 +439,37 @@ export function PosClient({
   const [posPaperSize, setPosPaperSize] = useState<"58mm" | "80mm">((receiptConfig.paperSize as any) || "80mm");
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(receiptConfig.autoPrintReceipt ?? true);
 
-  // POS Screen Layout Detection
+  // Multi-Vertical Detection & POS Mode Switcher State
+  const hasMultipleVerticals =
+    [hasCafePlugin, hasBarbershopPlugin, hasLaundryPlugin, hasRetailPlugin].filter(Boolean).length > 1;
+
+  const defaultVertical = hasBarbershopPlugin
+    ? "BARBERSHOP"
+    : hasCafePlugin
+    ? "CAFE"
+    : hasLaundryPlugin
+    ? "LAUNDRY"
+    : "RETAIL";
+
+  const [activeVerticalPos, setActiveVerticalPos] = useState<"CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL">(
+    (receiptConfig.posLayout === "CAFE_RESTO" && hasCafePlugin)
+      ? "CAFE"
+      : (receiptConfig.posLayout === "BARBERSHOP_STATION" && hasBarbershopPlugin)
+      ? "BARBERSHOP"
+      : (receiptConfig.posLayout === "LAUNDRY_WEIGHING" && hasLaundryPlugin)
+      ? "LAUNDRY"
+      : defaultVertical
+  );
+
+  // Dynamic POS Screen Layout from Active Vertical
   const posLayout: PosLayoutType =
-    (tenantInfo?.receiptConfig?.posLayout as PosLayoutType) || "STANDARD";
+    activeVerticalPos === "CAFE"
+      ? "CAFE_RESTO"
+      : activeVerticalPos === "BARBERSHOP"
+      ? "BARBERSHOP_STATION"
+      : activeVerticalPos === "LAUNDRY"
+      ? "LAUNDRY_WEIGHING"
+      : "RETAIL_FAST_BARCODE";
 
   // 1. Cafe & Resto Workflow States (Flexible Free Seating vs Table vs Tent Card)
   const [localCafeTables, setLocalCafeTables] = useState<any[]>(cafeTables || []);
@@ -684,18 +733,45 @@ export function PosClient({
   const parsedPaid = Number(amountPaid) || 0;
   const change = Math.max(0, parsedPaid - grandTotalWithTip);
 
-  // Generate QRIS Dinamis QR Code Payload
+  // Generate Real Midtrans Dynamic QRIS Payload & Base64 QR Image
   const generateQris = async (amount: number) => {
+    setIsQrisGenerating(true);
+    setIsQrisVerified(false);
     try {
-      const rawPayload = `00020101021226670014ID.LINKAJA.WWW0118936009143820011234021500000000000000051440014ID.CO.QRIS.WWW02150000000000000000303UME520458125303360540${amount.toString().length < 10 ? "0" + amount.toString().length : amount.toString().length}${amount}5802ID5913${(tenantInfo?.businessName || "KASIRKU").slice(0, 25).toUpperCase()}6007JAKARTA62070703A016304`;
-      const url = await QRCode.toDataURL(rawPayload, {
-        width: 320,
-        margin: 1,
-        color: { dark: "#0f172a", light: "#ffffff" },
+      const orderId = `POS-${Date.now()}`;
+      setActiveQrisOrderId(orderId);
+
+      const res = await generatePosDynamicQrisAction({
+        orderId,
+        amount,
+        outletId: shiftData?.currentOutletId,
+        customerName: selectedCustomer?.name,
+        customerPhone: selectedCustomer?.phone,
+        items: cart.map((c) => ({
+          id: c.productId,
+          name: c.name,
+          price: c.price,
+          quantity: c.qty,
+        })),
       });
-      setDynamicQrisDataUrl(url);
-    } catch (err) {
+
+      if (res.qrDataUrl) {
+        setDynamicQrisDataUrl(res.qrDataUrl);
+      }
+      if (res.qrString) {
+        setDynamicQrisString(res.qrString);
+      }
+      setIsQrisSimulated(!!res.isSimulated);
+    } catch (err: any) {
       console.error("QR Code generation error:", err);
+      // Fallback lokal jika terjadi kendala jaringan
+      const rawPayload = `00020101021226670014ID.LINKAJA.WWW0118936009143820011234021500000000000000051440014ID.CO.QRIS.WWW02150000000000000000303UME520458125303360540${amount.toString().length < 10 ? "0" + amount.toString().length : amount.toString().length}${amount}5802ID5913${(tenantInfo?.businessName || "KASIRKU").slice(0, 25).toUpperCase()}6007JAKARTA62070703A016304`;
+      setDynamicQrisString(rawPayload);
+      QRCode.toDataURL(rawPayload, { width: 320, margin: 1, color: { dark: "#0f172a", light: "#ffffff" } })
+        .then((url) => setDynamicQrisDataUrl(url))
+        .catch(() => {});
+    } finally {
+      setIsQrisGenerating(false);
     }
   };
 
@@ -704,6 +780,58 @@ export function PosClient({
       generateQris(grandTotalWithTip);
     }
   }, [showPaymentModal, selectedPaymentMethod, grandTotalWithTip]);
+
+  // Real-time Polling Listener untuk Verifikasi Pembayaran QRIS Otomatis
+  useEffect(() => {
+    if (!showPaymentModal || selectedPaymentMethod !== "QRIS" || !activeQrisOrderId || isQrisVerified) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await checkPosPaymentStatusAction(activeQrisOrderId);
+        if (res.isPaid) {
+          setIsQrisVerified(true);
+          setQrisDynamicPaid(true);
+          clearInterval(interval);
+          toastSuccess("✅ Pembayaran QRIS Berhasil Diverifikasi!");
+        }
+      } catch (err) {
+        // Polling silent
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [showPaymentModal, selectedPaymentMethod, activeQrisOrderId, isQrisVerified]);
+
+  // Manual Check & Trigger Simulasi
+  const handleCheckQrisStatusManual = async () => {
+    if (!activeQrisOrderId) return;
+    try {
+      const res = await checkPosPaymentStatusAction(activeQrisOrderId);
+      if (res.isPaid) {
+        setIsQrisVerified(true);
+        setQrisDynamicPaid(true);
+        toastSuccess("✅ Pembayaran QRIS Sudah Masuk & Diverifikasi!");
+      } else {
+        toastError("Belum ada pembayaran masuk dari pelanggan.");
+      }
+    } catch (err: any) {
+      toastError(err.message || "Gagal cek status.");
+    }
+  };
+
+  const handleSimulateQrisPaid = async () => {
+    if (!activeQrisOrderId) return;
+    try {
+      await simulatePaymentWebhookAction(activeQrisOrderId);
+      setIsQrisVerified(true);
+      setQrisDynamicPaid(true);
+      toastSuccess("✨ [SIMULASI SANDBOX] Pembayaran QRIS Berhasil Masuk!");
+    } catch (err: any) {
+      toastError(err.message || "Gagal simulasi.");
+    }
+  };
 
   // Handle Verifikasi & Terapkan Voucher
   const handleApplyVoucher = async (overrideCode?: string) => {
@@ -736,23 +864,6 @@ export function PosClient({
     setAppliedVoucher(null);
     setDiscountType("PERCENT");
   };
-
-  // Auto-generate QR code saat nominal belanja berubah atau modal QRIS dibuka
-  useEffect(() => {
-    if (grandTotalWithTip > 0 && (selectedPaymentMethod === "QRIS" || showDynamicQrisModal)) {
-      const qrisString = `00020101021226680016ID.CO.KASIRKU.WWW011893600998${shiftData.currentOutletId.slice(0, 10)}520458125303360540${grandTotalWithTip.toString().padStart(6, "0")}5802ID5913${tenantInfo?.businessName?.slice(0, 13) || "KASIRKU"}6007JAKARTA6304`;
-      QRCode.toDataURL(qrisString, {
-        width: 320,
-        margin: 2,
-        color: {
-          dark: "#0f172a",
-          light: "#ffffff",
-        },
-      })
-        .then((url) => setDynamicQrisDataUrl(url))
-        .catch((err) => console.error("Gagal generate QRIS:", err));
-    }
-  }, [grandTotalWithTip, selectedPaymentMethod, showDynamicQrisModal, shiftData.currentOutletId, tenantInfo?.businessName]);
 
   // Hold Order / Parkir Transaksi States
   interface HeldCartItem {
@@ -1048,7 +1159,7 @@ export function PosClient({
       product.name?.toLowerCase().includes("tea") ||
       product.name?.toLowerCase().includes("espresso");
 
-    if ((posLayout === "CAFE_QUICK_ORDER" || localCafeTables.length > 0) && isDrink) {
+    if ((posLayout === "CAFE_RESTO" || localCafeTables.length > 0) && isDrink) {
       setModifierProduct(product);
       return;
     }
@@ -1362,6 +1473,15 @@ export function PosClient({
           amountPaid: Number(trx?.amountPaid || (selectedPaymentMethod === "CASH" ? parsedPaid : grandTotalWithTip)),
           changeAmount: Number(trx?.change || (selectedPaymentMethod === "CASH" ? change : 0)),
           footerNote: receiptConfig.footerText || "Terima kasih atas kunjungan Anda!",
+          promoBannerText: receiptConfig.promoBannerText || undefined,
+          socialMediaText: receiptConfig.socialMediaText || undefined,
+          vertical: receiptConfig.vertical || (hasBarbershopPlugin ? "BARBERSHOP" : hasCafePlugin ? "CAFE" : hasLaundryPlugin ? "LAUNDRY" : "RETAIL"),
+          stylistName: (cart.find((c) => c.staffId) as any)?.staffId
+            ? staffList.find((s: any) => s.id === (cart.find((c) => c.staffId) as any)?.staffId)?.name
+            : undefined,
+          chairNumber: selectedChair ? Number(selectedChair.replace(/[^0-9]/g, "")) || undefined : undefined,
+          laundryFragrance: posLayout === "LAUNDRY_WEIGHING" ? laundryFragrance : undefined,
+          laundryRack: posLayout === "LAUNDRY_WEIGHING" ? laundryRack : undefined,
           coupon: receiptConfig.dynamicCoupon?.enabled
             ? {
                 code: receiptConfig.dynamicCoupon.couponCode || "DISKON10",
@@ -1410,6 +1530,7 @@ export function PosClient({
       }
     } catch (err: any) {
       setError(err.message || "Gagal memproses transaksi kasir.");
+      toastError(err.message || "Gagal memproses transaksi kasir.");
     } finally {
       setLoading(false);
     }
@@ -1530,6 +1651,8 @@ export function PosClient({
     setClosingCash("");
   };
 
+  const [filterAllVerticalsInPos, setFilterAllVerticalsInPos] = useState<boolean>(false);
+
   const filteredProducts = products.filter((p) => {
     const matchCat =
       selectedCategory === "ALL" || p.category === selectedCategory;
@@ -1539,7 +1662,32 @@ export function PosClient({
       p.name.toLowerCase().includes(query) ||
       (p.barcode && p.barcode.toLowerCase().includes(query)) ||
       (p.category && p.category.toLowerCase().includes(query));
-    return matchCat && matchSearch && p.isActive;
+
+    let matchVertical = true;
+    if (!filterAllVerticalsInPos) {
+      if (posLayout === "BARBERSHOP_STATION") {
+        matchVertical =
+          p.attributes?.verticalType === "BARBERSHOP" ||
+          p.attributes?.durationMinutes !== undefined ||
+          (p.type === "JASA" && !["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || ""));
+      } else if (posLayout === "LAUNDRY_WEIGHING") {
+        matchVertical =
+          p.attributes?.verticalType === "LAUNDRY" ||
+          p.attributes?.serviceUnit !== undefined ||
+          p.attributes?.estimateTime !== undefined ||
+          ["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || "");
+      } else if (posLayout === "CAFE_RESTO") {
+        matchVertical =
+          p.attributes?.verticalType === "CAFE" ||
+          p.attributes?.unit === "Porsi" ||
+          p.attributes?.unit === "Cup" ||
+          p.attributes?.unit === "Plate" ||
+          p.attributes?.unit === "Glass" ||
+          (p.attributes?.verticalType === undefined && p.type === "BARANG" && p.attributes?.durationMinutes === undefined && p.attributes?.serviceUnit === undefined);
+      }
+    }
+
+    return matchCat && matchSearch && matchVertical && p.isActive;
   });
 
   return (
@@ -1626,6 +1774,75 @@ export function PosClient({
           </div>
 
         </div>
+
+        {/* Middle: Multi-Vertical POS Switcher (If Business has 2+ Verticals) */}
+        {hasMultipleVerticals && (
+          <div
+            className="flex items-center gap-1 p-1 rounded-2xl border shadow-inner overflow-x-auto"
+            style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}
+          >
+            {hasCafePlugin && (
+              <button
+                type="button"
+                onClick={() => setActiveVerticalPos("CAFE")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  activeVerticalPos === "CAFE"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                    : "hover:text-emerald-500 text-slate-500"
+                }`}
+                title="Beralih ke Mesin Kasir Kafe & Resto (Denah Meja & KOT)"
+              >
+                <Coffee className="w-3.5 h-3.5" />
+                <span>POS Kafe</span>
+              </button>
+            )}
+            {hasBarbershopPlugin && (
+              <button
+                type="button"
+                onClick={() => setActiveVerticalPos("BARBERSHOP")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  activeVerticalPos === "BARBERSHOP"
+                    ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
+                    : "hover:text-amber-500 text-slate-500"
+                }`}
+                title="Beralih ke Mesin Kasir Barbershop & Salon (Stasiun Kursi & Kapster)"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                <span>POS Barber</span>
+              </button>
+            )}
+            {hasLaundryPlugin && (
+              <button
+                type="button"
+                onClick={() => setActiveVerticalPos("LAUNDRY")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  activeVerticalPos === "LAUNDRY"
+                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                    : "hover:text-purple-500 text-slate-500"
+                }`}
+                title="Beralih ke Mesin Kasir Laundry Kiloan & Satuan (Timbangan & Rak)"
+              >
+                <Shirt className="w-3.5 h-3.5" />
+                <span>POS Laundry</span>
+              </button>
+            )}
+            {hasRetailPlugin && (
+              <button
+                type="button"
+                onClick={() => setActiveVerticalPos("RETAIL")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  activeVerticalPos === "RETAIL"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                    : "hover:text-blue-500 text-slate-500"
+                }`}
+                title="Beralih ke Mesin Kasir Toko Retail & Minimarket (Barcode & Grosir)"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>POS Retail</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Right Top Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -2013,6 +2230,19 @@ export function PosClient({
               {/* Category Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 <button
+                  type="button"
+                  onClick={() => setFilterAllVerticalsInPos((prev) => !prev)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border flex items-center gap-1 cursor-pointer ${
+                    filterAllVerticalsInPos
+                      ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                  }`}
+                  title="Tampilkan semua produk lintas modul untuk cross-selling"
+                >
+                  <span>{filterAllVerticalsInPos ? "🌟 Semua Modul (Cross-Sell)" : "🎯 Filter Vertikal"}</span>
+                </button>
+
+                <button
                   onClick={() => setSelectedCategory("ALL")}
                   style={
                     selectedCategory === "ALL"
@@ -2027,9 +2257,9 @@ export function PosClient({
                         color: textSecondary,
                       }
                   }
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border cursor-pointer"
                 >
-                  Semua
+                  Semua Kategori
                 </button>
                 {categories.map((cat) => (
                   <button
@@ -2192,7 +2422,7 @@ export function PosClient({
                 >
                   <Smartphone className="w-3.5 h-3.5" />
                   <span>
-                    {posLayout === "CAFE_QUICK_ORDER"
+                    {posLayout === "CAFE_RESTO"
                       ? "Pesanan Meja"
                       : posLayout === "BARBERSHOP_STATION"
                         ? "Antrean Tamu"
@@ -2678,7 +2908,7 @@ export function PosClient({
                     </div>
                   )}
                   {/* Specialized Kitchen Slip Button for Cafe */}
-                  {posLayout === "CAFE_QUICK_ORDER" && cart.length > 0 && (
+                  {posLayout === "CAFE_RESTO" && cart.length > 0 && (
                     <button
                       type="button"
                       onClick={() => {
@@ -3526,43 +3756,135 @@ export function PosClient({
                       );
                     })()}
 
-                    {/* KONTEN TAB 2: QRIS */}
+                    {/* KONTEN TAB 2: REAL DYNAMIC QRIS (MIDTRANS / EMVCO) */}
                     {selectedPaymentMethod === "QRIS" && (
                       <div className="space-y-3.5 text-center">
-                        <div className="p-4 bg-white rounded-2xl border-2 border-dashed border-indigo-400/40 shadow-inner flex flex-col items-center justify-center mx-auto max-w-[240px]">
-                          {dynamicQrisDataUrl ? (
-                            <img
-                              src={dynamicQrisDataUrl}
-                              alt="QRIS Code"
-                              className="w-44 h-44 object-contain rounded-lg"
-                            />
+                        <div className="p-4 bg-white rounded-2xl border-2 border-dashed border-indigo-400/40 shadow-inner flex flex-col items-center justify-center mx-auto max-w-[260px] relative">
+                          {isQrisVerified ? (
+                            <div className="w-48 h-48 flex flex-col items-center justify-center gap-2 bg-emerald-50 rounded-xl border border-emerald-300 animate-fadeIn">
+                              <div className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg">
+                                <Check className="w-8 h-8 stroke-[3]" />
+                              </div>
+                              <span className="text-xs font-black text-emerald-800">
+                                PEMBAYARAN LUNAS
+                              </span>
+                              <span className="text-[10px] text-emerald-600 font-medium">
+                                Siap cetak struk POS
+                              </span>
+                            </div>
+                          ) : dynamicQrisDataUrl ? (
+                            <div className="relative">
+                              <img
+                                src={dynamicQrisDataUrl}
+                                alt="Dynamic QRIS Code"
+                                className="w-48 h-48 object-contain rounded-lg shadow-xs"
+                              />
+                              {isQrisGenerating && (
+                                <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center rounded-lg">
+                                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-slate-400">
+                            <div className="w-48 h-48 flex flex-col items-center justify-center gap-2 text-slate-400">
                               <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-                              <span className="text-[11px] font-bold">Membuat QR...</span>
+                              <span className="text-[11px] font-bold">Menghubungkan Midtrans...</span>
                             </div>
                           )}
-                          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+
+                          <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
                             <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>BCA, GoPay, OVO, ShopeePay, Dana</span>
+                            <span>BCA, GoPay, OVO, ShopeePay, Dana, BRI, Mandiri</span>
                           </div>
-                          <span className="text-[11px] font-black font-mono text-indigo-700 mt-1">
-                            Nominal Pas: Rp {grandTotalWithTip.toLocaleString("id-ID")}
+                          <span className="text-xs font-black font-mono text-indigo-700 mt-1">
+                            Nominal: Rp {grandTotalWithTip.toLocaleString("id-ID")}
                           </span>
+
+                          {/* Order ID & Testing Payload Box */}
+                          {activeQrisOrderId && (
+                            <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10.5px] space-y-1.5 text-left">
+                              <div className="flex items-center justify-between gap-1 text-slate-500">
+                                <span>Order ID: <strong className="font-mono text-slate-800 dark:text-slate-200">{activeQrisOrderId}</strong></span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(activeQrisOrderId);
+                                    setCopiedPosKey("order-id");
+                                    setTimeout(() => setCopiedPosKey(null), 2500);
+                                  }}
+                                  className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  {copiedPosKey === "order-id" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                  <span>{copiedPosKey === "order-id" ? "Tersalin" : "Salin"}</span>
+                                </button>
+                              </div>
+
+                              {dynamicQrisString && (
+                                <div className="flex items-center justify-between gap-1 text-slate-500">
+                                  <span className="truncate max-w-[130px]">EMVCo: <strong className="font-mono text-[9px]">{dynamicQrisString.substring(0, 16)}...</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(dynamicQrisString);
+                                      setCopiedPosKey("qris-str");
+                                      setTimeout(() => setCopiedPosKey(null), 2500);
+                                    }}
+                                    className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                  >
+                                    {copiedPosKey === "qris-str" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                                    <span>{copiedPosKey === "qris-str" ? "Tersalin" : "Salin String"}</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              <a
+                                href="https://simulator.sandbox.midtrans.com/qris/index"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline pt-0.5"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span>Buka Simulator Midtrans QRIS &rarr;</span>
+                              </a>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Status Menunggu Pembayaran */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
-                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                              Menunggu Pembayaran Pelanggan...
-                            </span>
+                        {/* Status Live Radar */}
+                        {!isQrisVerified ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-ping" />
+                              <span className="text-xs font-bold text-cyan-700 dark:text-cyan-400">
+                                Menunggu Pelanggan Scan QRIS... (Auto-Sync)
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={handleCheckQrisStatusManual}
+                                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer flex items-center gap-1"
+                              >
+                                <span>🔄</span>
+                                <span>Cek Status</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSimulateQrisPaid}
+                                className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                              >
+                                <span>⚡</span>
+                                <span>Simulasi Bayar (Demo)</span>
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-[10px] text-slate-400 max-w-xs mx-auto">
-                            Pelanggan dapat scan QR di layar POS atau akrilik meja kasir. Setelah bukti bayar terlihat, kasir klik konfirmasi di bawah.
-                          </p>
-                        </div>
+                        ) : (
+                          <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-center gap-2">
+                            <Check className="w-4 h-4 text-emerald-600" />
+                            <span>Pembayaran berhasil diverifikasi secara real-time!</span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -4163,23 +4485,22 @@ export function PosClient({
                   </div>
                 )}
 
-                {/* Ringkasan Realtime Sebelum Tutup */}
-                {liveShiftSummary && (
-                  <div className="p-3.5 rounded-2xl border space-y-1.5" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-400">Total Transaksi:</span>
+                {/* Blind Closing Instruction Banner */}
+                <div className="p-3.5 rounded-2xl border space-y-1.5 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200">
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Mode Blind Closing (Rekonsiliasi Kas Murni)</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                    Mohon hitung seluruh uang lembaran dan koin fisik yang ada di dalam laci kasir Anda secara mandiri. Sistem akan membandingkan uang fisik dengan catatan transaksi setelah Anda menekan tombol konfirmasi.
+                  </p>
+                  {liveShiftSummary && (
+                    <div className="flex justify-between items-center text-[10.5px] pt-1 border-t border-amber-200/60 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 font-semibold">
+                      <span>Total Transaksi Selesai:</span>
                       <strong className="font-mono">{liveShiftSummary.totalTransactions} Transaksi</strong>
                     </div>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-400">Total Penjualan Tunai:</span>
-                      <strong className="font-mono text-emerald-600">Rp {Number(liveShiftSummary.cashSalesTotal || 0).toLocaleString("id-ID")}</strong>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-slate-400">Ekspektasi Uang di Laci:</span>
-                      <strong className="font-mono text-indigo-600 text-xs">Rp {Number(liveShiftSummary.expectedCash || 0).toLocaleString("id-ID")}</strong>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <div>
                   <label className="block font-bold mb-1" style={{ color: textSecondary }}>
@@ -4247,67 +4568,29 @@ export function PosClient({
         </div>
       )}
 
-      {/* 4. Modal Cetak Struk Transaksi Selesai */}
-      {showReceiptModal && completedReceiptData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fadeIn">
-          <div
-            className="rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-3 border my-auto transition-all"
-            style={{
-              backgroundColor: cardBg,
-              borderColor: cardBorder,
-              color: textPrimary,
-              borderRadius: radius,
-            }}
-          >
-            <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: cardBorder }}>
-              <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 rounded text-[10px] font-bold">
-                ✓ Transaksi Kasir Berhasil
-              </span>
-              <span className="text-[10px] font-mono opacity-70">
-                {completedReceiptData.invoiceNo}
-              </span>
-            </div>
-
-            {/* Dynamic Thermal Receipt Renderer - 100% Synced with Owner Template & Receipt Config */}
-            <div className="max-h-[60vh] overflow-y-auto rounded-xl p-1 bg-stone-100/50 border border-stone-200">
-              <DynamicReceiptRenderer
-                config={{
-                  ...receiptConfig,
-                  paperSize: posPaperSize,
-                }}
-                data={completedReceiptData}
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t" style={{ borderColor: cardBorder }}>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl font-bold transition flex items-center justify-center gap-1.5 border cursor-pointer"
-                style={{
-                  backgroundColor: innerBoxBg,
-                  borderColor: cardBorder,
-                  color: textPrimary,
-                }}
-              >
-                <Printer className="w-3.5 h-3.5" style={{ color: primaryColor }} />
-                <span>Cetak Struk</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowReceiptModal(false);
-                  setCompletedTrx(null);
-                  setCompletedReceiptData(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl text-white font-extrabold shadow-md transition cursor-pointer"
-                style={{ backgroundColor: primaryColor }}
-              >
-                Selesai
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* 4. Modal Struk Thermal Modular Resmi 4 Vertikal & KOT Slip */}
+      {completedReceiptData && (
+        <ModularThermalReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => {
+            setShowReceiptModal(false);
+            setCompletedTrx(null);
+            setCompletedReceiptData(null);
+          }}
+          receiptData={{
+            ...completedReceiptData,
+            vertical:
+              (receiptConfig as any)?.vertical ||
+              (hasBarbershopPlugin
+                ? "BARBERSHOP"
+                : hasCafePlugin
+                ? "CAFE"
+                : hasLaundryPlugin
+                ? "LAUNDRY"
+                : "RETAIL"),
+          }}
+          receiptConfig={receiptConfig}
+        />
       )}
 
       {/* 4b. Modal Quick Setup Printer Kasir */}
@@ -4832,4 +5115,3 @@ export function PosClient({
     </div>
   );
 }
-

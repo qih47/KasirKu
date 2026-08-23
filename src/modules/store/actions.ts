@@ -68,7 +68,7 @@ export async function getStoreData() {
   };
 
   const activePluginCodes =
-    activeSub?.plugins?.map((tp) => tp.plugin?.code) || [];
+    (activeSub?.plugins || []).map((tp: any) => tp.plugin?.code) || [];
 
   const activeUiThemeId = activeSub?.theme?.themeId || null;
 
@@ -104,23 +104,23 @@ export async function getStoreData() {
     (currentReceiptConfig.posLayout as PosLayoutType) || "STANDARD";
 
   // Dynamic DB-driven UI Themes, POS Layouts, and Receipt Themes
-  const dynamicUiThemes = allThemes.filter(
-    (t) =>
+  const dynamicUiThemes = (allThemes as any[]).filter(
+    (t: any) =>
       (t.tokens as any)?.packageType !== "POS_LAYOUT" &&
       (t.tokens as any)?.packageType !== "RECEIPT_PRESET" &&
       !t.code?.startsWith("pos-") &&
       !t.code?.startsWith("receipt-")
   );
 
-  const dynamicReceiptThemes = allThemes
+  const dynamicReceiptThemes = (allThemes as any[])
     .filter(
-      (t) =>
+      (t: any) =>
         (t.tokens as any)?.packageType === "RECEIPT_PRESET" ||
         t.code?.startsWith("receipt-") ||
         Boolean((t.tokens as any)?.receipt?.paperWidth) ||
         Boolean((t.tokens as any)?.receipt?.blocks?.length)
     )
-    .map((t) => {
+    .map((t: any) => {
       const tokens = (t.tokens as any) || {};
       const rc = tokens.receipt || {};
       return {
@@ -143,14 +143,14 @@ export async function getStoreData() {
     });
 
 
-  const dynamicPosLayouts = allThemes
+  const dynamicPosLayouts = (allThemes as any[])
     .filter(
-      (t) =>
+      (t: any) =>
         (t.tokens as any)?.packageType === "POS_LAYOUT" ||
         t.code?.startsWith("pos-") ||
         Boolean((t.tokens as any)?.layouts?.pos?.cartDock)
     )
-    .map((t) => {
+    .map((t: any) => {
       const tokens = (t.tokens as any) || {};
       const pos = tokens.layouts?.pos || {};
       return {

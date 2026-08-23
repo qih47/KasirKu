@@ -92,14 +92,14 @@ export async function evaluateTenantFeatureAccess(
     }),
   ]);
 
-  const feat = matrix.find((f) => f.key === featureKey);
+  const feat = (matrix as any[]).find((f: any) => f.key === featureKey);
   if (!feat) {
     return { isAllowed: true };
   }
 
   // 1. Cek prasyarat plugin vertikal
   if (feat.requiredPlugin) {
-    const hasPlugin = activePlugins.some((p) => p.plugin.code === feat.requiredPlugin);
+    const hasPlugin = (activePlugins as any[]).some((p: any) => p.plugin?.code === feat.requiredPlugin);
     if (!hasPlugin) {
       return {
         isAllowed: false,
@@ -113,15 +113,15 @@ export async function evaluateTenantFeatureAccess(
   const tenantTierCode = (activeSub?.licenseTier?.code || "basic").toLowerCase();
   const normalizedTier = tenantTierCode === "basic" ? "starter" : tenantTierCode;
 
-  const isTierAllowed = feat.allowedTiers.some(
-    (t) => t.toLowerCase() === normalizedTier || t.toLowerCase() === tenantTierCode
+  const isTierAllowed = (feat.allowedTiers as any[]).some(
+    (t: any) => t.toLowerCase() === normalizedTier || t.toLowerCase() === tenantTierCode
   );
 
   if (!isTierAllowed) {
     return {
       isAllowed: false,
       feature: feat,
-      reason: `Tersedia secara eksklusif pada paket ${feat.allowedTiers.map((t) => t.toUpperCase()).join(" / ")}.`,
+      reason: `Tersedia secara eksklusif pada paket ${(feat.allowedTiers as any[]).map((t: any) => t.toUpperCase()).join(" / ")}.`,
     };
   }
 

@@ -24,6 +24,7 @@ import {
   ArrowRight,
   ShoppingCart,
   Loader2,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -93,9 +94,31 @@ export function BarbershopQueueClient({
       {/* Header Barbershop */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            <Scissors className="w-3.5 h-3.5" />
-            Modul Barbershop & Salon
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-xs font-semibold uppercase tracking-wider">
+              <Scissors className="w-3.5 h-3.5" />
+              Modul Barbershop & Salon
+            </div>
+
+            {/* Multi-Outlet Switcher for Owner */}
+            {data.outlets && data.outlets.length > 1 && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700">
+                <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <select
+                  value={data.currentOutletId}
+                  onChange={(e) => {
+                    window.location.href = `/dashboard/barbershop/queue?outletId=${e.target.value}`;
+                  }}
+                  className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-0 cursor-pointer p-0 pr-1"
+                >
+                  {data.outlets.map((o: any) => (
+                    <option key={o.id} value={o.id} className="dark:bg-slate-900">
+                      Cabang: {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
             Live Queue & Kursi Pangkas

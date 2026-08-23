@@ -93,14 +93,26 @@ export default async function PosPage() {
   const receiptConfig = (tenant?.receiptConfig as any) || {};
   const posThemeCode = receiptConfig.posThemeCode || receiptConfig.posLayout;
 
-  // Cek apakah plugin 'self_order' & 'barbershop' aktif untuk tenant ini
-  const isSelfOrderActive = activeSub?.plugins?.some(
-    (tp) => tp.plugin.code === "self_order" && tp.isActive
+  // Cek apakah plugin vertikal & self_order aktif untuk tenant ini
+  const isSelfOrderActive = ((activeSub?.plugins || []) as any[]).some(
+    (tp: any) => tp.plugin?.code === "self_order" && tp.isActive
   ) ?? false;
 
-  const isBarbershopActive = activeSub?.plugins?.some(
-    (tp) => tp.plugin.code === "barbershop" && tp.isActive
+  const isBarbershopActive = ((activeSub?.plugins || []) as any[]).some(
+    (tp: any) => tp.plugin?.code === "barbershop" && tp.isActive
   ) ?? false;
+
+  const isCafeActive = ((activeSub?.plugins || []) as any[]).some(
+    (tp: any) => tp.plugin?.code === "cafe" && tp.isActive
+  ) ?? false;
+
+  const isLaundryActive = ((activeSub?.plugins || []) as any[]).some(
+    (tp: any) => tp.plugin?.code === "laundry" && tp.isActive
+  ) ?? false;
+
+  const isRetailActive = ((activeSub?.plugins || []) as any[]).some(
+    (tp: any) => tp.plugin?.code === "retail" && tp.isActive
+  ) ?? (!isBarbershopActive && !isCafeActive && !isLaundryActive);
 
   let initialBarberBookings: any[] = [];
   if (isBarbershopActive && user.tenantId) {
@@ -159,12 +171,15 @@ export default async function PosPage() {
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
       hasSelfOrderPlugin={isSelfOrderActive}
       hasBarbershopPlugin={isBarbershopActive}
+      hasCafePlugin={isCafeActive}
+      hasLaundryPlugin={isLaundryActive}
+      hasRetailPlugin={isRetailActive}
       initialBarberBookings={initialBarberBookings}
       activeVouchers={activeVouchers ? JSON.parse(JSON.stringify(activeVouchers)) : []}
       tenantInfo={{
         tenantId: user.tenantId,
         businessName: tenant?.businessName || "POS Universal",
-        logoUrl: tenant?.logoUrl || null,
+        logoUrl: tenant?.logoUrl || (tenant?.receiptConfig as any)?.logoUrl || null,
         receiptConfig: tenant?.receiptConfig || null,
       }}
     />

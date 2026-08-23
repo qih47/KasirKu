@@ -189,7 +189,7 @@ export default async function SuperAdminDashboardPage() {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {recentTenants.length > 0 ? (
-                  recentTenants.map((t) => {
+                  recentTenants.map((t: any) => {
                     const owner = t.users[0];
                     const activeSub = t.subscriptions[0];
                     const plugins = activeSub?.plugins || [];
@@ -206,7 +206,7 @@ export default async function SuperAdminDashboardPage() {
                         </td>
                         <td className="py-3 px-3">
                           <div className="flex flex-wrap gap-1">
-                            {plugins.map((p) => (
+                            {plugins.map((p: any) => (
                               <span
                                 key={p.id}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 border border-slate-700"
@@ -249,7 +249,7 @@ export default async function SuperAdminDashboardPage() {
             </p>
 
             <div className="space-y-3">
-              {pluginsDistribution.map((p) => (
+              {pluginsDistribution.map((p: any) => (
                 <div
                   key={p.id}
                   className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between"

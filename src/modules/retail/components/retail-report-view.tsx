@@ -14,31 +14,16 @@ import {
 
 export function RetailReportView({ data }: { data?: any }) {
   const kpi = {
-    basketSize: "4.8 Pcs / Trx",
-    avgScanSpeed: "1.4 Menit",
-    totalStockValuation: data?.totalStockValuation || "Rp 48.250.000",
-    totalStockUnits: data?.totalStockUnits || 120,
-    shiftDiscrepancy: "Rp 0 (Match)",
+    basketSize: data?.basketSize || "0 Pcs / Trx",
+    avgScanSpeed: data?.avgScanSpeed || "-",
+    totalStockValuation: data?.totalStockValuation || "Rp 0",
+    totalStockUnits: data?.totalStockUnits || 0,
+    shiftDiscrepancy: "Rp 0",
   };
 
-  const fastMovingSku = data?.fastMovingSku && data.fastMovingSku.length > 0 ? data.fastMovingSku : [
-    { sku: "8992753011", name: "Sania Minyak Goreng 2L", salesQty: 184, turnover: "2.4 Hari" },
-    { sku: "8991002301", name: "Indomie Goreng Spesial (Dus)", salesQty: 142, turnover: "3.1 Hari" },
-    { sku: "8998866102", name: "Ultra Milk Cokelat 1L", salesQty: 96, turnover: "4.0 Hari" },
-    { sku: "8997001409", name: "Chitato Sapi Panggang 68g", salesQty: 88, turnover: "4.5 Hari" },
-  ];
-
-  const deadStockSku = data?.deadStockSku && data.deadStockSku.length > 0 ? data.deadStockSku : [
-    { sku: "8990012991", name: "Kopi Sachet Premium Jar 200g", stockQty: 24, lastSold: "> 35 Hari Lalu", val: "Rp 840.000" },
-    { sku: "8993344119", name: "Sabun Mandi Import Lavender", stockQty: 18, lastSold: "> 42 Hari Lalu", val: "Rp 450.000" },
-  ];
-
-  const categoryMargin = [
-    { name: "Snack & Biskuit", margin: 34, color: "bg-emerald-500" },
-    { name: "Minuman Dingin & RTD", margin: 28, color: "bg-blue-500" },
-    { name: "Perawatan Tubuh & Sabun", margin: 24, color: "bg-purple-500" },
-    { name: "Sembako (Minyak, Beras, Gula)", margin: 12, color: "bg-amber-500" },
-  ];
+  const fastMovingSku = data?.fastMovingSku || [];
+  const deadStockSku = data?.deadStockSku || [];
+  const categoryMargin = data?.categoryMargin || [];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -120,26 +105,29 @@ export function RetailReportView({ data }: { data?: any }) {
               </p>
             </div>
           </div>
-
           <div className="space-y-2.5">
-            {fastMovingSku.map((item: any, idx: number) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex items-center justify-between"
-              >
-                <div className="space-y-0.5">
-                  <span className="font-bold text-xs text-slate-900 dark:text-white block">
-                    {item.name}
-                  </span>
-                  <span className="font-mono text-[9.5px] text-slate-400">
-                    SKU: {item.sku} • Stok: {item.stockQty ?? 0}
+            {fastMovingSku.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">Belum ada data produk terjual pada periode ini.</p>
+            ) : (
+              fastMovingSku.map((item: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex items-center justify-between"
+                >
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white block">
+                      {item.name}
+                    </span>
+                    <span className="font-mono text-[9.5px] text-slate-400">
+                      SKU: {item.sku} • Stok: {item.stockQty ?? 0}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200/50">
+                    {item.salesQty} Terjual
                   </span>
                 </div>
-                <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200/50">
-                  {item.salesQty} Terjual
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -158,24 +146,28 @@ export function RetailReportView({ data }: { data?: any }) {
           </div>
 
           <div className="space-y-2.5">
-            {deadStockSku.map((item: any, idx: number) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between"
-              >
-                <div className="space-y-0.5">
-                  <span className="font-bold text-xs text-slate-900 dark:text-white block">
-                    {item.name}
-                  </span>
-                  <span className="text-[10px] text-amber-600 font-bold">
-                    ⚠️ Sisa Stok: {item.stockQty} Pcs ({item.lastSold || "Belum Terjual"})
+            {deadStockSku.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">Tidak ada dead-stock terdeteksi.</p>
+            ) : (
+              deadStockSku.map((item: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between"
+                >
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white block">
+                      {item.name}
+                    </span>
+                    <span className="font-mono text-[9.5px] text-slate-400">
+                      Stok: {item.stockQty ?? 0} unit
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 px-2.5 py-1 rounded-lg border border-amber-200/50">
+                    {item.val || "Perlu Promo"}
                   </span>
                 </div>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-mono">
-                  Valuasi: {item.val}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Margin Kategori */}

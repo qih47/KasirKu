@@ -14,33 +14,19 @@ import {
 
 export function LaundryReportView({ data }: { data?: any }) {
   const kpi = {
-    totalWeightKg: data?.totalWeightKg || "324.50 Kg",
-    totalSatuanPcs: data?.totalSatuanPcs || "39 Pcs",
-    avgWeightPerOrder: data?.avgWeightPerOrder || "4.2 Kg",
-    onTimeSlaPercent: data?.onTimeSlaPercent || "96.4%",
-    pendingRackPickup: data?.pendingPickup || "4 Nota",
+    totalWeightKg: data?.totalWeightKg || "0.0 Kg",
+    totalSatuanPcs: data?.totalSatuanPcs || "0 Pcs",
+    avgWeightPerOrder: data?.avgWeightPerOrder || "0.0 Kg",
+    onTimeSlaPercent: data?.onTimeSlaPercent || "100%",
+    pendingRackPickup: data?.pendingPickup || "0 Nota",
   };
 
-  const dailyWeightTrend = [
-    { day: "Sen", kg: 42.5 },
-    { day: "Sel", kg: 38.0 },
-    { day: "Rab", kg: 45.5 },
-    { day: "Kam", kg: 39.0 },
-    { day: "Jum", kg: 52.0 },
-    { day: "Sab", kg: 61.5 },
-    { day: "Min", kg: 46.0 },
+  const dailyWeightTrend = data?.dailyWeightTrend || [];
+  const packageBreakdown = data?.packageBreakdown || [
+    { name: "Cuci Kiloan", percent: data?.kiloanOrders ? Math.round((data.kiloanOrders / (data.kiloanOrders + (data.satuanOrders || 0) || 1)) * 100) : 0, count: data?.totalWeightKg || "0 Kg", color: "bg-purple-500" },
+    { name: "Cuci Satuan / Dry Clean", percent: data?.satuanOrders ? Math.round((data.satuanOrders / ((data.kiloanOrders || 0) + data.satuanOrders || 1)) * 100) : 0, count: data?.totalSatuanPcs || "0 Pcs", color: "bg-indigo-500" },
   ];
-
-  const packageBreakdown = [
-    { name: "Cuci Kiloan", percent: data?.kiloanOrders ? Math.round((data.kiloanOrders / (data.kiloanOrders + (data.satuanOrders || 0) || 1)) * 100) : 62, count: data?.totalWeightKg || "201 Kg", color: "bg-purple-500" },
-    { name: "Cuci Satuan / Dry Clean", percent: data?.satuanOrders ? Math.round((data.satuanOrders / ((data.kiloanOrders || 0) + data.satuanOrders || 1)) * 100) : 38, count: data?.totalSatuanPcs || "39 Pcs", color: "bg-indigo-500" },
-  ];
-
-  const fragranceDistribution = [
-    { name: "Lavender Fresh", percent: 46, tag: "Paling Diminati" },
-    { name: "Sakura Blossom", percent: 34, tag: "Favorit Wanita" },
-    { name: "Ocean Breeze", percent: 20, tag: "Aroma Segar" },
-  ];
+  const fragranceDistribution = data?.fragranceDistribution || [];
 
   return (
     <div className="space-y-6 animate-fadeIn">

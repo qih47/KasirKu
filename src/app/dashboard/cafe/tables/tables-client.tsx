@@ -356,13 +356,22 @@ export function CafeTablesClient({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredTables.map((table: any) => {
-            const isAvailable = table.status === "AVAILABLE";
-            const isOccupied = table.status === "OCCUPIED";
-            const zoneLabel = ZONE_LABELS[table.areaZone || "INDOOR"] || table.areaZone || "Indoor";
+        {filteredTables.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 space-y-3">
+            <Coffee className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 opacity-50" />
+            <div>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum Ada Data Meja</p>
+              <p className="text-xs text-slate-500 mt-0.5">Klik tombol &quot;Tambah Meja&quot; di atas untuk mendaftarkan denah meja cafe Anda.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredTables.map((table: any) => {
+              const isAvailable = table.status === "AVAILABLE";
+              const isOccupied = table.status === "OCCUPIED";
+              const zoneLabel = ZONE_LABELS[table.areaZone || "INDOOR"] || table.areaZone || "Indoor";
 
-            return (
+              return (
               <div
                 key={table.id}
                 onClick={() => openTableDetail(table)}
@@ -454,6 +463,7 @@ export function CafeTablesClient({
             );
           })}
         </div>
+      )}
       </div>
 
       {/* Modal Tambah Meja */}

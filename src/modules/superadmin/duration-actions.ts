@@ -54,7 +54,7 @@ export async function updateSubscriptionDurationSettingsAction(
   }
 
   // Validasi nilai persentase diskon
-  const sanitizedSettings = settings.map((s) => ({
+  const sanitizedSettings = (settings as any[]).map((s: any) => ({
     key: s.key,
     label: s.label || s.key,
     months: Number(s.months) || 1,

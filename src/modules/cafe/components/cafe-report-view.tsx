@@ -17,40 +17,18 @@ export function CafeReportView({ data }: { data?: any }) {
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
 
   const kpi = {
-    avgTableDuration: "48 Menit",
-    avgTicketPerTable: data?.avgTicketPerTable || "Rp 88.500",
-    dineInRatio: 76,
-    takeAwayRatio: 24,
-    kotWastePercent: "0.6%",
-    totalTablesServed: data?.totalTables || 184,
-    tableOccupancyPercent: data?.tableOccupancyPercent !== undefined ? `${data.tableOccupancyPercent}%` : "38%",
+    avgTableDuration: data?.avgTableDuration || "-",
+    avgTicketPerTable: data?.avgTicketPerTable || "Rp 0",
+    dineInRatio: data?.dineInRatio || 0,
+    takeAwayRatio: data?.takeAwayRatio || 0,
+    kotWastePercent: data?.kotWastePercent || "0%",
+    totalTablesServed: data?.totalTables || 0,
+    tableOccupancyPercent: data?.tableOccupancyPercent !== undefined ? `${data.tableOccupancyPercent}%` : "0%",
   };
 
-  const hourlyOccupancy = [
-    { hour: "08:00", rate: 25 },
-    { hour: "10:00", rate: 45 },
-    { hour: "12:00", rate: 95 }, // Peak Lunch
-    { hour: "14:00", rate: 60 },
-    { hour: "16:00", rate: 70 },
-    { hour: "18:00", rate: 85 },
-    { hour: "20:00", rate: 100 }, // Peak Dinner
-    { hour: "22:00", rate: 40 },
-  ];
-
-  const categoryBreakdown = data?.categoryBreakdown && data.categoryBreakdown.length > 0 ? data.categoryBreakdown : [
-    { name: "Signature Coffee", amount: 4850000, percent: 45, color: "bg-amber-500" },
-    { name: "Non-Coffee & Tea", amount: 2150000, percent: 20, color: "bg-emerald-500" },
-    { name: "Main Course / Meals", amount: 2380000, percent: 22, color: "bg-indigo-500" },
-    { name: "Pastry, Cake & Snacks", amount: 1400000, percent: 13, color: "bg-pink-500" },
-  ];
-
-  const topModifiers = [
-    { name: "Oat Milk Substitute (+5k)", count: 142, revenue: 710000 },
-    { name: "Extra Espresso Shot (+4k)", count: 98, revenue: 392000 },
-    { name: "Less Sugar / Gula Aren", count: 210, revenue: 0 },
-    { name: "Warm Up / Diangatkan", count: 64, revenue: 0 },
-    { name: "Plant-Based Almond Milk (+6k)", count: 42, revenue: 252000 },
-  ];
+  const categoryBreakdown = data?.categoryBreakdown || [];
+  const topModifiers = data?.topModifiers || [];
+  const hourlyOccupancy = data?.hourlyOccupancy || [];
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -149,33 +127,36 @@ export function CafeReportView({ data }: { data?: any }) {
                 Pola jam sibuk makan siang (Lunch) dan makan malam (Dinner).
               </p>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60">
-              Puncak: 20:00 (100%)
-            </span>
           </div>
 
           {/* SVG Bar Visual */}
           <div className="h-44 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-100 dark:border-slate-800">
-            {hourlyOccupancy.map((item: any, idx: number) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
-                <span className="text-[9px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition">
-                  {item.rate}%
-                </span>
-                <div
-                  className={`w-full rounded-t-lg transition-all duration-300 ${
-                    item.rate >= 90
-                      ? "bg-gradient-to-t from-red-500 to-amber-500 shadow-md shadow-red-500/20"
-                      : item.rate >= 60
-                      ? "bg-gradient-to-t from-amber-500 to-amber-400"
-                      : "bg-slate-200 dark:bg-slate-800"
-                  }`}
-                  style={{ height: `${Math.max(12, (item.rate / 100) * 120)}px` }}
-                />
-                <span className="text-[10px] font-mono text-slate-400 pt-1">
-                  {item.hour}
-                </span>
+            {hourlyOccupancy.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                Belum ada data okupansi meja per jam pada periode ini.
               </div>
-            ))}
+            ) : (
+              hourlyOccupancy.map((item: any, idx: number) => (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
+                  <span className="text-[9px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition">
+                    {item.rate}%
+                  </span>
+                  <div
+                    className={`w-full rounded-t-lg transition-all duration-300 ${
+                      item.rate >= 90
+                        ? "bg-gradient-to-t from-red-500 to-amber-500 shadow-md shadow-red-500/20"
+                        : item.rate >= 60
+                        ? "bg-gradient-to-t from-amber-500 to-amber-400"
+                        : "bg-slate-200 dark:bg-slate-800"
+                    }`}
+                    style={{ height: `${Math.max(12, (item.rate / 100) * 120)}px` }}
+                  />
+                  <span className="text-[10px] font-mono text-slate-400 pt-1">
+                    {item.hour}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -192,25 +173,29 @@ export function CafeReportView({ data }: { data?: any }) {
           </div>
 
           <div className="space-y-3 pt-1">
-            {categoryBreakdown.map((cat: any, idx: number) => (
-              <div key={idx} className="space-y-1">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${cat.color || "bg-indigo-500"}`} />
-                    {cat.name}
-                  </span>
-                  <span className="font-mono text-slate-900 dark:text-white">
-                    Rp {Number(cat.amount).toLocaleString("id-ID")} ({cat.percent}%)
-                  </span>
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-6">Belum ada data penjualan kategori.</p>
+            ) : (
+              categoryBreakdown.map((cat: any, idx: number) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${cat.color || "bg-indigo-500"}`} />
+                      {cat.name}
+                    </span>
+                    <span className="font-mono text-slate-900 dark:text-white">
+                      Rp {Number(cat.amount).toLocaleString("id-ID")} ({cat.percent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${cat.color || "bg-indigo-500"} rounded-full`}
+                      style={{ width: `${Math.min(100, cat.percent)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${cat.color || "bg-indigo-500"} rounded-full`}
-                    style={{ width: `${Math.min(100, cat.percent)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -230,26 +215,32 @@ export function CafeReportView({ data }: { data?: any }) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {topModifiers.map((mod: any, idx: number) => (
-            <div
-              key={idx}
-              className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between"
-            >
-              <div>
-                <p className="font-bold text-xs text-slate-800 dark:text-slate-100">{mod.name}</p>
-                <span className="text-[11px] text-slate-400">{mod.count}x dipesan</span>
-              </div>
-              {mod.revenue > 0 ? (
-                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                  +Rp {mod.revenue.toLocaleString("id-ID")}
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-500">
-                  Gratis / Free
-                </span>
-              )}
+          {topModifiers.length === 0 ? (
+            <div className="col-span-full py-6 text-center text-xs text-slate-400">
+              Belum ada data varian add-ons pesanan dapur tercatat.
             </div>
-          ))}
+          ) : (
+            topModifiers.map((mod: any, idx: number) => (
+              <div
+                key={idx}
+                className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between"
+              >
+                <div>
+                  <p className="font-bold text-xs text-slate-800 dark:text-slate-100">{mod.name}</p>
+                  <span className="text-[11px] text-slate-400">{mod.count}x dipesan</span>
+                </div>
+                {mod.revenue > 0 ? (
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                    +Rp {Number(mod.revenue).toLocaleString("id-ID")}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                    Non-Berbayar
+                  </span>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

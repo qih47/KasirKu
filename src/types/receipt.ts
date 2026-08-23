@@ -50,6 +50,7 @@ export interface ReceiptConfig {
   headerText: string;
   showHeader: boolean;
   showAddress: boolean;
+  address?: string;
   showPhone: boolean;
   phone?: string;
   showCashier: boolean;
@@ -82,6 +83,7 @@ export interface ReceiptConfig {
   showPromoBanner: boolean;
   promoBannerText?: string; // Program Loyalty / Promo Aplikasi
   showQrCode: boolean;
+  qrCodeText?: string;
   footerText: string;
   showFooter: boolean;
   showPoweredBy: boolean;
@@ -89,7 +91,7 @@ export interface ReceiptConfig {
   dynamicCoupon?: DynamicCouponConfig;
   kitchenTicket?: KitchenTicketConfig;
   purchasedThemeIds?: string[]; // Daftar ID tema struk yang sudah dibeli oleh tenant
-  posLayout?: "STANDARD" | "CAFE_QUICK_ORDER" | "BARBERSHOP_STATION" | "RETAIL_FAST_BARCODE" | "LAUNDRY_WEIGHING";
+  posLayout?: "STANDARD" | "CAFE_QUICK_ORDER" | "CAFE_RESTO" | "BARBERSHOP_STATION" | "RETAIL_FAST_BARCODE" | "LAUNDRY_WEIGHING";
   purchasedLayoutIds?: string[]; // Daftar ID tema layout POS yang sudah dibeli oleh tenant
 }
 

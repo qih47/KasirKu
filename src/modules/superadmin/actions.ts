@@ -75,8 +75,8 @@ export async function getSuperAdminDashboardData() {
   let estimatedMRR = 0;
   for (const sub of activeSubs) {
     const tierMonthly = Number(sub.licenseTier.priceMonthly || 0);
-    const pluginsMonthly = sub.plugins.reduce(
-      (sum, p) => sum + Number(p.plugin.priceMonthly || 0),
+    const pluginsMonthly = (sub.plugins as any[]).reduce(
+      (sum: number, p: any) => sum + Number(p.plugin?.priceMonthly || 0),
       0
     );
     estimatedMRR += (tierMonthly + pluginsMonthly);

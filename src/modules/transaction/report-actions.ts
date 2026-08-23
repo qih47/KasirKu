@@ -331,7 +331,7 @@ export async function getSalesReportData(params: {
   // 7. Advanced Analytics: Jam Ramai Transaksi (Peak Hours)
   let targetOutletSchedule: any = null;
   if (params.outletId && params.outletId !== "ALL") {
-    const matchedOutlet = allOutlets.find((o) => o.id === params.outletId);
+    const matchedOutlet = allOutlets.find((o: any) => o.id === params.outletId);
     targetOutletSchedule = (matchedOutlet as any)?.operatingHours;
   } else if (allOutlets.length > 0) {
     targetOutletSchedule = (allOutlets[0] as any)?.operatingHours;
@@ -405,7 +405,7 @@ export async function getSalesReportData(params: {
 
   // --- VERTICAL 1: CAFE & F&B ---
   const totalTables = cafeTables.length;
-  const occupiedTables = cafeTables.filter((t) => t.status === "OCCUPIED").length;
+  const occupiedTables = (cafeTables as any[]).filter((t: any) => t.status === "OCCUPIED").length;
   const tableOccupancyPercent = totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0;
 
   let cafeSignatureRevenue = 0;
@@ -414,9 +414,9 @@ export async function getSalesReportData(params: {
   let cafeOtherRevenue = 0;
 
   transactions.forEach((t: any) => {
-    t.items.forEach((item: any) => {
-      const cat = (item.product.category || "").toLowerCase();
-      const sub = Number(item.subtotal);
+    (t.items || []).forEach((item: any) => {
+      const cat = (item.product?.category || "").toLowerCase();
+      const sub = Number(item.subtotal || 0);
       if (cat.includes("kopi") || cat.includes("coffee") || cat.includes("signature")) {
         cafeSignatureRevenue += sub;
       } else if (cat.includes("makan") || cat.includes("food") || cat.includes("meal")) {
@@ -446,18 +446,18 @@ export async function getSalesReportData(params: {
   };
 
   // --- VERTICAL 2: BARBERSHOP & SALON ---
-  const totalHeadsCut = bookings.filter((b) => b.status === "COMPLETED").length;
-  const totalCommissionPaid = commissions.reduce((sum, c) => sum + Number(c.amount), 0);
+  const totalHeadsCut = (bookings as any[]).filter((b: any) => b.status === "COMPLETED").length;
+  const totalCommissionPaid = (commissions as any[]).reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
 
   let barberServiceRevenue = 0;
   let barberRetailProductRevenue = 0;
 
   transactions.forEach((t: any) => {
-    t.items.forEach((item: any) => {
-      if (item.product.type === "JASA") {
-        barberServiceRevenue += Number(item.subtotal);
+    (t.items || []).forEach((item: any) => {
+      if (item.product?.type === "JASA") {
+        barberServiceRevenue += Number(item.subtotal || 0);
       } else {
-        barberRetailProductRevenue += Number(item.subtotal);
+        barberRetailProductRevenue += Number(item.subtotal || 0);
       }
     });
   });
@@ -470,7 +470,7 @@ export async function getSalesReportData(params: {
 
   // Barber Staff Breakdown
   const barberStaffMap: Record<string, { name: string; cuts: number; revenue: number; commission: number }> = {};
-  bookings.forEach((b) => {
+  (bookings as any[]).forEach((b: any) => {
     if (b.barber) {
       if (!barberStaffMap[b.barber.id]) {
         barberStaffMap[b.barber.id] = { name: b.barber.name, cuts: 0, revenue: 0, commission: 0 };
@@ -479,9 +479,9 @@ export async function getSalesReportData(params: {
     }
   });
 
-  commissions.forEach((c) => {
+  (commissions as any[]).forEach((c: any) => {
     if (c.staff && barberStaffMap[c.staff.id]) {
-      barberStaffMap[c.staff.id].commission += Number(c.amount);
+      barberStaffMap[c.staff.id].commission += Number(c.amount || 0);
     }
   });
 
@@ -500,7 +500,7 @@ export async function getSalesReportData(params: {
   let laundryKiloanOrders = 0;
   let laundrySatuanOrders = 0;
 
-  laundryOrders.forEach((o) => {
+  (laundryOrders as any[]).forEach((o: any) => {
     if (o.serviceType === "KILOAN") {
       totalWeightKg += Number(o.weightKg || 0);
       laundryKiloanOrders += 1;
@@ -510,8 +510,8 @@ export async function getSalesReportData(params: {
     }
   });
 
-  const activeLaundryOrders = laundryOrders.filter((o) => o.status !== "COMPLETED" && o.status !== "CANCELLED").length;
-  const completedLaundryOrders = laundryOrders.filter((o) => o.status === "COMPLETED").length;
+  const activeLaundryOrders = (laundryOrders as any[]).filter((o: any) => o.status !== "COMPLETED" && o.status !== "CANCELLED").length;
+  const completedLaundryOrders = (laundryOrders as any[]).filter((o: any) => o.status === "COMPLETED").length;
   const slaOnTimePercent = laundryOrders.length > 0 ? Math.round((completedLaundryOrders / laundryOrders.length) * 100) : 100;
 
   const laundryAnalytics = {
@@ -529,9 +529,9 @@ export async function getSalesReportData(params: {
   const fastMovingSku: any[] = [];
   const deadStockSku: any[] = [];
 
-  outletStocks.forEach((os) => {
+  (outletStocks as any[]).forEach((os: any) => {
     const qty = os.stockQty ?? 0;
-    const price = os.priceOverride ? Number(os.priceOverride) : Number(os.product.price);
+    const price = os.priceOverride ? Number(os.priceOverride) : Number(os.product?.price || 0);
     totalStockValuation += qty * price;
     totalStockUnits += qty;
 

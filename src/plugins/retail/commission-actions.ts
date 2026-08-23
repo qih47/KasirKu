@@ -60,8 +60,8 @@ export async function getRetailIncentivesData(params?: {
     }),
   ]);
 
-  const totalIncentivesPaid = commissions.reduce(
-    (sum, c) => sum + Number(c.amount),
+  const totalIncentivesPaid = (commissions as any[]).reduce(
+    (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
 

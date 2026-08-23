@@ -7,6 +7,8 @@ export default withAuth(
     const pathname = req.nextUrl.pathname;
     const isSuperAdmin = token?.role === "SUPER_ADMIN";
 
+    const isKasir = token?.role === "KASIR";
+
     // 1. Logika untuk rute /admin/login
     if (pathname === "/admin/login") {
       if (isSuperAdmin) {
@@ -28,11 +30,17 @@ export default withAuth(
       if (isSuperAdmin) {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
+      if (isKasir) {
+        return NextResponse.redirect(new URL("/pos", req.url));
+      }
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
-    // 4. Jika Super Admin mengakses /dashboard, izinkan untuk preview/testing
-    // (tidak dialihkan paksa ke /admin)
+    // 4. Isolasi Penuh Kasir: Hanya boleh akses /pos, tidak boleh akses /dashboard & laporan owner
+    if (isKasir && (pathname.startsWith("/dashboard") || pathname.startsWith("/settings") || pathname.startsWith("/onboarding"))) {
+      return NextResponse.redirect(new URL("/pos", req.url));
+    }
+
     return NextResponse.next();
 
   },
@@ -79,6 +87,8 @@ export const config = {
     "/pos/:path*",
     "/settings",
     "/settings/:path*",
+    "/onboarding",
+    "/onboarding/:path*",
     "/login",
     "/register",
   ],

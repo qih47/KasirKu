@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   CheckCircle2,
@@ -20,9 +21,21 @@ import {
   Info,
   Calendar,
   AlertCircle,
+  AlertTriangle,
+  QrCode,
+  Building2,
+  Copy,
+  Clock,
+  X,
+  ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { upgradeSubscriptionAction } from "@/modules/subscription/actions";
-
+import {
+  generateSaaSDynamicQrisAction,
+  checkSaaSPaymentStatusAction,
+  simulatePaymentWebhookAction,
+} from "@/modules/payment/actions";
 import {
   DEFAULT_DURATION_SETTINGS,
   DurationSettingItem,
@@ -40,7 +53,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const data = initialData || propData || {
     tenant: { status: "TRIAL", daysRemaining: 30 },
     activeSubscription: { billingCycle: "MONTHLY", durationKey: "1M", durationMonths: 1 },
-    currentTier: { name: "Lisensi Basic" },
+    currentTier: { name: "Lisensi Basic", code: "basic" },
     activePluginIds: [],
     activePlugins: [],
     availableTiers: [],
@@ -81,11 +94,50 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const [error, setError] = useState<string | null>(null);
   const [expandedTier, setExpandedTier] = useState<string | null>(null);
 
+  // Modal Downgrade States
+  const [showDowngradeModal, setShowDowngradeModal] = useState<boolean>(false);
+  const [downgradeAgreed, setDowngradeAgreed] = useState<boolean>(false);
+  const [downgradeSinglePluginId, setDowngradeSinglePluginId] = useState<string>(initialActivePluginIds[0] || "");
+
+  // Modal Payment Gateway States
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [activePaymentTab, setActivePaymentTab] = useState<"QRIS" | "VA" | "TRANSFER">("QRIS");
+  const [selectedVaBank, setSelectedVaBank] = useState<"bca" | "mandiri" | "bni" | "bri">("bca");
+  const [invoiceData, setInvoiceData] = useState<any | null>(null);
+  const [generatingInvoice, setGeneratingInvoice] = useState<boolean>(false);
+  const [paymentPollingActive, setPaymentPollingActive] = useState<boolean>(false);
+  const [isPaymentVerified, setIsPaymentVerified] = useState<boolean>(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [expirySeconds, setExpirySeconds] = useState<number>(900); // 15 menit
+
   const availableTiers = data.availableTiers || [];
   const availablePlugins = data.availablePlugins || [];
 
+  const tierRank: Record<string, number> = { basic: 1, pro: 2, enterprise: 3 };
+  const currentRank = tierRank[data.currentTier?.code?.toLowerCase() || "basic"] || 1;
+  const selectedTier = availableTiers.find((t: any) => t.id === selectedTierId) || availableTiers[0];
+  const selectedRank = tierRank[selectedTier?.code?.toLowerCase() || "basic"] || 1;
+
+  const isDowngrading = selectedRank < currentRank && !isTrial && !data.tenant?.isExpired;
+  const isUpgrading = selectedRank > currentRank;
+  const isBasicSelected = selectedTier?.code?.toLowerCase() === "basic";
+
+  // Enforcement: Jika memilih tier Basic, pastikan hanya 1 vertikal yang dipilih
+  useEffect(() => {
+    if (isBasicSelected && selectedPluginIds.length > 1) {
+      setSelectedPluginIds([selectedPluginIds[0]]);
+    }
+  }, [selectedTierId, isBasicSelected]);
+
   // Toggle Plugin Selection
   const togglePlugin = (pluginId: string) => {
+    if (isBasicSelected) {
+      // Basic hanya boleh 1 vertikal (ganti pilihan secara langsung)
+      setSelectedPluginIds([pluginId]);
+      return;
+    }
+
+    // PRO / Enterprise: Multi-vertikal bebas
     setSelectedPluginIds((prev) =>
       prev.includes(pluginId)
         ? prev.filter((id) => id !== pluginId)
@@ -96,29 +148,25 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   // Kalkulasi Biaya Upgrade & Tambahan (Delta Pricing & Prorated untuk durasi fleksibel)
   const isDurationChanged = selectedDurationKey !== initialDurationKey;
   const isOngoingMonthlyActive = initialDurationKey === "1M" && !isTrial && !data.tenant?.isExpired;
-  const selectedTier = availableTiers.find((t: any) => t.id === selectedTierId);
   const isTierChanged = selectedTierId !== currentTierId;
 
-  // Biaya tier prorata jika berpindah dari 1 bulan berjalan ke durasi yang lebih panjang
   let tierCostToday = 0;
   if (selectedTier) {
     const monthlyPrice = Number(selectedTier.priceMonthly);
     const tierCalc = calculateDurationPrice(monthlyPrice, selectedDuration);
 
     if (isTierChanged || isTrial || data.tenant?.isExpired) {
-      // Paket baru / dari trial / masa expired -> bayar durasi baru penuh
       tierCostToday = tierCalc.totalPrice;
     } else if (isDurationChanged && isOngoingMonthlyActive) {
-      // Konversi paket yang sama dari 1 bulan aktif -> Prorata (potong 1 bulan yang sudah dibayar)
       tierCostToday = Math.max(0, tierCalc.totalPrice - monthlyPrice);
     } else if (isDurationChanged) {
       tierCostToday = tierCalc.totalPrice;
     } else {
-      tierCostToday = 0; // Paket dan durasi sama serta aktif
+      tierCostToday = 0;
     }
   }
 
-  // Rincian Plugin: Modul yang sudah dimiliki vs Modul Baru (Prorata jika konversi durasi)
+  // Rincian Plugin: Modul yang sudah dimiliki vs Modul Baru
   const pluginItemsCalculation = availablePlugins.map((plugin: any) => {
     const isSelected = selectedPluginIds.includes(plugin.id);
     const wasAlreadyActive = initialActivePluginIds.includes(plugin.id);
@@ -130,16 +178,14 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
 
     if (isSelected) {
       if (!wasAlreadyActive || isTrial || data.tenant?.isExpired) {
-        // Plugin baru -> Bayar penuh sesuai durasi terpilih
         costToday = pluginCalc.totalPrice;
       } else if (isDurationChanged && isOngoingMonthlyActive) {
-        // Modul aktif 1 bulan dikonversi ke durasi lebih panjang -> Prorata (potong 1 bulan)
         costToday = Math.max(0, pluginCalc.totalPrice - monthlyPrice);
         isProrated1Month = true;
       } else if (isDurationChanged) {
         costToday = pluginCalc.totalPrice;
       } else {
-        costToday = 0; // Sudah aktif
+        costToday = 0;
       }
     }
 
@@ -160,33 +206,176 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
 
   const grandTotalToday = tierCostToday + pluginsTotalCostToday;
 
-  const handleUpgrade = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccessMsg(null);
+  // Countdown timer untuk modal QRIS
+  useEffect(() => {
+    if (!showPaymentModal || expirySeconds <= 0) return;
+    const timer = setInterval(() => {
+      setExpirySeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showPaymentModal, expirySeconds]);
 
+  // Polling Status Pembayaran SaaS Gateway setiap 3 detik
+  useEffect(() => {
+    if (!paymentPollingActive || !invoiceData?.orderId || isPaymentVerified) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await checkSaaSPaymentStatusAction(invoiceData.orderId);
+        if (res.isPaid) {
+          setIsPaymentVerified(true);
+          setPaymentPollingActive(false);
+          await finalizeSubscriptionActivation();
+        }
+      } catch (err) {
+        // Silent polling
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [paymentPollingActive, invoiceData, isPaymentVerified]);
+
+  const handleCopy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  // 1. Eksekusi Pembayaran & Buka Modal Gateway
+  const handleInitiateCheckout = async () => {
+    setError(null);
+
+    // Skenario A: Downgrade ke paket lebih rendah -> Buka Modal Peringatan
+    if (isDowngrading) {
+      setDowngradeAgreed(false);
+      setDowngradeSinglePluginId(selectedPluginIds[0] || initialActivePluginIds[0] || availablePlugins[0]?.id || "");
+      setShowDowngradeModal(true);
+      return;
+    }
+
+    // Skenario B: Gratis / Sudah Aktif / Tidak ada tagihan -> Langsung terapkan
+    if (grandTotalToday === 0) {
+      await finalizeSubscriptionActivation();
+      return;
+    }
+
+    // Skenario C: Ada Tagihan Berbayar -> Buka Modal Payment Gateway Interaktif
+    setGeneratingInvoice(true);
+    setShowPaymentModal(true);
+    setExpirySeconds(900); // 15 menit
+    setIsPaymentVerified(false);
+
+    try {
+      const qrisRes = await generateSaaSDynamicQrisAction({
+        tierCode: selectedTier.code,
+        durationMonths: selectedDuration.months,
+        totalAmount: grandTotalToday,
+        tierName: selectedTier.name,
+      });
+
+      if (qrisRes.success) {
+        setInvoiceData(qrisRes);
+        setPaymentPollingActive(true);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal memuat gateway pembayaran.");
+      setShowPaymentModal(false);
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
+
+  // 2. Simulasi Scan QRIS Lunas (Testing Sandbox)
+  const handleSimulateScanPayment = async () => {
+    if (!invoiceData?.orderId) return;
+    setLoading(true);
+
+    try {
+      await simulatePaymentWebhookAction(invoiceData.orderId);
+      setIsPaymentVerified(true);
+      setPaymentPollingActive(false);
+      await finalizeSubscriptionActivation();
+    } catch (err: any) {
+      setError(err.message || "Gagal melakukan simulasi pembayaran.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Finalisasi Aktivasi Langganan di Database
+  const finalizeSubscriptionActivation = async (customPluginIds?: string[]) => {
+    setLoading(true);
     try {
       const res = await upgradeSubscriptionAction({
         licenseTierId: selectedTierId,
         durationKey: selectedDuration.key,
         durationMonths: selectedDuration.months,
         billingCycle: selectedDuration.months >= 12 ? "ANNUAL" : "MONTHLY",
-        selectedPluginIds,
+        selectedPluginIds: customPluginIds || selectedPluginIds,
       });
 
       if (res.success) {
+        setShowPaymentModal(false);
+        setShowDowngradeModal(false);
         setSuccessMsg(
-          `Paket lisensi & modul bisnis berhasil diperbarui untuk durasi ${selectedDuration.label}! Fitur tambahan langsung aktif.`
+          `✨ Paket ${selectedTier.name} berhasil diaktifkan untuk durasi ${selectedDuration.label}! Fitur langsung dapat digunakan.`
         );
-        setTimeout(() => setSuccessMsg(null), 4000);
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
     } catch (err: any) {
-      setError(err.message || "Gagal memperbarui langganan.");
+      setError(err.message || "Gagal memperbarui paket langganan.");
     } finally {
       setLoading(false);
     }
   };
 
+  // 4. Konfirmasi Eksekusi Downgrade -> Buka Modal Payment Gateway dengan Rincian Paket Downgrade
+  const handleConfirmDowngrade = async () => {
+    if (!downgradeAgreed) {
+      setError("Mohon centang persetujuan konsekuensi penurunan paket.");
+      return;
+    }
+
+    // Set pilihan plugin tunggal hasil downgrade
+    const finalPlugins = [downgradeSinglePluginId];
+    setSelectedPluginIds(finalPlugins);
+    setShowDowngradeModal(false);
+
+    // Hitung total biaya paket baru hasil downgrade
+    const monthlyTier = Number(selectedTier.priceMonthly);
+    const tierCalc = calculateDurationPrice(monthlyTier, selectedDuration);
+    const selectedPluginObj = availablePlugins.find((p: any) => p.id === downgradeSinglePluginId);
+    const monthlyPlugin = Number(selectedPluginObj?.priceMonthly || 0);
+    const pluginCalc = calculateDurationPrice(monthlyPlugin, selectedDuration);
+    const downgradeTotalAmount = tierCalc.totalPrice + pluginCalc.totalPrice;
+
+    // Buka Modal Payment Gateway Interaktif
+    setGeneratingInvoice(true);
+    setShowPaymentModal(true);
+    setExpirySeconds(900);
+    setIsPaymentVerified(false);
+
+    try {
+      const qrisRes = await generateSaaSDynamicQrisAction({
+        tierCode: selectedTier.code,
+        durationMonths: selectedDuration.months,
+        totalAmount: downgradeTotalAmount,
+        tierName: selectedTier.name,
+      });
+
+      if (qrisRes.success) {
+        setInvoiceData(qrisRes);
+        setPaymentPollingActive(true);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal memuat gateway pembayaran downgrade.");
+      setShowPaymentModal(false);
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
 
   const getPluginIcon = (code: string) => {
     switch (code.toLowerCase()) {
@@ -203,7 +392,6 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
     }
   };
 
-  // Cek apakah ada perubahan dari kondisi saat ini
   const hasTierChange = selectedTierId !== currentTierId;
   const hasPluginChange =
     selectedPluginIds.length !== initialActivePluginIds.length ||
@@ -215,6 +403,12 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const currentDurationLabel =
     durationSettings.find((d) => d.key === initialDurationKey)?.label ||
     (initialDurationKey === "1Y" ? "1 Tahun" : "1 Bulan");
+
+  const formatCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
 
   return (
     <div className="space-y-8 text-left max-w-7xl mx-auto pb-16 font-sans">
@@ -262,7 +456,6 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                   Langganan Aktif ({currentDurationLabel})
                 </span>
               )}
-
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
@@ -270,7 +463,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             </h1>
 
             <p className="text-xs sm:text-sm max-w-2xl font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-              Pilih durasi langganan fleksibel (1 Bulan s/d 3 Tahun). Nikmati potongan diskon semakin hemat untuk durasi lebih panjang tanpa mereset modul yang sudah Anda miliki.
+              Pilih durasi langganan fleksibel (1 Bulan s/d 3 Tahun). Nikmati diskon hemat hingga 30% tanpa mereset modul bisnis yang sudah Anda miliki.
             </p>
           </div>
 
@@ -302,33 +495,42 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
 
             <div className="space-y-0.5 col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold flex items-center gap-1" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                <Layers className="w-3 h-3" /> Modul Aktif
+                <Layers className="w-3 h-3" /> Vertikal Aktif
               </span>
               <p className="text-sm font-black text-indigo-600">
-                {initialActivePluginIds.length} Modul Terpasang
+                {data.activePlugins?.length || 1} Modul
               </p>
             </div>
           </div>
         </div>
+
+        {/* Global Notifications */}
+        {successMsg && (
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
       </div>
 
-      {successMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{successMsg}</span>
+      {/* 2. Durasi Langganan Selector */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Pilih Periode Durasi Langganan:</span>
+          </label>
         </div>
-      )}
-      {error && (
-        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
 
-      {/* 2. Multi-Duration Switcher (1 Bulan s/d 3 Tahun) */}
-      <div className="flex flex-col items-center justify-center space-y-2 pt-1">
         <div
-          className="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-2xl border shadow-sm max-w-full"
+          className="p-1.5 rounded-2xl border flex flex-wrap items-center gap-1.5 shadow-xs overflow-x-auto"
           style={{
             backgroundColor: "var(--theme-inner-bg, #f1f5f9)",
             borderColor: "var(--theme-card-border, #e2e8f0)",
@@ -341,7 +543,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 key={dur.key}
                 type="button"
                 onClick={() => setSelectedDurationKey(dur.key)}
-                className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                 style={{
                   backgroundColor: isSelected ? "var(--theme-card-bg, #ffffff)" : "transparent",
                   color: isSelected ? "var(--theme-primary, #4f46e5)" : "var(--theme-text-secondary, #64748b)",
@@ -371,19 +573,20 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             1. Pilihan Paket Lisensi (Kapasitas &amp; Cabang)
           </h3>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Pilih paket yang Anda inginkan untuk durasi {selectedDuration.label}. Paket yang saat ini sudah Anda miliki ditandai dan tidak akan dikenakan biaya ganda.
+            Pilih paket yang Anda inginkan untuk durasi {selectedDuration.label}. Basic dibatasi 1 vertikal, sedangkan PRO dan Enterprise mendukung Multi-Vertikal penuh.
           </p>
         </div>
 
         <div className={`grid grid-cols-1 md:grid-cols-3 gap-5 ${expandedTier === null ? 'items-stretch' : 'items-start'}`}>
           {availableTiers.map((tier: any) => {
             const isSelected = selectedTierId === tier.id;
-            const isCurrentActive = tier.id === currentTierId && !isTrial && !isDurationChanged;
-            const isCurrentTierOnNewDuration = tier.id === currentTierId && !isTrial && isDurationChanged;
+            const thisTierRank = tierRank[tier.code?.toLowerCase() || "basic"] || 1;
+            const isThisTierCurrent = tier.id === currentTierId && !isTrial && !isDurationChanged;
+            const isThisTierCurrentOnNewDuration = tier.id === currentTierId && !isTrial && isDurationChanged;
+            const isThisTierDowngrade = thisTierRank < currentRank && !isTrial && !data.tenant?.isExpired;
             
             const monthlyBase = Number(tier.priceMonthly);
             const tierCalc = calculateDurationPrice(monthlyBase, selectedDuration);
-            const thisTierProratedCost = Math.max(0, tierCalc.totalPrice - monthlyBase);
             const isPopularPro = tier.code?.toLowerCase() === "pro";
 
             return (
@@ -403,7 +606,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 }}
               >
                 {/* Popular Pro Ribbon */}
-                {isPopularPro && !isCurrentActive && !isSelected && (
+                {isPopularPro && !isThisTierCurrent && !isSelected && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <span className="px-3 py-1 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black uppercase tracking-wider shadow-md">
                       ⭐ Paling Populer
@@ -412,13 +615,13 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 )}
 
                 {/* Badge Status */}
-                {isCurrentActive ? (
+                {isThisTierCurrent ? (
                   <div className="absolute top-4 right-4">
                     <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 text-[10px] font-extrabold flex items-center gap-1">
                       <Check className="w-3 h-3" /> Paket Anda Saat Ini
                     </span>
                   </div>
-                ) : isCurrentTierOnNewDuration ? (
+                ) : isThisTierCurrentOnNewDuration ? (
                   <div className="absolute top-4 right-4">
                     <span className="px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 text-[10px] font-extrabold flex items-center gap-1">
                       <Sparkles className="w-3 h-3" /> Ganti ke {selectedDuration.label}
@@ -437,6 +640,9 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     <span className="text-xs font-black uppercase tracking-wider block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
                       {tier.name}
                     </span>
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      {tier.code === "basic" ? "Maksimal 1 Vertikal" : "Mendukung Multi-Vertikal"}
+                    </span>
                   </div>
 
                   <div className="min-h-[4.5rem] flex flex-col justify-center">
@@ -449,7 +655,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                       <div className="mt-1">
                         {selectedDuration.months > 1 ? (
                           <span className="text-[11px] font-semibold text-emerald-600 block">
-                            setara Rp {tierCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat Rp {tierCalc.savedAmount.toLocaleString("id-ID")} ({selectedDuration.discountPercent}%)
+                            setara Rp ${tierCalc.effectiveMonthlyPrice.toLocaleString("id-ID")}/bln • Hemat {selectedDuration.discountPercent}%
                           </span>
                         ) : (
                           <span className="text-[11px] font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
@@ -464,53 +670,48 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     )}
                   </div>
 
-                  {/* Comprehensive & Authentic System Benefits List */}
+                  {/* Benefit Items List */}
                   <div className="pt-3 border-t space-y-2" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
                       Benefit &amp; Fitur Termasuk:
                     </span>
                     <ul className="text-xs space-y-2 font-medium" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                       <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>{tier.code === 'basic' ? '1 Cabang Outlet' : tier.code === 'pro' ? 'Hingga 10 Cabang' : 'Unlimited Cabang'}</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>{tier.code === 'basic' ? '5 Akun Kasir' : 'Unlimited Akun Kasir'}</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                            <span>Manajemen Stok & Penjualan Lengkap</span>
-                          </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                        <span>{tier.code === 'basic' ? '1 Cabang Outlet' : tier.code === 'pro' ? 'Hingga 10 Cabang' : 'Unlimited Cabang'}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                        <span>{tier.code === 'basic' ? '5 Akun Kasir' : 'Unlimited Akun Kasir'}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                        <span>{tier.code === 'basic' ? '1 Vertikal Bisnis' : 'Multi-Vertikal Penuh (Kafe, Barber, Laundry, Retail)'}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-emerald-500 font-bold mt-0.5">✓</span>
+                        <span>Manajemen Stok &amp; Penjualan Lengkap</span>
+                      </li>
                     </ul>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setExpandedTier(expandedTier === tier.id ? null : tier.id); }}
-                      className="text-[11px] font-bold text-indigo-500 flex items-center justify-center gap-1 w-full py-1 hover:text-indigo-600 transition mt-2"
-                    >
-                      {expandedTier === tier.id ? (
-                        <>Tutup Detail <AlertCircle className="w-3 h-3 hidden" /></> 
-                      ) : (
-                        <>Lihat Detail Paket <Info className="w-3 h-3" /></>
-                      )}
-                    </button>
                   </div>
-
                 </div>
 
+                {/* Footer Action on Card */}
                 <div className="pt-4 mt-5 border-t" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
-                  {isCurrentActive ? (
+                  {isThisTierCurrent ? (
                     <span className="text-xs font-bold text-emerald-600 block text-center py-1">
                       Sudah Aktif (Rp 0)
                     </span>
-                  ) : isCurrentTierOnNewDuration ? (
-                    <span className="text-xs font-bold text-indigo-600 block text-center py-1">
-                      Ganti ke {selectedDuration.label} (Prorata): Rp {thisTierProratedCost.toLocaleString("id-ID")}
+                  ) : isThisTierDowngrade ? (
+                    <span className="text-xs font-black text-rose-600 block text-center py-1 group-hover:underline">
+                      ⬇️ Downgrade ke {tier.name}
                     </span>
                   ) : isSelected ? (
                     <span className="text-xs font-bold text-indigo-600 block text-center py-1">
                       {monthlyBase === 0
                         ? "Pilih Lisensi Enterprise"
+                        : isThisTierDowngrade
+                        ? `⬇️ Downgrade ke ${tier.name}`
                         : `🚀 Upgrade ke Paket Ini (+Rp ${tierCalc.totalPrice.toLocaleString("id-ID")})`}
                     </span>
                   ) : (
@@ -528,12 +729,21 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       {/* 4. Section 2: Modul Vertikal Bisnis (Add-On Modules) */}
       <div className="space-y-4">
         <div className="space-y-1">
-          <h3 className="text-base font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-            <Layers className="w-4 h-4" style={{ color: "var(--theme-primary, #4f46e5)" }} />
-            2. Modul Vertikal Bisnis (Bisa Multi-Vertikal)
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+              <Layers className="w-4 h-4" style={{ color: "var(--theme-primary, #4f46e5)" }} />
+              2. Modul Vertikal Bisnis {isBasicSelected ? "(Maks 1 Vertikal di Lisensi Basic)" : "(Multi-Vertikal Bebas)"}
+            </h3>
+            {isBasicSelected && (
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30">
+                🔒 Lisensi Basic: 1 Vertikal Aktif
+              </span>
+            )}
+          </div>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Modul yang sudah Anda miliki tetap aktif. Anda bisa menambah modul vertikal lain (misal: Cafe + Barbershop) untuk durasi {selectedDuration.label}.
+            {isBasicSelected
+              ? "Lisensi Basic hanya dapat memilih 1 modul vertikal aktif. Upgrade ke Lisensi PRO untuk mengaktifkan Multi-Vertikal sekaligus."
+              : "Modul yang sudah Anda miliki tetap aktif. Anda bisa mencentang beberapa modul vertikal sekaligus (misal: Cafe + Barbershop + Laundry)."}
           </p>
         </div>
 
@@ -554,11 +764,10 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 onClick={() => togglePlugin(plugin.id)}
                 className={`p-5 rounded-3xl border transition cursor-pointer flex flex-col justify-between relative ${
                   isSelected
-                    ? "ring-2 ring-indigo-500 shadow-md"
+                    ? "ring-2 ring-indigo-500 shadow-md bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-400"
                     : "hover:border-slate-300 shadow-sm"
                 }`}
                 style={{
-                  backgroundColor: isSelected ? "var(--theme-inner-bg, #f8fafc)" : "var(--theme-card-bg, #ffffff)",
                   borderColor: isSelected ? "var(--theme-primary, #4f46e5)" : "var(--theme-card-border, #e2e8f0)",
                 }}
               >
@@ -572,18 +781,15 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 ) : isSelected ? (
                   <div className="absolute top-4 right-4" style={{ color: "var(--theme-primary, #4f46e5)" }}>
                     <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1">
-                      <Plus className="w-3 h-3" /> {wasAlreadyActive ? `Ganti ${selectedDuration.label}` : "Tambahan Baru"}
+                      <CheckCircle2 className="w-3 h-3" /> Terpilih
                     </span>
                   </div>
                 ) : null}
 
                 <div className="space-y-3">
                   <div
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center"
-                    style={{
-                      backgroundColor: "var(--theme-card-bg, #ffffff)",
-                      borderColor: "var(--theme-card-border, #e2e8f0)",
-                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center bg-white dark:bg-slate-800"
+                    style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}
                   >
                     {getPluginIcon(plugin.code)}
                   </div>
@@ -603,7 +809,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                   ) : (
                     <span className="text-xs font-black text-indigo-600">
                       {isPluginProrated
-                        ? `Rp ${itemProratedCost.toLocaleString("id-ID")} (Prorata)`
+                        ? `Rp ${itemProratedCost.toLocaleString("id-ID")}`
                         : `+Rp ${pluginCalc.totalPrice.toLocaleString("id-ID")}`}
                     </span>
                   )}
@@ -627,10 +833,12 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       >
         <div className="border-b pb-4 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
           <h3 className="font-black text-base" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-            Rincian Tagihan Pembayaran Hari Ini (Durasi: {selectedDuration.label})
+            Rincian Tagihan Pembayaran ({selectedDuration.label})
           </h3>
           <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-            Hanya menghitung biaya paket upgrade, perpanjangan durasi, atau modul tambahan baru yang Anda pilih.
+            {isDowngrading
+              ? "Penurunan lisensi ke paket lebih rendah. Harap tinjau ketentuan sebelum konfirmasi."
+              : "Menghitung biaya lisensi upgrade, perpanjangan durasi, atau modul vertikal baru."}
           </p>
         </div>
 
@@ -645,10 +853,10 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                   Paket Lisensi: {selectedTier?.name || "Lisensi Basic"}
                 </p>
                 <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                  {isTierChanged
-                    ? `Upgrade ke ${selectedTier?.name || "Paket Baru"} (Durasi ${selectedDuration.label})`
-                    : isDurationChanged && isOngoingMonthlyActive
-                    ? `Konversi ke ${selectedDuration.label} (Prorata dipotong 1 bulan berjalan)`
+                  {isDowngrading
+                    ? `⬇️ Downgrade ke ${selectedTier.name} (Batas 1 Cabang & 1 Vertikal)`
+                    : isTierChanged
+                    ? `🚀 Upgrade ke ${selectedTier?.name} (Durasi ${selectedDuration.label})`
                     : isDurationChanged
                     ? `Perpanjang ke Durasi ${selectedDuration.label}`
                     : !isTrial
@@ -672,11 +880,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                     Modul Vertikal: {item.plugin.name}
                   </p>
                   <p className="text-[10px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                    {item.isProrated1Month
-                      ? `Konversi ke ${selectedDuration.label} (Prorata dipotong 1 bulan berjalan)`
-                      : isDurationChanged
-                      ? `Konversi ke Durasi ${selectedDuration.label}`
-                      : item.wasAlreadyActive && !isTrial
+                    {item.wasAlreadyActive && !isTrial
                       ? "Modul yang sudah Anda miliki"
                       : "Modul Tambahan Baru"}
                   </p>
@@ -704,18 +908,30 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
             <p className="text-xs mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
               {selectedPluginIds.length} Modul Vertikal akan aktif untuk akun Anda.
             </p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+              Dengan melanjutkan, Anda menyetujui{" "}
+              <Link href="/terms" target="_blank" className="text-indigo-500 hover:underline font-bold">
+                Syarat &amp; Ketentuan Layanan (No-Refund Policy)
+              </Link>.
+            </p>
           </div>
 
           <button
-            onClick={handleUpgrade}
+            onClick={handleInitiateCheckout}
             disabled={loading || (!hasAnyChange && grandTotalToday === 0)}
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-extrabold text-xs shadow-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
-            style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
+            className={`w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-extrabold text-xs shadow-xl transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${
+              isDowngrading ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"
+            }`}
           >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Memproses Perubahan...</span>
+                <span>Memproses...</span>
+              </>
+            ) : isDowngrading ? (
+              <>
+                <AlertTriangle className="w-4 h-4" />
+                <span>Konfirmasi Downgrade &amp; Bayar (Rp {grandTotalToday.toLocaleString("id-ID")})</span>
               </>
             ) : !hasAnyChange && grandTotalToday === 0 ? (
               <>
@@ -727,7 +943,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                 <CreditCard className="w-4 h-4" />
                 <span>
                   {grandTotalToday > 0
-                    ? `Bayar & Aktifkan Paket ${selectedDuration.label} (Rp ${grandTotalToday.toLocaleString("id-ID")})`
+                    ? `Bayar & Aktifkan Paket (Rp ${grandTotalToday.toLocaleString("id-ID")})`
                     : "Simpan & Terapkan Perubahan"}
                 </span>
               </>
@@ -735,6 +951,375 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
           </button>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: PERINGATAN KONSEKUENSI DOWNGRADE PAKET LISENSI */}
+      {/* ========================================================================= */}
+      {showDowngradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                    Peringatan Penurunan Paket (Downgrade)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Dari {data.currentTier?.name} ke {selectedTier.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDowngradeModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-slate-600 dark:text-slate-300">
+              <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="font-black text-rose-600">1.</span>
+                  <div>
+                    <strong className="text-rose-700 dark:text-rose-400">Pembatasan Cabang Outlet:</strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                      Lisensi Basic hanya mendukung <strong>1 Cabang Outlet</strong>. Cabang tambahan ({data.quota.outletsUsed > 1 ? `${data.quota.outletsUsed - 1} cabang lain` : "cabang lain"}) akan dibekukan sementara.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <span className="font-black text-rose-600">2.</span>
+                  <div>
+                    <strong className="text-rose-700 dark:text-rose-400">Isolasi 1 Vertikal Bisnis:</strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                      Lisensi Basic tidak mendukung Multi-Vertikal. Silakan pilih <strong>1 Vertikal Utama</strong> yang tetap aktif di bawah ini:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {availablePlugins.map((p: any) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setDowngradeSinglePluginId(p.id)}
+                          className={`p-2.5 rounded-xl border text-left font-bold text-xs flex items-center gap-2 transition cursor-pointer ${
+                            downgradeSinglePluginId === p.id
+                              ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          {getPluginIcon(p.code)}
+                          <span>{p.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <span className="font-black text-rose-600">3.</span>
+                  <div>
+                    <strong className="text-rose-700 dark:text-rose-400">Sisa Hari Masa Aktif Hangus:</strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                      Sisa masa aktif paket PRO berjalan tidak dapat diuangkan kembali (*no refund*).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Checkbox Persetujuan */}
+              <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={downgradeAgreed}
+                  onChange={(e) => setDowngradeAgreed(e.target.checked)}
+                  className="w-4 h-4 rounded text-rose-600 mt-0.5 cursor-pointer"
+                />
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  Saya memahami dan menyetujui seluruh konsekuensi penurunan paket ke Lisensi Basic.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowDowngradeModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={!downgradeAgreed || loading}
+                onClick={handleConfirmDowngrade}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                <span>Lanjut ke Pembayaran Downgrade &rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: IN-APP PAYMENT GATEWAY (DYNAMIC QRIS & VIRTUAL ACCOUNT SANDBOX) */}
+      {/* ========================================================================= */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/15 text-indigo-600 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                    Pembayaran Invoice Langganan
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Order ID: <span className="font-mono">{invoiceData?.orderId || "Generating..."}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setPaymentPollingActive(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {generatingInvoice ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                <p className="text-xs font-bold text-slate-500">Menyiapkan QRIS Dinamis &amp; Gateway...</p>
+              </div>
+            ) : isPaymentVerified ? (
+              <div className="py-10 text-center space-y-4 animate-scaleUp">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-lg font-black text-slate-900 dark:text-white">
+                    Pembayaran Berhasil Diverifikasi!
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Paket {selectedTier.name} ({selectedDuration.label}) telah aktif di sistem.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Ringkasan Total Tagihan */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Tagihan</span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                      {selectedTier.name} ({selectedDuration.label})
+                    </span>
+                  </div>
+                  <span className="text-xl font-black text-indigo-600 font-mono">
+                    Rp {grandTotalToday.toLocaleString("id-ID")}
+                  </span>
+                </div>
+
+                {/* Tab Pilihan Metode Pembayaran */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentTab("QRIS")}
+                    className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      activePaymentTab === "QRIS"
+                        ? "bg-white dark:bg-slate-900 text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>QRIS Real</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentTab("VA")}
+                    className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      activePaymentTab === "VA"
+                        ? "bg-white dark:bg-slate-900 text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Virtual Account</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentTab("TRANSFER")}
+                    className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      activePaymentTab === "TRANSFER"
+                        ? "bg-white dark:bg-slate-900 text-indigo-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Transfer Bank</span>
+                  </button>
+                </div>
+
+                {/* CONTENT TAB 1: DYNAMIC QRIS */}
+                {activePaymentTab === "QRIS" && (
+                  <div className="space-y-4 text-center">
+                    {/* Countdown Timer */}
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-xl border border-amber-200 dark:border-amber-900">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Batas Waktu Bayar: {formatCountdown(expirySeconds)}</span>
+                    </div>
+
+                    {/* QR Code Container */}
+                    <div className="p-4 bg-white rounded-2xl border border-slate-200 inline-block shadow-sm mx-auto">
+                      {invoiceData?.qrDataUrl ? (
+                        <img
+                          src={invoiceData.qrDataUrl}
+                          alt="Dynamic QRIS Midtrans"
+                          className="w-56 h-56 mx-auto object-contain"
+                        />
+                      ) : (
+                        <div className="w-56 h-56 flex items-center justify-center bg-slate-50 rounded-xl">
+                          <QrCode className="w-16 h-16 text-slate-300 animate-pulse" />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-wider">
+                        BCA • Mandiri • GoPay • OVO • DANA • ShopeePay • LinkAja
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                      <span>Mendengarkan status pembayaran real-time...</span>
+                    </div>
+
+                    {/* Tombol Testing Simulator Scan Lunas */}
+                    <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-2">
+                      <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                        🧪 Mode Pengujian Sandbox / Demo:
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleSimulateScanPayment}
+                        disabled={loading}
+                        className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />}
+                        <span>📱 Simulasi Scan QRIS Lunas (Instant Settlement)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* CONTENT TAB 2: VIRTUAL ACCOUNT */}
+                {activePaymentTab === "VA" && (
+                  <div className="space-y-3 text-xs">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(["bca", "mandiri", "bni", "bri"] as const).map((bank) => (
+                        <button
+                          key={bank}
+                          type="button"
+                          onClick={() => setSelectedVaBank(bank)}
+                          className={`py-2 rounded-xl border text-center font-bold uppercase transition cursor-pointer ${
+                            selectedVaBank === bank
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          {bank}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500">Nomor Virtual Account ({selectedVaBank.toUpperCase()}):</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(invoiceData?.vaNumbers?.[selectedVaBank] || "8077708571600865", `va-${selectedVaBank}`)}
+                          className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedKey === `va-${selectedVaBank}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedKey === `va-${selectedVaBank}` ? "Tersalin!" : "Salin VA"}</span>
+                        </button>
+                      </div>
+                      <p className="text-base font-black font-mono text-slate-900 dark:text-white">
+                        {invoiceData?.vaNumbers?.[selectedVaBank] || "8077708571600865"}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Atas Nama: <strong className="text-slate-700 dark:text-slate-300">POS UNIVERSAL SAAS</strong>
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/40 text-[11px] text-slate-500 space-y-1">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">Panduan Pembayaran:</p>
+                      <p>1. Buka Mobile Banking / ATM {selectedVaBank.toUpperCase()}</p>
+                      <p>2. Pilih menu Transfer &gt; Virtual Account</p>
+                      <p>3. Masukkan nominal tagihan tepat: <strong>Rp {grandTotalToday.toLocaleString("id-ID")}</strong></p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSimulateScanPayment}
+                      disabled={loading}
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      <span>Konfirmasi Pembayaran VA Lunas</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* CONTENT TAB 3: TRANSFER BANK */}
+                {activePaymentTab === "TRANSFER" && (
+                  <div className="space-y-3 text-xs">
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500">Bank BCA (Manual Settlement):</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy("8291029381", "bca-rek")}
+                          className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedKey === "bca-rek" ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedKey === "bca-rek" ? "Tersalin!" : "Salin No Rek"}</span>
+                        </button>
+                      </div>
+                      <p className="text-base font-black font-mono text-slate-900 dark:text-white">
+                        8291-029-381
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Atas Nama: <strong className="text-slate-700 dark:text-slate-300">PT POS UNIVERSAL TEKNOLOGI</strong>
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSimulateScanPayment}
+                      disabled={loading}
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      <span>Konfirmasi Pembayaran Transfer</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -30,7 +30,7 @@ export async function getProductsData(explicitOutletId?: string) {
   const user = session.user as any;
   const targetOutletId = explicitOutletId || user.outletId;
 
-  const [products, outlets] = await Promise.all([
+  const [products, outlets, activeTenantPlugins] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId: user.tenantId },
       orderBy: { createdAt: "desc" },
@@ -51,12 +51,32 @@ export async function getProductsData(explicitOutletId?: string) {
       where: { tenantId: user.tenantId, isActive: true },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.tenantPlugin.findMany({
+      where: {
+        subscription: { tenantId: user.tenantId, isActive: true },
+        isActive: true,
+      },
+      include: { plugin: true },
+    }),
   ]);
 
+  const hasBarbershopPlugin = (activeTenantPlugins as any[]).some((tp: any) => tp.plugin?.code === "barbershop");
+  const hasCafePlugin = (activeTenantPlugins as any[]).some((tp: any) => tp.plugin?.code === "cafe");
+  const hasLaundryPlugin = (activeTenantPlugins as any[]).some((tp: any) => tp.plugin?.code === "laundry");
+  const hasRetailPlugin = (activeTenantPlugins as any[]).some((tp: any) => tp.plugin?.code === "retail") || (!hasBarbershopPlugin && !hasCafePlugin && !hasLaundryPlugin);
+
+  const activeVertical: "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" = hasBarbershopPlugin
+    ? "BARBERSHOP"
+    : hasCafePlugin
+    ? "CAFE"
+    : hasLaundryPlugin
+    ? "LAUNDRY"
+    : "RETAIL";
+
   // Jika diakses oleh kasir spesifik atau outlet terpilih, transform stok & harga efektif
-  const formattedProducts = products.map((p) => {
+  const formattedProducts = (products as any[]).map((p: any) => {
     const specificStock = targetOutletId
-      ? p.outletStocks.find((s) => s.outletId === targetOutletId)
+      ? (p.outletStocks || []).find((s: any) => s.outletId === targetOutletId)
       : null;
 
     const effectiveStockQty =
@@ -89,14 +109,14 @@ export async function getProductsData(explicitOutletId?: string) {
   });
 
   const totalItems = formattedProducts.length;
-  const totalBarang = formattedProducts.filter((p) => p.type === "BARANG").length;
-  const totalJasa = formattedProducts.filter((p) => p.type === "JASA").length;
-  const lowStockCount = formattedProducts.filter(
-    (p) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= (p.minStockAlert ?? 5)
+  const totalBarang = (formattedProducts as any[]).filter((p: any) => p.type === "BARANG").length;
+  const totalJasa = (formattedProducts as any[]).filter((p: any) => p.type === "JASA").length;
+  const lowStockCount = (formattedProducts as any[]).filter(
+    (p: any) => p.type === "BARANG" && (p.effectiveStockQty ?? 0) <= (p.minStockAlert ?? 5)
   ).length;
 
   const categories = Array.from(
-    new Set(formattedProducts.map((p) => p.category).filter(Boolean) as string[])
+    new Set((formattedProducts as any[]).map((p: any) => p.category).filter(Boolean) as string[])
   );
 
   return {
@@ -104,6 +124,13 @@ export async function getProductsData(explicitOutletId?: string) {
     outlets: JSON.parse(JSON.stringify(outlets)),
     categories,
     selectedOutletId: targetOutletId || null,
+    activeVertical,
+    verticalFlags: {
+      isBarbershop: hasBarbershopPlugin,
+      isCafe: hasCafePlugin,
+      isLaundry: hasLaundryPlugin,
+      isRetail: hasRetailPlugin,
+    },
     metrics: {
       totalItems,
       totalBarang,
@@ -482,16 +509,46 @@ export async function toggleProductStatusAction(id: string) {
 export async function deleteProductAction(id: string) {
   const user = await requireTenantUser();
 
-  const existing = await prisma.product.findUnique({ where: { id } });
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      transactionItems: { take: 1 },
+      bookings: { take: 1 },
+    },
+  });
+
   if (!existing || existing.tenantId !== user.tenantId) {
     throw new Error("Produk tidak ditemukan.");
   }
 
-  await prisma.product.delete({
-    where: { id },
-  });
+  // Jika produk sudah memiliki riwayat transaksi / booking, lakukan soft-delete agar laporan historis tidak rusak
+  if ((existing as any).transactionItems?.length > 0 || (existing as any).bookings?.length > 0) {
+    await prisma.$transaction([
+      prisma.product.update({
+        where: { id },
+        data: { isActive: false },
+      }),
+      prisma.outletStock.updateMany({
+        where: { productId: id },
+        data: { isAvailable: false },
+      }),
+    ]);
+  } else {
+    await prisma.$transaction([
+      prisma.stockMovement.deleteMany({
+        where: { outletStock: { productId: id } },
+      }),
+      prisma.outletStock.deleteMany({
+        where: { productId: id },
+      }),
+      prisma.product.delete({
+        where: { id },
+      }),
+    ]);
+  }
 
   revalidatePath("/dashboard/products");
+  revalidatePath("/pos");
   return { success: true };
 }
 
@@ -543,7 +600,7 @@ export async function transferProductStockAction(data: {
     throw new Error("Cabang tujuan tidak valid.");
   }
 
-  const fromStock = product.outletStocks.find((s) => s.outletId === fromOutletId);
+  const fromStock = product.outletStocks.find((s: any) => s.outletId === fromOutletId);
   const currentFromQty = fromStock ? fromStock.stockQty : (product.stockQty ?? 0);
 
   if (currentFromQty < qty) {
@@ -555,7 +612,7 @@ export async function transferProductStockAction(data: {
   const transferRefCode = `TRF-${Date.now().toString().slice(-6)}`;
 
   // Run atomic transfer transaction
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     // 1. Deduct from source outlet
     const updatedFrom = await tx.outletStock.upsert({
       where: {

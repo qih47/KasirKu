@@ -71,7 +71,7 @@ export function TenantTableClient({
     try {
       const res = await extendTenantTrial(tenantId, days);
       setTenants((prev) =>
-        prev.map((t) =>
+        prev.map((t: any) =>
           t.id === tenantId
             ? { ...t, trialEndAt: res.newTrialEndAt, status: "TRIAL" }
             : t
@@ -94,7 +94,7 @@ export function TenantTableClient({
     try {
       await updateTenantStatus(tenantId, newStatus);
       setTenants((prev) =>
-        prev.map((t) => (t.id === tenantId ? { ...t, status: newStatus } : t))
+        prev.map((t: any) => (t.id === tenantId ? { ...t, status: newStatus } : t))
       );
       setMsg({ id: tenantId, text: `Status diubah ke ${newStatus}` });
       setTimeout(() => setMsg(null), 3000);
@@ -105,7 +105,7 @@ export function TenantTableClient({
     }
   };
 
-  const filteredTenants = tenants.filter((t) => {
+  const filteredTenants = tenants.filter((t: any) => {
     const matchStatus = filterStatus === "ALL" || t.status === filterStatus;
     const owner = t.users[0];
     const matchSearch =
@@ -205,7 +205,7 @@ export function TenantTableClient({
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {filteredTenants.length > 0 ? (
-                filteredTenants.map((t) => {
+                filteredTenants.map((t: any) => {
                   const owner = t.users[0];
                   const activeSub = t.subscriptions[0];
                   const plugins = activeSub?.plugins || [];

@@ -89,7 +89,7 @@ export async function getStaffAdvancesData(params?: {
     }),
   ]);
 
-  const formattedAdvances: StaffAdvanceItem[] = advances.map((a) => ({
+  const formattedAdvances: StaffAdvanceItem[] = (advances as any[]).map((a: any) => ({
     id: a.id,
     staffId: a.staffId,
     staffName: a.staff?.name || "Karyawan",
@@ -106,16 +106,16 @@ export async function getStaffAdvancesData(params?: {
     createdAt: a.createdAt.toISOString(),
   }));
 
-  const totalActiveAdvance = formattedAdvances
-    .filter((a) => a.status === "ACTIVE")
-    .reduce((sum, a) => sum + a.remainingAmount, 0);
+  const totalActiveAdvance = (formattedAdvances as any[])
+    .filter((a: any) => a.status === "ACTIVE")
+    .reduce((sum: number, a: any) => sum + a.remainingAmount, 0);
 
-  const totalPaidOffAdvance = formattedAdvances
-    .filter((a) => a.status === "PAID_OFF")
-    .reduce((sum, a) => sum + a.amount, 0);
+  const totalPaidOffAdvance = (formattedAdvances as any[])
+    .filter((a: any) => a.status === "PAID_OFF")
+    .reduce((sum: number, a: any) => sum + a.amount, 0);
 
   const activeStaffCount = new Set(
-    formattedAdvances.filter((a) => a.status === "ACTIVE").map((a) => a.staffId)
+    (formattedAdvances as any[]).filter((a: any) => a.status === "ACTIVE").map((a: any) => a.staffId)
   ).size;
 
   return {

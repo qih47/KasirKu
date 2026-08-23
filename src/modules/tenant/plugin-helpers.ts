@@ -40,5 +40,5 @@ export async function getTenantActivePlugins(tenantId: string): Promise<TenantPl
  */
 export async function hasTenantPlugin(tenantId: string, pluginCode: string): Promise<boolean> {
   const activePlugins = await getTenantActivePlugins(tenantId);
-  return activePlugins.some((p) => p.code === pluginCode);
+  return activePlugins.some((p: any) => p.code === pluginCode);
 }

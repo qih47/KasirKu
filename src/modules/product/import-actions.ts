@@ -60,7 +60,7 @@ export async function importProductsBatchAction(params: {
   const barcodeMap = new Map<string, typeof existingProducts[0]>();
   const nameMap = new Map<string, typeof existingProducts[0]>();
 
-  existingProducts.forEach((p) => {
+  (existingProducts as any[]).forEach((p: any) => {
     if (p.barcode) barcodeMap.set(p.barcode.toLowerCase().trim(), p);
     nameMap.set(p.name.toLowerCase().trim(), p);
   });

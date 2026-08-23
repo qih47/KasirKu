@@ -32,7 +32,7 @@ export default async function DemoPage() {
     enterprise: 3,
   };
 
-  const dbTiers = rawTiers.sort((a, b) => {
+  const dbTiers = (rawTiers as any[]).sort((a: any, b: any) => {
     const orderA = tierOrderMap[a.code.toLowerCase()] || 99;
     const orderB = tierOrderMap[b.code.toLowerCase()] || 99;
     return orderA - orderB;

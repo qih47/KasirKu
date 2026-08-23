@@ -97,57 +97,57 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
   const activeUiThemeId = activeSub?.theme?.themeId || null;
 
   // Saring hanya tema yang sudah dibeli / gratis / sedang aktif
-  const ownedUiThemes = allThemes
+  const ownedUiThemes = (allThemes as any[])
     .filter(
-      (t) =>
+      (t: any) =>
         (t.tokens as any)?.packageType !== "POS_LAYOUT" &&
         (t.tokens as any)?.packageType !== "RECEIPT_PRESET" &&
         !t.code?.startsWith("pos-") &&
         !t.code?.startsWith("receipt-") &&
         (Number(t.priceMonthly) === 0 || t.id === activeUiThemeId || isTrial)
     )
-    .map((t) => ({
+    .map((t: any) => ({
       id: t.id,
       code: t.code,
       name: t.name,
       priceMonthly: Number(t.priceMonthly),
     }));
 
-  const ownedPosLayouts = allThemes
+  const ownedPosLayouts = (allThemes as any[])
     .filter(
-      (t) =>
+      (t: any) =>
         (t.tokens as any)?.packageType === "POS_LAYOUT" ||
         t.code?.startsWith("pos-") ||
         Boolean((t.tokens as any)?.layouts?.pos?.cartDock)
     )
     .filter(
-      (t) =>
+      (t: any) =>
         Number(t.priceMonthly) === 0 ||
         purchasedLayoutIds.includes(t.code) ||
         purchasedLayoutIds.includes(t.id) ||
         isTrial
     )
-    .map((t) => ({
+    .map((t: any) => ({
       id: t.code,
       name: t.name,
       vertical: (t.tokens as any)?.vertical || "Umum",
     }));
 
-  const ownedReceiptThemes = allThemes
+  const ownedReceiptThemes = (allThemes as any[])
     .filter(
-      (t) =>
+      (t: any) =>
         (t.tokens as any)?.packageType === "RECEIPT_PRESET" ||
         t.code?.startsWith("receipt-") ||
         Boolean((t.tokens as any)?.receipt?.paperWidth)
     )
     .filter(
-      (t) =>
+      (t: any) =>
         Number(t.priceMonthly) === 0 ||
         purchasedThemeIds.includes(t.code) ||
         purchasedThemeIds.includes(t.id) ||
         isTrial
     )
-    .map((t) => ({
+    .map((t: any) => ({
       id: t.code,
       name: t.name,
       vertical: (t.tokens as any)?.vertical || "Umum",
@@ -158,17 +158,17 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
   const hasReceiptProPlugin =
     isTrial ||
     Boolean(
-      activeSub?.plugins?.some(
-        (p) =>
-          p.plugin.code.toLowerCase().includes("receipt") ||
-          p.plugin.code.toLowerCase().includes("custom")
+      (activeSub?.plugins || []).some(
+        (p: any) =>
+          p.plugin?.code?.toLowerCase().includes("receipt") ||
+          p.plugin?.code?.toLowerCase().includes("custom")
       )
     ) ||
     savedConfig.hasReceiptProPlugin === true;
 
   const outlets = tenant.outlets || [];
   const selectedOutlet = explicitOutletId
-    ? outlets.find((o) => o.id === explicitOutletId) || outlets[0] || null
+    ? outlets.find((o: any) => o.id === explicitOutletId) || outlets[0] || null
     : outlets[0] || null;
 
   return JSON.parse(

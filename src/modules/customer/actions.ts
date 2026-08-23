@@ -5,13 +5,26 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-async function requireAuth() {
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireAuth(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
-  return session.user as any;
+  return user;
 }
+
+type CustomerWhereInput = Record<string, any>;
+type CustomerOrderByInput = Record<string, any>;
 
 export interface CustomerSummaryItem {
   id: string;
@@ -52,7 +65,8 @@ export async function getCustomersData(params?: {
   outletId?: string;
 }): Promise<CustomersPageData> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     return {
       customers: [],
       stats: {
@@ -66,31 +80,34 @@ export async function getCustomersData(params?: {
       totalCount: 0,
     };
   }
-  const user = session.user as any;
 
-  const whereClause: any = {
-    tenantId: user.tenantId,
-  };
+  const andConditions: any[] = [{ tenantId: user.tenantId }];
 
   if (params?.search && params.search.trim() !== "") {
     const q = params.search.trim();
-    whereClause.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { phone: { contains: q, mode: "insensitive" } },
-      { email: { contains: q, mode: "insensitive" } },
-      { notes: { contains: q, mode: "insensitive" } },
-    ];
+    andConditions.push({
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { phone: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { notes: { contains: q, mode: "insensitive" } },
+      ],
+    });
   }
 
   if (params?.outletId && params.outletId !== "ALL") {
-    whereClause.OR = [
-      { transactions: { some: { outletId: params.outletId } } },
-      { bookings: { some: { outletId: params.outletId } } },
-      { laundryOrders: { some: { outletId: params.outletId } } },
-    ];
+    andConditions.push({
+      OR: [
+        { transactions: { some: { outletId: params.outletId } } },
+        { bookings: { some: { outletId: params.outletId } } },
+        { laundryOrders: { some: { outletId: params.outletId } } },
+      ],
+    });
   }
 
-  let orderBy: any = { createdAt: "desc" };
+  const whereClause: CustomerWhereInput = { AND: andConditions };
+
+  let orderBy: CustomerOrderByInput = { createdAt: "desc" };
   if (params?.sortBy === "visits") {
     orderBy = { visits: "desc" };
   } else if (params?.sortBy === "totalSpent") {
@@ -143,11 +160,11 @@ export async function getCustomersData(params?: {
 
   const totalCustomers = allCustomersStats.length;
   const activeThisMonth = allCustomersStats.filter(
-    (c: { lastVisitAt: Date | null }) => c.lastVisitAt && new Date(c.lastVisitAt) >= oneMonthAgo
+    (c: any) => c.lastVisitAt && new Date(c.lastVisitAt) >= oneMonthAgo
   ).length;
 
   const totalSpentAll = allCustomersStats.reduce(
-    (acc: number, curr: { totalSpent: any }) => acc + Number(curr.totalSpent || 0),
+    (acc: number, curr: any) => acc + Number(curr.totalSpent || 0),
     0
   );
 
@@ -163,8 +180,8 @@ export async function getCustomersData(params?: {
     notes: c.notes,
     visits: c.visits,
     totalSpent: Number(c.totalSpent || 0),
-    lastVisitAt: c.lastVisitAt ? c.lastVisitAt.toISOString() : null,
-    createdAt: c.createdAt.toISOString(),
+    lastVisitAt: c.lastVisitAt ? new Date(c.lastVisitAt).toISOString() : null,
+    createdAt: new Date(c.createdAt).toISOString(),
     lastOutletName: c.transactions?.[0]?.outlet?.name || null,
     _count: c._count,
   }));
@@ -231,7 +248,7 @@ export async function getCustomerDetail(customerId: string) {
   return {
     ...customer,
     totalSpent: Number(customer.totalSpent || 0),
-    transactions: customer.transactions.map((t: any) => ({
+    transactions: ((customer as any).transactions || []).map((t: any) => ({
       ...t,
       subtotalAmount: Number(t.subtotalAmount || 0),
       discountAmount: Number(t.discountAmount || 0),
@@ -401,7 +418,7 @@ export async function searchCustomerQuickAction(query: string) {
     },
   });
 
-  return customers.map((c: any) => ({
+  return ((customers as any[]) || []).map((c: any) => ({
     ...c,
     totalSpent: Number(c.totalSpent || 0),
   }));

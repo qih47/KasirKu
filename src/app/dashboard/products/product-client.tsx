@@ -29,6 +29,10 @@ import {
   FileSpreadsheet,
   SlidersHorizontal,
   Ticket,
+  Scissors,
+  Coffee,
+  Shirt,
+  Check,
 } from "lucide-react";
 import { ImportProductModal } from "@/components/products/import-product-modal";
 import { StockManagementModal } from "@/components/products/stock-management-modal";
@@ -90,6 +94,12 @@ export function ProductClient({
   const [unit, setUnit] = useState("Pcs");
   const [wholesaleMinQty, setWholesaleMinQty] = useState<number | string>("");
   const [wholesalePrice, setWholesalePrice] = useState<number | string>("");
+  
+  // Vertical specific states
+  const [barberDuration, setBarberDuration] = useState<number | string>(30);
+  const [barberCommission, setBarberCommission] = useState<number | string>("");
+  const [laundryServiceUnit, setLaundryServiceUnit] = useState<string>("Kg");
+  const [laundryEstimate, setLaundryEstimate] = useState<string>("2 Hari");
 
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -97,24 +107,58 @@ export function ProductClient({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
 
-  const openAddModal = () => {
+  const hasBarbershopFlag = (data as any)?.verticalFlags?.isBarbershop ?? ((data as any)?.activeVertical === "BARBERSHOP");
+  const hasCafeFlag = (data as any)?.verticalFlags?.isCafe ?? ((data as any)?.activeVertical === "CAFE");
+  const hasLaundryFlag = (data as any)?.verticalFlags?.isLaundry ?? ((data as any)?.activeVertical === "LAUNDRY");
+  const hasRetailFlag = (data as any)?.verticalFlags?.isRetail ?? (!hasBarbershopFlag && !hasCafeFlag && !hasLaundryFlag);
+
+  const defaultVertical: "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" = hasBarbershopFlag
+    ? "BARBERSHOP"
+    : hasCafeFlag
+    ? "CAFE"
+    : hasLaundryFlag
+    ? "LAUNDRY"
+    : "RETAIL";
+
+  const [selectedFormVertical, setSelectedFormVertical] = useState<"BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL">(defaultVertical);
+  const [filterVerticalTab, setFilterVerticalTab] = useState<string>("ALL");
+
+  const isBarbershop = selectedFormVertical === "BARBERSHOP";
+  const isCafe = selectedFormVertical === "CAFE";
+  const isLaundry = selectedFormVertical === "LAUNDRY";
+  const isRetail = selectedFormVertical === "RETAIL";
+
+  const openAddModal = (verticalOverride?: any) => {
+    const activeV =
+      typeof verticalOverride === "string"
+        ? (verticalOverride as "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL")
+        : selectedFormVertical || defaultVertical;
+    setSelectedFormVertical(activeV);
     setEditItem(null);
     setName("");
-    setType("BARANG");
+    setType(activeV === "BARBERSHOP" || activeV === "LAUNDRY" ? "JASA" : "BARANG");
     setCategory("");
     setPrice("");
     setImageUrl("");
     setBarcode("");
-    setStockQty(10);
+    setStockQty(activeV === "BARBERSHOP" || activeV === "LAUNDRY" ? "" : 10);
     setMinStockAlert(5);
-    setUnit("Pcs");
+    setUnit(activeV === "CAFE" ? "Porsi" : activeV === "LAUNDRY" ? "Kg" : "Pcs");
     setWholesaleMinQty("");
     setWholesalePrice("");
+    setBarberDuration(30);
+    setBarberCommission("");
+    setLaundryServiceUnit("Kg");
+    setLaundryEstimate("2 Hari");
     setError(null);
     setShowModal(true);
   };
 
   const openEditModal = (p: any) => {
+    const pVertical: "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" =
+      p.attributes?.verticalType ||
+      (p.attributes?.durationMinutes ? "BARBERSHOP" : p.attributes?.serviceUnit || p.attributes?.estimateTime ? "LAUNDRY" : p.type === "JASA" ? "BARBERSHOP" : defaultVertical);
+    setSelectedFormVertical(pVertical);
     setEditItem(p);
     setName(p.name);
     setType(p.type);
@@ -124,9 +168,13 @@ export function ProductClient({
     setBarcode(p.barcode || "");
     setStockQty(p.stockQty ?? "");
     setMinStockAlert(p.minStockAlert ?? 5);
-    setUnit(p.attributes?.unit || "Pcs");
+    setUnit(p.attributes?.unit || (pVertical === "CAFE" ? "Porsi" : pVertical === "LAUNDRY" ? "Kg" : "Pcs"));
     setWholesaleMinQty(p.attributes?.wholesaleTiers?.[0]?.minQty || "");
     setWholesalePrice(p.attributes?.wholesaleTiers?.[0]?.price || "");
+    setBarberDuration(p.attributes?.durationMinutes || 30);
+    setBarberCommission(p.attributes?.commissionPercent || "");
+    setLaundryServiceUnit(p.attributes?.serviceUnit || "Kg");
+    setLaundryEstimate(p.attributes?.estimateTime || "2 Hari");
     setError(null);
     setShowModal(true);
   };
@@ -152,8 +200,17 @@ export function ProductClient({
     setLoading(true);
 
     try {
-      const attributesPayload = {
-        unit: unit || "Pcs",
+      const attributesPayload: Record<string, any> = {
+        verticalType: selectedFormVertical,
+        unit: unit || (isCafe ? "Porsi" : isLaundry ? "Kg" : "Pcs"),
+        ...(isBarbershop && {
+          durationMinutes: Number(barberDuration || 30),
+          commissionPercent: barberCommission ? Number(barberCommission) : undefined,
+        }),
+        ...(isLaundry && {
+          serviceUnit: laundryServiceUnit || "Kg",
+          estimateTime: laundryEstimate || "2 Hari",
+        }),
         wholesaleTiers:
           wholesaleMinQty && wholesalePrice
             ? [
@@ -281,12 +338,27 @@ export function ProductClient({
     const matchLowStock =
       !filterLowStockOnly ||
       (p.type === "BARANG" && (p.stockQty ?? 0) <= (p.minStockAlert ?? 5));
+    
+    let matchVertical = true;
+    if (filterVerticalTab !== "ALL") {
+      const pV =
+        p.attributes?.verticalType ||
+        (p.attributes?.durationMinutes
+          ? "BARBERSHOP"
+          : p.attributes?.serviceUnit || p.attributes?.estimateTime
+          ? "LAUNDRY"
+          : p.type === "JASA"
+          ? "BARBERSHOP"
+          : "RETAIL");
+      matchVertical = pV === filterVerticalTab;
+    }
+
     const query = searchQuery.toLowerCase();
     const matchSearch =
       p.name.toLowerCase().includes(query) ||
       (p.barcode && p.barcode.toLowerCase().includes(query)) ||
       (p.category && p.category.toLowerCase().includes(query));
-    return matchType && matchCat && matchLowStock && matchSearch;
+    return matchType && matchCat && matchLowStock && matchVertical && matchSearch;
   });
 
   return (
@@ -412,35 +484,98 @@ export function ProductClient({
           {/* Action Header & Filters */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              {/* Type Tabs */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
-                <button
-                  onClick={() => setFilterType("ALL")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterType === "ALL"
-                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                    }`}
-                >
-                  {tr("Semua")}
-                </button>
-                <button
-                  onClick={() => setFilterType("BARANG")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterType === "BARANG"
-                      ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                    }`}
-                >
-                  {tr("Barang")}
-                </button>
-                <button
-                  onClick={() => setFilterType("JASA")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterType === "JASA"
-                      ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                    }`}
-                >
-                  {tr("Jasa")}
-                </button>
+              {/* Type Tabs & Vertical Tabs */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
+                  <button
+                    onClick={() => setFilterType("ALL")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterType === "ALL"
+                        ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                  >
+                    {tr("Semua")}
+                  </button>
+                  <button
+                    onClick={() => setFilterType("BARANG")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterType === "BARANG"
+                        ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                  >
+                    {tr("Barang")}
+                  </button>
+                  <button
+                    onClick={() => setFilterType("JASA")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterType === "JASA"
+                        ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                  >
+                    {tr("Jasa")}
+                  </button>
+                </div>
+
+                {/* Vertical Filter Tabs */}
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
+                  <button
+                    onClick={() => setFilterVerticalTab("ALL")}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterVerticalTab === "ALL"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                  >
+                    Semua Modul
+                  </button>
+                  {hasCafeFlag && (
+                    <button
+                      onClick={() => setFilterVerticalTab("CAFE")}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "CAFE"
+                          ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                    >
+                      <Coffee className="w-3 h-3" />
+                      <span>Kafe</span>
+                    </button>
+                  )}
+                  {hasBarbershopFlag && (
+                    <button
+                      onClick={() => setFilterVerticalTab("BARBERSHOP")}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "BARBERSHOP"
+                          ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                    >
+                      <Scissors className="w-3 h-3" />
+                      <span>Barber</span>
+                    </button>
+                  )}
+                  {hasLaundryFlag && (
+                    <button
+                      onClick={() => setFilterVerticalTab("LAUNDRY")}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "LAUNDRY"
+                          ? "bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                    >
+                      <Shirt className="w-3 h-3" />
+                      <span>Laundry</span>
+                    </button>
+                  )}
+                  {hasRetailFlag && (
+                    <button
+                      onClick={() => setFilterVerticalTab("RETAIL")}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "RETAIL"
+                          ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                    >
+                      <Package className="w-3 h-3" />
+                      <span>Retail</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}
@@ -693,24 +828,48 @@ export function ProductClient({
           {/* Modal Tambah / Edit Produk */}
           {showModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                      <Package className="w-4 h-4" />
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      isBarbershop 
+                        ? "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400" 
+                        : isCafe 
+                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400" 
+                        : isLaundry 
+                        ? "bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400" 
+                        : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400"
+                    }`}>
+                      {isBarbershop ? (
+                        <Scissors className="w-4 h-4" />
+                      ) : isCafe ? (
+                        <Coffee className="w-4 h-4" />
+                      ) : isLaundry ? (
+                        <Shirt className="w-4 h-4" />
+                      ) : (
+                        <Package className="w-4 h-4" />
+                      )}
                     </div>
                     <div>
                       <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                        {editItem ? tr("Edit Produk / Jasa") : tr("Tambah Produk / Jasa")}
+                        {editItem 
+                          ? (isBarbershop ? "Edit Layanan / Produk Barber" : isCafe ? "Edit Menu Makanan / Minuman" : isLaundry ? "Edit Layanan / Produk Laundry" : "Edit Produk Retail")
+                          : (isBarbershop ? "Tambah Layanan / Produk Barber" : isCafe ? "Tambah Menu Kafe & Resto" : isLaundry ? "Tambah Layanan Cuci Laundry" : "Tambah Produk Toko & Minimarket")}
                       </h3>
                       <p className="text-xs text-slate-500">
-                        {tr("Lengkapi rincian katalog item untuk kasir")}
+                        {isBarbershop
+                          ? "Katalog layanan pangkas, treatment, atau produk retail styling"
+                          : isCafe
+                          ? "Katalog sajian kuliner makanan, minuman, atau dessert kafe"
+                          : isLaundry
+                          ? "Katalog paket cuci kiloan, satuan, atau deterjen laundry"
+                          : "Katalog barang dagangan, sembako, dan harga grosir bertingkat"}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowModal(false)}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -723,11 +882,85 @@ export function ProductClient({
                   </div>
                 )}
 
+                {/* Selector Vertikal Form (Multi-Plugin Support) */}
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                  {hasCafeFlag && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFormVertical("CAFE");
+                        setUnit("Porsi");
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        selectedFormVertical === "CAFE"
+                          ? "bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Coffee className="w-3.5 h-3.5" />
+                      <span>Menu Kafe</span>
+                    </button>
+                  )}
+                  {hasBarbershopFlag && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFormVertical("BARBERSHOP");
+                        setType("JASA");
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        selectedFormVertical === "BARBERSHOP"
+                          ? "bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Scissors className="w-3.5 h-3.5" />
+                      <span>Barbershop</span>
+                    </button>
+                  )}
+                  {hasLaundryFlag && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFormVertical("LAUNDRY");
+                        setType("JASA");
+                        setUnit("Kg");
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        selectedFormVertical === "LAUNDRY"
+                          ? "bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Shirt className="w-3.5 h-3.5" />
+                      <span>Laundry</span>
+                    </button>
+                  )}
+                  {hasRetailFlag && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFormVertical("RETAIL");
+                        setType("BARANG");
+                        setUnit("Pcs");
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        selectedFormVertical === "RETAIL"
+                          ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Retail Mart</span>
+                    </button>
+                  )}
+                </div>
+
                 <form onSubmit={handleSave} className="space-y-3.5">
-                  {/* Foto Produk / Jasa */}
+                  {/* Foto Produk / Menu / Jasa */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                      {tr("Foto / Gambar Item (Opsional)")}
+                      {isCafe ? "Foto Menu (Opsional)" : isBarbershop ? "Foto Layanan / Model Rambut (Opsional)" : "Foto / Gambar Item (Opsional)"}
                     </label>
                     <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                       {imageUrl ? (
@@ -736,7 +969,7 @@ export function ProductClient({
                           <button
                             type="button"
                             onClick={() => setImageUrl("")}
-                            className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition"
+                            className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
                             title={tr("Hapus gambar")}
                           >
                             <X className="w-4 h-4" />
@@ -744,7 +977,7 @@ export function ProductClient({
                         </div>
                       ) : (
                         <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 flex-shrink-0">
-                          <Package className="w-5 h-5 opacity-40" />
+                          {isCafe ? <Coffee className="w-5 h-5 opacity-40" /> : isBarbershop ? <Scissors className="w-5 h-5 opacity-40" /> : <Package className="w-5 h-5 opacity-40" />}
                           <span className="text-[8px] font-bold mt-0.5">{tr("No Image")}</span>
                         </div>
                       )}
@@ -768,28 +1001,38 @@ export function ProductClient({
                           type="url"
                           value={imageUrl.startsWith("data:") ? "" : imageUrl}
                           onChange={(e) => setImageUrl(e.target.value)}
-                          placeholder="https://example.com/foto-produk.jpg"
+                          placeholder="https://example.com/foto-item.jpg"
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
                         />
                       </div>
                     </div>
                   </div>
 
+                  {/* Nama Item */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                      {tr("Nama Item")}
+                      {isBarbershop ? (type === "JASA" ? "Nama Layanan Pangkas / Treatment *" : "Nama Produk Styling / Pomade *") : isCafe ? "Nama Menu Makanan / Minuman *" : isLaundry ? "Nama Paket / Layanan Laundry *" : "Nama Produk Retail *"}
                     </label>
                     <input
                       type="text"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder={tr("Contoh: Potong Rambut Fade / Kopi Susu Aren / Pomade")}
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder={
+                        isBarbershop
+                          ? (type === "JASA" ? "Contoh: Potong Rambut Fade, Beard Trim, Creambath Mint" : "Contoh: Water-Based Pomade, Hair Tonic Ginseng")
+                          : isCafe
+                          ? "Contoh: Espresso Romano, Caffe Latte, Croissant Almond, Nasi Goreng"
+                          : isLaundry
+                          ? (type === "JASA" ? "Contoh: Cuci Kering Setrika Reguler, Cuci Kilat 3 Jam, Cuci Bedcover" : "Contoh: Deterjen Cair 1L, Parfum Laundry Lavender")
+                          : "Contoh: Minyak Goreng 2L, Beras Ramos 5kg, Sabun Cair"
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  {/* Tipe Item, Satuan (UOM), Kategori */}
+                  <div className={`grid gap-3 ${type === "JASA" && isBarbershop ? "grid-cols-2" : "grid-cols-3"}`}>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                         {tr("Tipe Item")}
@@ -797,33 +1040,86 @@ export function ProductClient({
                       <select
                         value={type}
                         onChange={(e) => setType(e.target.value as ProductType)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                       >
-                        <option value="BARANG">{tr("BARANG (Fisik)")}</option>
-                        <option value="JASA">{tr("JASA (Layanan)")}</option>
+                        {isBarbershop ? (
+                          <>
+                            <option value="JASA">💈 JASA (Pangkas / Perawatan)</option>
+                            <option value="BARANG">🧴 BARANG (Pomade / Produk Retail)</option>
+                          </>
+                        ) : isCafe ? (
+                          <>
+                            <option value="BARANG">☕ MENU (Makanan / Minuman)</option>
+                            <option value="JASA">🎪 LAYANAN (Event / Sewa Tempat)</option>
+                          </>
+                        ) : isLaundry ? (
+                          <>
+                            <option value="JASA">🧺 JASA (Cuci Kiloan / Satuan)</option>
+                            <option value="BARANG">🧴 BARANG (Deterjen / Parfum Retail)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="BARANG">📦 BARANG (Produk Fisik)</option>
+                            <option value="JASA">🛠️ JASA (Layanan / Ongkir)</option>
+                          </>
+                        )}
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                        {tr("Satuan (UOM)")}
-                      </label>
-                      <select
-                        value={unit}
-                        onChange={(e) => setUnit(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                      >
-                        <option value="Pcs">Pcs (Satuan)</option>
-                        <option value="Dus">Dus / Box</option>
-                        <option value="Lusin">Lusin (12 Pcs)</option>
-                        <option value="Pack">Pack</option>
-                        <option value="Botol">Botol</option>
-                        <option value="Bungkus">Bungkus</option>
-                        <option value="Kg">Kg (Kilogram)</option>
-                        <option value="Liter">Liter</option>
-                        <option value="Porsi">Porsi</option>
-                      </select>
-                    </div>
+                    {/* Satuan UOM - Hanya ditampilkan jika relevan */}
+                    {!(type === "JASA" && isBarbershop) && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          {isLaundry && type === "JASA" ? "Satuan Hitung" : isCafe ? "Satuan Saji" : "Satuan (UOM)"}
+                        </label>
+                        <select
+                          value={unit}
+                          onChange={(e) => setUnit(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-bold cursor-pointer"
+                        >
+                          {isCafe ? (
+                            <>
+                              <option value="Porsi">Porsi</option>
+                              <option value="Cup">Cup</option>
+                              <option value="Glass">Glass / Gelas</option>
+                              <option value="Slice">Slice / Potong</option>
+                              <option value="Pcs">Pcs</option>
+                              <option value="Bottle">Bottle / Botol</option>
+                              <option value="Plate">Plate / Piring</option>
+                            </>
+                          ) : isLaundry && type === "JASA" ? (
+                            <>
+                              <option value="Kg">Kg (Kilogram)</option>
+                              <option value="Pcs">Pcs (Satuan)</option>
+                              <option value="Pasang">Pasang (Sepatu)</option>
+                              <option value="m²">m² (Karpet/Gorden)</option>
+                              <option value="Lembar">Lembar (Selimut)</option>
+                            </>
+                          ) : isBarbershop && type === "BARANG" ? (
+                            <>
+                              <option value="Pcs">Pcs (Satuan)</option>
+                              <option value="Botol">Botol</option>
+                              <option value="Tub">Tub / Jar</option>
+                              <option value="Kaleng">Kaleng</option>
+                              <option value="Sachet">Sachet</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="Pcs">Pcs (Satuan)</option>
+                              <option value="Dus">Dus / Box</option>
+                              <option value="Lusin">Lusin (12 Pcs)</option>
+                              <option value="Pack">Pack</option>
+                              <option value="Botol">Botol</option>
+                              <option value="Bungkus">Bungkus</option>
+                              <option value="Kg">Kg (Kilogram)</option>
+                              <option value="Liter">Liter</option>
+                              <option value="Karton">Karton</option>
+                              <option value="Renteng">Renteng</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
@@ -833,27 +1129,192 @@ export function ProductClient({
                         type="text"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        placeholder={tr("Contoh: Sembako")}
+                        placeholder={
+                          isBarbershop
+                            ? (type === "JASA" ? "Contoh: Haircut, Treatment, Coloring" : "Contoh: Pomade, Styling, Hair Care")
+                            : isCafe
+                            ? "Contoh: Coffee, Non-Coffee, Snack"
+                            : isLaundry
+                            ? (type === "JASA" ? "Contoh: Kiloan, Satuan, Karpet" : "Contoh: Parfum, Deterjen")
+                            : "Contoh: Sembako, Minuman"
+                        }
                         className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
 
-                  {/* Pricing and Tiered Wholesale Section */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                        💰 Pengaturan Harga &amp; Grosir
-                      </span>
-                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                        Retail Modern Pricing
-                      </span>
-                    </div>
+                  {/* Section Harga & Parameter Vertikal */}
+                  {isRetail ? (
+                    /* RETAIL: PENGATURAN HARGA & GROSIR BERTINGKAT */
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          💰 Pengaturan Harga &amp; Grosir
+                        </span>
+                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
+                          Retail Modern Pricing
+                        </span>
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            Harga Satuan Normal (Rp) *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            placeholder="35000"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Minimal Beli Grosir">
+                              Min Qty Grosir
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={wholesaleMinQty}
+                              onChange={(e) => setWholesaleMinQty(e.target.value)}
+                              placeholder="Mis: 6"
+                              className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Harga Grosir per Satuan">
+                              Harga Grosir (Rp)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={wholesalePrice}
+                              onChange={(e) => setWholesalePrice(e.target.value)}
+                              placeholder="Mis: 30000"
+                              className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : isBarbershop && type === "JASA" ? (
+                    /* BARBERSHOP JASA: TARIF, DURASI & KOMISI KAPSTER */
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <Scissors className="w-3.5 h-3.5" />
+                          <span>Tarif Layanan &amp; Durasi Pangkas</span>
+                        </span>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                          Barber Service Parameter
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Tarif Jasa (Rp) *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            placeholder="50000"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Durasi (Menit)
+                          </label>
+                          <input
+                            type="number"
+                            min={5}
+                            step={5}
+                            value={barberDuration}
+                            onChange={(e) => setBarberDuration(e.target.value)}
+                            placeholder="30"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 truncate" title="Komisi Staf / Kapster">
+                            Komisi Kapster (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={barberCommission}
+                            onChange={(e) => setBarberCommission(e.target.value)}
+                            placeholder="Contoh: 10"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : isLaundry && type === "JASA" ? (
+                    /* LAUNDRY JASA: TARIF & ESTIMASI SELESAI */
+                    <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-cyan-800 dark:text-cyan-300 flex items-center gap-1.5">
+                          <Shirt className="w-3.5 h-3.5" />
+                          <span>Tarif Layanan &amp; Waktu Pengerjaan</span>
+                        </span>
+                        <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">
+                          Laundry Service Rate
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Tarif per {unit || "Kg"} (Rp) *
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            placeholder="8000"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Estimasi Selesai
+                          </label>
+                          <select
+                            value={laundryEstimate}
+                            onChange={(e) => setLaundryEstimate(e.target.value)}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+                          >
+                            <option value="2 Hari">2 Hari (Reguler)</option>
+                            <option value="1 Hari">1 Hari (Next Day)</option>
+                            <option value="3 Jam">3 Jam (Super Express)</option>
+                            <option value="6 Jam">6 Jam (Same Day)</option>
+                            <option value="3 Hari">3 Hari (Karpet / Khusus)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* CAFE & STANDAR PRODUK FISIK: HARGA SATUAN BERSIH */
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                          Harga Satuan Normal (Rp) *
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          {isCafe ? `Harga Menu per ${unit || "Porsi"} (Rp) *` : `Harga Jual per ${unit || "Pcs"} (Rp) *`}
                         </label>
                         <input
                           type="number"
@@ -861,116 +1322,87 @@ export function ProductClient({
                           min={0}
                           value={price}
                           onChange={(e) => setPrice(e.target.value)}
-                          placeholder="35000"
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder={isCafe ? "28000" : "50000"}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Minimal Beli Grosir">
-                            Min Qty Grosir
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={wholesaleMinQty}
-                            onChange={(e) => setWholesaleMinQty(e.target.value)}
-                            placeholder="Mis: 6"
-                            className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-1 truncate" title="Harga Grosir per Satuan">
-                            Harga Grosir (Rp)
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={wholesalePrice}
-                            onChange={(e) => setWholesalePrice(e.target.value)}
-                            placeholder="Mis: 30000"
-                            className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none"
-                          />
-                        </div>
-                      </div>
                     </div>
-                  </div>
+                  )}
 
-                    {type === "BARANG" ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                            {tr("Jumlah Stok")}
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={stockQty}
-                            onChange={(e) => setStockQty(e.target.value)}
-                            placeholder={tr("Contoh: 50")}
-                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            <span>{tr("Batas Minimum Alert")}</span>
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={minStockAlert}
-                            onChange={(e) => setMinStockAlert(e.target.value)}
-                            placeholder={tr("Contoh: 5")}
-                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                          />
-                        </div>
-                      </div>
-                    ) : (
+                  {/* Bagian Stok & Alert Minimum */}
+                  {type === "BARANG" ? (
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          {tr("Jumlah Stok")}
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          {isCafe ? "Stok Porsi Terbatas (Opsional)" : tr("Jumlah Stok")}
                         </label>
-                        <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 italic">
-                          {tr("Tidak berlaku untuk JASA")}
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={stockQty}
+                          onChange={(e) => setStockQty(e.target.value)}
+                          placeholder={isCafe ? "Kosongkan jika selalu sedia" : tr("Contoh: 50")}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
                       </div>
-                    )}
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                        {tr("Barcode / SKU (Opsional)")}
-                      </label>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <ScanLine className="w-3 h-3" /> {tr("Scanner keyboard ready")}
-                      </span>
+                      <div>
+                        <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>{tr("Batas Minimum Alert")}</span>
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={minStockAlert}
+                          onChange={(e) => setMinStockAlert(e.target.value)}
+                          placeholder={tr("Contoh: 5")}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      placeholder={tr("Scan atau ketik kode barcode SKU...")}
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center gap-2 text-slate-500 text-xs">
+                      <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <span>Layanan Jasa / Kerja kasir tidak memerlukan kuantitas stok gudang fisik.</span>
+                    </div>
+                  )}
+
+                  {/* Barcode SKU - Hanya tampil jika BARANG atau RETAIL */}
+                  {(type === "BARANG" || isRetail) && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          {tr("Barcode / SKU (Opsional)")}
+                        </label>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <ScanLine className="w-3 h-3" /> {tr("Scanner keyboard ready")}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={barcode}
+                        onChange={(e) => setBarcode(e.target.value)}
+                        placeholder={tr("Scan atau ketik kode barcode SKU...")}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={() => setShowModal(false)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
                     >
                       {tr("Batal")}
                     </button>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50 transition flex items-center gap-2"
+                      className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50 transition flex items-center gap-2 cursor-pointer"
                     >
                       {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {editItem ? tr("Simpan Perubahan") : tr("Tambah Produk")}
+                      {editItem ? tr("Simpan Perubahan") : (isBarbershop && type === "JASA" ? "Tambah Layanan Barber" : isCafe ? "Tambah Menu Kafe" : isLaundry && type === "JASA" ? "Tambah Layanan Cuci" : tr("Tambah Produk"))}
                     </button>
                   </div>
                 </form>

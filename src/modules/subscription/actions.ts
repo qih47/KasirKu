@@ -10,12 +10,21 @@ import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/dura
 
 export type BillingCycle = "MONTHLY" | "ANNUAL";
 
-async function requireOwner() {
+interface AuthenticatedOwner {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+}
+
+async function requireOwner(): Promise<AuthenticatedOwner> {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "OWNER") {
+  const user = session?.user as unknown as AuthenticatedOwner | undefined;
+  if (!session || user?.role !== "OWNER" || !user?.tenantId) {
     throw new Error("Akses ditolak: Hanya Owner yang dapat mengelola lisensi & langganan.");
   }
-  return session.user as any;
+  return user;
 }
 
 export async function getSubscriptionData() {
@@ -47,7 +56,7 @@ export async function getSubscriptionData() {
 
   // Urutkan tier: Basic -> Pro -> Enterprise
   const tierOrder: Record<string, number> = { basic: 1, pro: 2, enterprise: 3 };
-  availableTiers.sort((a, b) => (tierOrder[a.code.toLowerCase()] || 99) - (tierOrder[b.code.toLowerCase()] || 99));
+  availableTiers.sort((a: any, b: any) => (tierOrder[a.code.toLowerCase()] || 99) - (tierOrder[b.code.toLowerCase()] || 99));
 
 
   const activeSub = tenant.subscriptions[0];
@@ -69,12 +78,12 @@ export async function getSubscriptionData() {
   const cashiersUsed = tenant.users.length;
 
   const currentTier = activeSub?.licenseTier || availableTiers[0];
-  let activePluginIds = activeSub?.plugins.map((p: any) => p.pluginId) || [];
+  let activePluginIds = (activeSub?.plugins || []).map((p: any) => p.pluginId);
 
   if (activePluginIds.length === 0 && availablePlugins.length > 0) {
     const nameLower = tenant.businessName.toLowerCase();
     const defaultPlugin =
-      availablePlugins.find((p) => {
+      availablePlugins.find((p: any) => {
         const code = p.code.toLowerCase();
         if (nameLower.includes("cafe") || nameLower.includes("kopi") || nameLower.includes("coffee")) return code.includes("cafe");
         if (nameLower.includes("barber") || nameLower.includes("potong")) return code.includes("barber");
@@ -88,7 +97,7 @@ export async function getSubscriptionData() {
     }
   }
 
-  const activePlugins = availablePlugins.filter((p) => activePluginIds.includes(p.id));
+  const activePlugins = availablePlugins.filter((p: any) => activePluginIds.includes(p.id));
 
   // Ambil pengaturan diskon durasi dinamis dari database (PlatformSetting)
   const durationSettings = await getSubscriptionDurationSettingsAction();
@@ -131,7 +140,7 @@ export async function upgradeSubscriptionAction(data: {
   selectedPluginIds: string[];
 }) {
   const user = await requireOwner();
-  const { licenseTierId, selectedPluginIds } = data;
+  let { licenseTierId, selectedPluginIds } = data;
   const durationMonths = Number(data.durationMonths) || (data.billingCycle === "ANNUAL" ? 12 : 1);
   const durationKey = data.durationKey || (durationMonths >= 12 ? (durationMonths === 12 ? "1Y" : durationMonths === 24 ? "2Y" : "3Y") : durationMonths === 6 ? "6M" : durationMonths === 3 ? "3M" : "1M");
   const billingCycle: BillingCycle = durationMonths >= 12 ? "ANNUAL" : "MONTHLY";
@@ -141,6 +150,12 @@ export async function upgradeSubscriptionAction(data: {
   });
 
   if (!targetTier) throw new Error("Lisensi tidak ditemukan.");
+
+  // Validasi Aturan Vertikal: Basic hanya boleh 1 vertikal
+  const isBasicTier = targetTier.code.toLowerCase() === "basic";
+  if (isBasicTier && selectedPluginIds.length > 1) {
+    selectedPluginIds = [selectedPluginIds[0]];
+  }
 
   const now = new Date();
   const periodEnd = addMonths(now, durationMonths);
@@ -177,7 +192,24 @@ export async function upgradeSubscriptionAction(data: {
       });
     }
 
-    // 4. Ubah status Tenant menjadi ACTIVE
+    // 4. Jika downgrade ke Basic (limit 1 outlet), pastikan hanya 1 outlet utama yang aktif
+    if (isBasicTier && targetTier.outletLimit === 1) {
+      const outlets = await tx.outlet.findMany({
+        where: { tenantId: user.tenantId },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (outlets.length > 1) {
+        // Biarkan outlet pertama aktif, nonaktifkan outlet kedua dst
+        const extraOutletIds = outlets.slice(1).map((o: any) => o.id);
+        await tx.outlet.updateMany({
+          where: { id: { in: extraOutletIds } },
+          data: { isActive: false },
+        });
+      }
+    }
+
+    // 5. Ubah status Tenant menjadi ACTIVE
     await tx.tenant.update({
       where: { id: user.tenantId },
       data: {

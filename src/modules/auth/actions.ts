@@ -35,8 +35,49 @@ export interface RegisterResult {
   otpCode?: string;
 }
 
-// Global in-memory OTP Store (Email -> { otp: string, expiresAt: number, phone?: string })
-const otpStore = new Map<string, { otp: string; expiresAt: number; phone?: string; createdAt: number }>();
+// Global in-memory OTP Store fallback
+const memoryOtpStore = new Map<string, { otp: string; expiresAt: number; phone?: string; createdAt: number }>();
+
+async function saveOtp(email: string, data: { otp: string; expiresAt: number; phone?: string; createdAt: number }) {
+  memoryOtpStore.set(email, data);
+  try {
+    const key = `otp_${email}`;
+    await (prisma.platformSetting as any).upsert({
+      where: { key },
+      update: { value: data },
+      create: { key, value: data },
+    });
+  } catch (err) {
+    console.warn("Could not persist OTP to database, using memory fallback:", err);
+  }
+}
+
+async function getOtp(email: string): Promise<{ otp: string; expiresAt: number; phone?: string; createdAt: number } | null> {
+  try {
+    const key = `otp_${email}`;
+    const record = await (prisma.platformSetting as any).findUnique({
+      where: { key },
+    });
+    if (record && record.value) {
+      return record.value as any;
+    }
+  } catch (err) {
+    console.warn("Could not read OTP from database, checking memory fallback:", err);
+  }
+  return memoryOtpStore.get(email) || null;
+}
+
+async function removeOtp(email: string) {
+  memoryOtpStore.delete(email);
+  try {
+    const key = `otp_${email}`;
+    await (prisma.platformSetting as any).delete({
+      where: { key },
+    }).catch(() => {});
+  } catch (err) {
+    // Ignore error
+  }
+}
 
 /**
  * 1. Kirim Kode OTP 6-Digit ke Email & WhatsApp Calon Merchant
@@ -74,7 +115,7 @@ export async function sendRegistrationOtpAction(data: {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 10 * 60 * 1000; // Berlaku 10 menit
 
-  otpStore.set(normalizedEmail, {
+  await saveOtp(normalizedEmail, {
     otp,
     expiresAt,
     phone,
@@ -127,10 +168,17 @@ export async function verifyOtpAndRegisterTenant(
     };
   }
 
+  if (!otpCode || !otpCode.trim()) {
+    return {
+      success: false,
+      message: "Kode verifikasi OTP wajib diisi.",
+    };
+  }
+
   const normalizedEmail = email.toLowerCase().trim();
 
   // Validasi Kode OTP
-  const record = otpStore.get(normalizedEmail);
+  const record = await getOtp(normalizedEmail);
   if (!record) {
     return {
       success: false,
@@ -139,7 +187,7 @@ export async function verifyOtpAndRegisterTenant(
   }
 
   if (Date.now() > record.expiresAt) {
-    otpStore.delete(normalizedEmail);
+    await removeOtp(normalizedEmail);
     return {
       success: false,
       message: "Kode verifikasi telah kedaluwarsa. Silakan kirim ulang kode.",
@@ -154,7 +202,7 @@ export async function verifyOtpAndRegisterTenant(
   }
 
   // OTP Valid -> Hapus dari store agar tidak bisa dipakai ulang
-  otpStore.delete(normalizedEmail);
+  await removeOtp(normalizedEmail);
 
   try {
     const existingUser = await prisma.user.findFirst({
@@ -299,157 +347,6 @@ export async function verifyOtpAndRegisterTenant(
         },
       });
 
-      // 6. Injeksi Produk Demo Awal Sesuai Bidang Usaha
-      if (vCode === "barbershop") {
-        await tx.product.createMany({
-          data: [
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Gentleman Haircut & Wash",
-              barcode: "BARBER-01",
-              category: "Haircut",
-              type: "JASA",
-              price: 50000,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Beard Shaving & Hot Towel",
-              barcode: "BARBER-02",
-              category: "Treatment",
-              type: "JASA",
-              price: 35000,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Pomade Oil-Based Matte",
-              barcode: "PROD-01",
-              category: "Produk",
-              type: "BARANG",
-              price: 85000,
-              stockQty: 24,
-              isActive: true,
-            },
-          ],
-        });
-      } else if (vCode === "retail") {
-        await tx.product.createMany({
-          data: [
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Minyak Goreng Sania 2L",
-              barcode: "899234511001",
-              category: "Sembako",
-              type: "BARANG",
-              price: 34000,
-              stockQty: 45,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Beras Pandan Wangi 5Kg",
-              barcode: "899234511002",
-              category: "Sembako",
-              type: "BARANG",
-              price: 78000,
-              stockQty: 20,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Air Mineral Botol 600ml",
-              barcode: "899234511003",
-              category: "Minuman",
-              type: "BARANG",
-              price: 3500,
-              stockQty: 120,
-              isActive: true,
-            },
-          ],
-        });
-      } else if (vCode === "laundry") {
-        await tx.product.createMany({
-          data: [
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Cuci Kering Lipat Reguler (Kg)",
-              barcode: "LAUNDRY-01",
-              category: "Kiloan",
-              type: "JASA",
-              price: 7000,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Cuci Setrika Express (Kg)",
-              barcode: "LAUNDRY-02",
-              category: "Kiloan Express",
-              type: "JASA",
-              price: 12000,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Bed Cover Besar Satuan",
-              barcode: "LAUNDRY-03",
-              category: "Satuan",
-              type: "JASA",
-              price: 30000,
-              isActive: true,
-            },
-          ],
-        });
-      } else {
-        // Cafe & F&B
-        await tx.product.createMany({
-          data: [
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Kopi Susu Gula Aren",
-              barcode: "CAFE-01",
-              category: "Coffee",
-              type: "BARANG",
-              price: 22000,
-              stockQty: 100,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Iced Caramel Macchiato",
-              barcode: "CAFE-02",
-              category: "Coffee",
-              type: "BARANG",
-              price: 28000,
-              stockQty: 80,
-              isActive: true,
-            },
-            {
-              tenantId: tenant.id,
-              outletId: outlet.id,
-              name: "Butter Croissant",
-              barcode: "CAFE-03",
-              category: "Pastry",
-              type: "BARANG",
-              price: 24000,
-              stockQty: 30,
-              isActive: true,
-            },
-          ],
-        });
-      }
-
       return { tenant, user };
     });
 
@@ -473,7 +370,7 @@ export async function verifyOtpAndRegisterTenant(
 export async function registerTenantAndOwner(data: any): Promise<any> {
   return verifyOtpAndRegisterTenant({
     ...data,
-    otpCode: data.otpCode || "123456",
+    otpCode: data.otpCode || "",
   });
 }
 

@@ -11,7 +11,7 @@ export interface DashboardWidgetItem {
 export interface WidgetDefinition {
   key: string;
   title: string;
-  category: "SUMMARY" | "CHART" | "UTILITY" | "VERTICAL";
+  category: "SUMMARY" | "CHART" | "UTILITY" | "VERTICAL" | "MULTI_OUTLET" | "FINANCIAL";
   description: string;
   defaultColSpan: WidgetColSpan;
   allowedColSpans: WidgetColSpan[];

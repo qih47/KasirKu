@@ -9,13 +9,22 @@ import { startOfDay, endOfDay, subDays, format } from "date-fns";
 
 export type BookingStatusType = "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
-async function requireTenantBarbershopUser() {
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireTenantBarbershopUser(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
-  const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "barbershop");
   if (!isPluginActive) {
     throw new Error(
@@ -71,6 +80,9 @@ export async function getBarbershopQueueData(explicitOutletId?: string) {
         tenantId: user.tenantId,
         type: "JASA",
         isActive: true,
+        NOT: {
+          category: { in: ["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean", "Setrika"] },
+        },
       },
       orderBy: { name: "asc" },
     }),
@@ -80,9 +92,9 @@ export async function getBarbershopQueueData(explicitOutletId?: string) {
     }),
   ]);
 
-  const waitingList = bookings.filter((b) => b.status === "WAITING");
-  const inProgressList = bookings.filter((b) => b.status === "IN_PROGRESS");
-  const completedList = bookings.filter((b) => b.status === "COMPLETED");
+  const waitingList = (bookings as any[]).filter((b: any) => b.status === "WAITING");
+  const inProgressList = (bookings as any[]).filter((b: any) => b.status === "IN_PROGRESS");
+  const completedList = (bookings as any[]).filter((b: any) => b.status === "COMPLETED");
 
   return {
     bookings,
@@ -272,8 +284,8 @@ export async function getBarberCommissionsReport(params?: {
     }),
   ]);
 
-  const totalCommissionsPaid = commissions.reduce(
-    (sum, c) => sum + Number(c.amount),
+  const totalCommissionsPaid = (commissions as any[]).reduce(
+    (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
 
@@ -283,7 +295,7 @@ export async function getBarberCommissionsReport(params?: {
     { id: string; name: string; email: string; totalServices: number; totalCommission: number }
   > = {};
 
-  barbers.forEach((b) => {
+  (barbers as any[]).forEach((b: any) => {
     barberSummaryMap[b.id] = {
       id: b.id,
       name: b.name,
@@ -293,15 +305,15 @@ export async function getBarberCommissionsReport(params?: {
     };
   });
 
-  commissions.forEach((c) => {
+  (commissions as any[]).forEach((c: any) => {
     if (barberSummaryMap[c.staffId]) {
       barberSummaryMap[c.staffId].totalServices += 1;
-      barberSummaryMap[c.staffId].totalCommission += Number(c.amount);
+      barberSummaryMap[c.staffId].totalCommission += Number(c.amount || 0);
     }
   });
 
   const barberSummaryList = Object.values(barberSummaryMap).sort(
-    (a, b) => b.totalCommission - a.totalCommission
+    (a: any, b: any) => Number(b.totalCommission || 0) - Number(a.totalCommission || 0)
   );
 
   return {

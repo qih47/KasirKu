@@ -25,7 +25,7 @@ async function requireSuperAdmin() {
  */
 export async function getTrialConfigurationAction(): Promise<TrialConfiguration> {
   try {
-    const setting = await prisma.platformSetting.findUnique({
+    const setting = await (prisma as any).platformSetting.findUnique({
       where: { key: TRIAL_CONFIG_KEY },
     });
 
@@ -79,7 +79,7 @@ export async function updateTrialConfigurationAction(config: Partial<TrialConfig
   const jsonStr = JSON.stringify(sanitized);
 
   try {
-    await prisma.platformSetting.upsert({
+    await (prisma as any).platformSetting.upsert({
       where: { key: TRIAL_CONFIG_KEY },
       create: {
         key: TRIAL_CONFIG_KEY,

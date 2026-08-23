@@ -222,18 +222,18 @@ export function CatalogClient({
       if (res.success && res.item) {
         if (res.type === "THEME") {
           setThemes((prev) => {
-            const exists = prev.some((t) => t.id === res.item.id);
+            const exists = prev.some((t: any) => t.id === res.item.id);
             if (exists) {
-              return prev.map((t) => (t.id === res.item.id ? res.item : t));
+              return prev.map((t: any) => (t.id === res.item.id ? res.item : t));
             }
             return [res.item, ...prev];
           });
           setTab("THEMES");
         } else if (res.type === "PLUGIN") {
           setPlugins((prev) => {
-            const exists = prev.some((p) => p.id === res.item.id);
+            const exists = prev.some((p: any) => p.id === res.item.id);
             if (exists) {
-              return prev.map((p) => (p.id === res.item.id ? res.item : p));
+              return prev.map((p: any) => (p.id === res.item.id ? res.item : p));
             }
             return [res.item, ...prev];
           });
@@ -270,12 +270,12 @@ export function CatalogClient({
   // License Handlers
   const handleLicenseChange = (id: string, field: string, value: any) => {
     setLicenses((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+      prev.map((l: any) => (l.id === id ? { ...l, [field]: value } : l))
     );
   };
 
   const handleCalcAnnualLicense = (id: string) => {
-    const item = licenses.find((l) => l.id === id);
+    const item = licenses.find((l: any) => l.id === id);
     if (!item) return;
     const disc = getDiscount(id, 17);
     const monthly = Number(item.priceMonthly) || 0;
@@ -308,12 +308,12 @@ export function CatalogClient({
   // Plugin Handlers
   const handlePluginChange = (id: string, field: string, value: any) => {
     setPlugins((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+      prev.map((p: any) => (p.id === id ? { ...p, [field]: value } : p))
     );
   };
 
   const handleCalcAnnualPlugin = (id: string) => {
-    const item = plugins.find((p) => p.id === id);
+    const item = plugins.find((p: any) => p.id === id);
     if (!item) return;
     const disc = getDiscount(id, 17);
     const monthly = Number(item.priceMonthly) || 0;
@@ -360,7 +360,7 @@ export function CatalogClient({
   // Theme Handlers
   const handleThemeChange = (id: string, field: string, value: any) => {
     setThemes((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+      prev.map((t: any) => (t.id === id ? { ...t, [field]: value } : t))
     );
   };
 
@@ -568,7 +568,7 @@ export function CatalogClient({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {licenses.map((l) => {
+            {licenses.map((l: any) => {
               const isLoading = loadingId === l.id;
               return (
                 <div
@@ -585,18 +585,15 @@ export function CatalogClient({
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-semibold uppercase text-slate-400 mb-1">
-                          {tr("Nama Lisensi")}
-                        </label>
+                        <label className="text-[11px] text-slate-400 font-medium">Nama Paket Lisensi</label>
                         <input
                           type="text"
                           value={l.name}
                           onChange={(e) => handleLicenseChange(l.id, "name", e.target.value)}
-                          className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
 
-                      {/* Harga Bulanan & Input Diskon Tahunan Custom */}
                       <div className="grid grid-cols-2 gap-2.5">
                         <div>
                           <label className="block text-[11px] font-semibold uppercase text-slate-400 mb-1">

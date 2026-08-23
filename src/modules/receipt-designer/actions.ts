@@ -81,8 +81,8 @@ export async function getReceiptDesignerData() {
   // Check if receipt_designer plugin is active in tenant's subscription
   const hasDesignerPlugin = Boolean(
     isTrial ||
-      activeSub?.plugins?.some(
-        (tp) => tp.plugin?.code === "receipt_designer" && tp.isActive
+      ((activeSub?.plugins || []) as any[]).some(
+        (tp: any) => tp.plugin?.code === "receipt_designer" && tp.isActive
       ) ||
       activeSub?.licenseTier?.code === "enterprise"
   );
@@ -132,12 +132,14 @@ export async function saveReceiptDesignAction(config: Partial<ReceiptConfig>) {
   await prisma.tenant.update({
     where: { id: user.tenantId },
     data: {
+      logoUrl: config.logoUrl !== undefined ? config.logoUrl : tenant.logoUrl,
       receiptConfig: updatedConfig as any,
     },
   });
 
   revalidatePath("/dashboard/receipt-designer");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard");
   revalidatePath("/pos");
 
   return { success: true };

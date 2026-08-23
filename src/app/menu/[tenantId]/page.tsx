@@ -68,7 +68,7 @@ export default async function CustomerMenuPage({
   // Tentukan target outlet berdasarkan QR query param ?outlet=[id]
   const targetOutlet =
     (searchParams?.outlet
-      ? tenant.outlets.find((o) => o.id === searchParams.outlet)
+      ? (tenant.outlets as any[]).find((o: any) => o.id === searchParams.outlet)
       : null) ||
     tenant.outlets[0] ||
     null;
@@ -102,13 +102,13 @@ export default async function CustomerMenuPage({
         outletId: targetOutlet?.id || "",
         outletName: targetOutlet?.name || "Outlet Utama",
       }}
-      tables={tables.map((t) => ({
+      tables={(tables as any[]).map((t: any) => ({
         id: t.id,
         tableNumber: t.tableNumber,
         status: t.status,
       }))}
       initialTableQuery={searchParams?.table}
-      products={products.map((p) => ({
+      products={(products as any[]).map((p: any) => ({
         id: p.id,
         name: p.name,
         price: Number(p.price),

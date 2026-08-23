@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       const baseOriginal = originalName.replace(/\.[^/.]+$/, "").toLowerCase().trim();
       const baseSanitized = sanitizedName.replace(/\.[^/.]+$/, "").toLowerCase().trim();
 
-      const matchedProduct = tenantProducts.find((p) => {
+      const matchedProduct = (tenantProducts as any[]).find((p: any) => {
         if (p.imageUrl) {
           const pImgBase = p.imageUrl.split("/").pop()?.replace(/\.[^/.]+$/, "").toLowerCase();
           if (pImgBase === baseOriginal || pImgBase === baseSanitized || p.imageUrl === originalName) {

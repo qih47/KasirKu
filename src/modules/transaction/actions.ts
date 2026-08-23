@@ -5,15 +5,42 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { calculateItemCommission } from "@/modules/commission/commission-engine";
+import { deductRecipeIngredients } from "@/modules/product/recipe-actions";
 
 export type PaymentMethod = "CASH" | "QRIS" | "TRANSFER" | "CARD";
 
-async function requireCashierOrOwner() {
+type TransactionWhereInput = Record<string, any>;
+
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireCashierOrOwner(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis/kasir.");
   }
-  return session.user as any;
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { status: true },
+  });
+
+  if (!tenant) {
+    throw new Error("Akun Bisnis tidak ditemukan.");
+  }
+
+  if (tenant.status === "LOCKED" || tenant.status === "FROZEN") {
+    throw new Error("Akun Bisnis sedang dikunci atau dibekukan. Silakan perbarui paket langganan Anda.");
+  }
+
+  return user;
 }
 
 export interface CartItemInput {
@@ -40,8 +67,8 @@ export interface VoucherValidationResult {
 }
 
 export async function verifyVoucherAction(code: string, subtotal: number): Promise<VoucherValidationResult> {
-  const session = await getServerSession(authOptions);
-  const tenantId = (session?.user as any)?.tenantId;
+  const user = await requireCashierOrOwner();
+  const tenantId = user.tenantId;
   const normalized = code.trim().toUpperCase().replace(/\s+/g, "");
   const now = new Date();
 
@@ -186,7 +213,16 @@ export async function createTransactionAction(data: {
     subtotalAmount - finalDiscountAmount + Number(taxAmount || 0) + Number(serviceCharge || 0)
   );
 
-  if (amountPaid < totalAmount) {
+  if (splitPayments && splitPayments.length > 0) {
+    const splitSum = (splitPayments as any[]).reduce((sum: number, sp: any) => sum + Number(sp.amount || 0), 0);
+    if (splitSum < totalAmount) {
+      throw new Error(
+        `Total pembayaran multi-metode (Rp ${splitSum.toLocaleString(
+          "id-ID"
+        )}) kurang dari total tagihan (Rp ${totalAmount.toLocaleString("id-ID")}).`
+      );
+    }
+  } else if (amountPaid < totalAmount) {
     throw new Error(
       `Uang yang dibayarkan (Rp ${amountPaid.toLocaleString(
         "id-ID"
@@ -201,20 +237,39 @@ export async function createTransactionAction(data: {
 
   // Eksekusi atomic transaction
   const result = await prisma.$transaction(async (tx: any) => {
-    // 1. Buat Header Transaksi shift masih aktif
-    const shift = await tx.shift.findUnique({
-      where: { id: shiftId },
-    });
+    // 1. Ambil atau pastikan shift kasir aktif
+    let activeShiftId = shiftId;
+    let shift = shiftId ? await tx.shift.findUnique({ where: { id: shiftId } }) : null;
 
     if (!shift || shift.closedAt !== null) {
-      throw new Error("Shift kasir sudah ditutup. Tidak dapat memproses transaksi.");
+      // Cari shift yang masih terbuka untuk outlet dan user kasir ini
+      const openShift = await tx.shift.findFirst({
+        where: { outletId, kasirId: user.id, closedAt: null },
+        orderBy: { openedAt: "desc" },
+      });
+
+      if (openShift) {
+        shift = openShift;
+        activeShiftId = openShift.id;
+      } else {
+        // Otomatis buka sesi shift cepat baru
+        const newShift = await tx.shift.create({
+          data: {
+            outletId,
+            kasirId: user.id,
+            openingCash: 0,
+          },
+        });
+        shift = newShift;
+        activeShiftId = newShift.id;
+      }
     }
 
     // 2. Buat record Transaksi utama dengan detail diskon & pajak
     const newTransaction = await tx.transaction.create({
       data: {
         outletId,
-        shiftId,
+        shiftId: activeShiftId,
         customerId: customerId || null,
         transactionNumber,
         subtotalAmount,
@@ -231,7 +286,7 @@ export async function createTransactionAction(data: {
 
     // 2b. Jika ada customerId, akumulasikan statistik pelanggan (visits & totalSpent)
     if (customerId) {
-      await (tx as any).customer.update({
+      await tx.customer.update({
         where: { id: customerId },
         data: {
           visits: { increment: 1 },
@@ -248,7 +303,7 @@ export async function createTransactionAction(data: {
         select: { tenantId: true },
       });
       if (outletData?.tenantId) {
-        await (tx as any).voucher.updateMany({
+        await tx.voucher.updateMany({
           where: {
             tenantId: outletData.tenantId,
             code: voucherCode.trim().toUpperCase().replace(/\s+/g, ""),
@@ -278,48 +333,53 @@ export async function createTransactionAction(data: {
 
     // 4. Simpan item-item transaksi & update stok barang
     for (const item of items) {
-      const product = productMap.get(item.productId);
+      const product: any = productMap.get(item.productId);
 
       if (!product) {
         throw new Error(`Produk "${item.name}" tidak ditemukan.`);
       }
 
-      // Kurangi stok di OutletStock & catat pergerakan StockMovement jika bertipe BARANG
-      let targetOutletStock = outletStockMap.get(item.productId) || null;
+      // Kurangi stok di OutletStock & catat pergerakan StockMovement jika bertipe BARANG & stok dilacak
+      let targetOutletStock: any = outletStockMap.get(item.productId) || null;
       if (product.type === "BARANG") {
-        const currentStock = targetOutletStock
-          ? targetOutletStock.stockQty
-          : (product.stockQty ?? 0);
+        const hasTrackedStock = targetOutletStock !== null || product.stockQty !== null;
+        if (hasTrackedStock) {
+          const currentStock = targetOutletStock
+            ? targetOutletStock.stockQty
+            : (product.stockQty ?? 0);
 
-        if (currentStock < item.qty) {
-          throw new Error(
-            `Stok untuk "${product.name}" di cabang ini tidak mencukupi (Tersisa ${currentStock}, diminta ${item.qty}).`
-          );
+          if (currentStock < item.qty) {
+            throw new Error(
+              `Stok untuk "${product.name}" di cabang ini tidak mencukupi (Tersisa ${currentStock}, diminta ${item.qty}).`
+            );
+          }
+
+          if (targetOutletStock) {
+            await tx.outletStock.update({
+              where: { id: targetOutletStock.id },
+              data: { stockQty: currentStock - item.qty },
+            });
+            targetOutletStock.stockQty = currentStock - item.qty;
+          } else {
+            targetOutletStock = await tx.outletStock.create({
+              data: {
+                outletId,
+                productId: item.productId,
+                stockQty: Math.max(0, currentStock - item.qty),
+                isAvailable: true,
+              },
+            });
+            outletStockMap.set(item.productId, targetOutletStock);
+          }
+
+          // Update legacy product stockQty juga untuk sinkronisasi
+          if (product.stockQty !== null) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stockQty: Math.max(0, product.stockQty - item.qty) },
+            });
+          }
         }
-
-        if (targetOutletStock) {
-          await tx.outletStock.update({
-            where: { id: targetOutletStock.id },
-            data: { stockQty: currentStock - item.qty },
-          });
-          targetOutletStock.stockQty = currentStock - item.qty;
-        } else {
-          targetOutletStock = await tx.outletStock.create({
-            data: {
-              outletId,
-              productId: item.productId,
-              stockQty: Math.max(0, currentStock - item.qty),
-              isAvailable: true,
-            },
-          });
-          outletStockMap.set(item.productId, targetOutletStock);
-        }
-
-        // Update legacy product stockQty juga untuk sinkronisasi
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stockQty: Math.max(0, (product.stockQty ?? 0) - item.qty) },
-        });
       }
 
       // Buat detail item transaksi
@@ -350,7 +410,7 @@ export async function createTransactionAction(data: {
 
       // Hitung komisi jika item memiliki penugasan staff / kapster / terapis
       if (item.staffId) {
-        const staffUser = staffMap.get(item.staffId);
+        const staffUser: any = staffMap.get(item.staffId);
         const isEligible =
           staffUser &&
           staffUser.tenantId === user.tenantId &&
@@ -420,9 +480,14 @@ export async function createTransactionAction(data: {
       });
     }
 
+    // 4b. Pengurangan Bahan Baku Otomatis (Bill of Materials / BOM Cafe)
+    await deductRecipeIngredients(tx, items, outletId, newTransaction.id);
+
     // 5. Buat Laundry Order jika ada metadata laundry
     if (laundryDetails && (laundryDetails.weightKg || laundryDetails.unitQty)) {
       const orderNumber = `LND-${todayStr}-${randomSuffix}`;
+      const serviceType = laundryDetails.weightKg ? "KILOAN" : "SATUAN";
+      const pricePerUnit = items[0]?.price ? Number(items[0].price) : totalAmount;
       await tx.laundryOrder.create({
         data: {
           tenantId: user.tenantId,
@@ -430,14 +495,14 @@ export async function createTransactionAction(data: {
           orderNumber,
           customerName: laundryDetails.customerName || "Pelanggan POS",
           customerPhone: laundryDetails.customerPhone || null,
-          packageType: laundryDetails.weightKg ? "KILOAN" : "SATUAN",
-          weightKg: laundryDetails.weightKg || null,
-          unitQty: laundryDetails.unitQty || null,
-          fragrance: laundryDetails.fragrance || "Standard",
+          serviceType,
+          weightKg: laundryDetails.weightKg ? Number(laundryDetails.weightKg) : null,
+          unitQty: laundryDetails.unitQty ? Number(laundryDetails.unitQty) : null,
+          pricePerUnit,
+          totalAmount,
+          fragrance: laundryDetails.fragrance || "Standard Fresh",
           status: "RECEIVED",
-          totalPrice: totalAmount,
-          paidStatus: "PAID",
-          rackNumber: laundryDetails.rackNumber || null,
+          notes: `Pembayaran Kasir POS #${transactionNumber}`,
         },
       });
     }
@@ -518,7 +583,7 @@ export async function createTransactionAction(data: {
   revalidatePath("/dashboard/cafe/tables");
   revalidatePath("/dashboard/reports");
 
-  return { success: true, ...result };
+  return JSON.parse(JSON.stringify({ success: true, ...result }));
 }
 
 export async function getTransactionHistoryAction(params: {
@@ -529,7 +594,7 @@ export async function getTransactionHistoryAction(params: {
   const user = await requireCashierOrOwner();
   const targetOutletId = params.outletId || user.outletId;
 
-  const whereClause: any = {};
+  const whereClause: TransactionWhereInput = {};
 
   if (targetOutletId) {
     whereClause.outletId = targetOutletId;
@@ -568,7 +633,7 @@ export async function voidTransactionAction(data: {
     throw new Error("Alasan void / refund transaksi wajib diisi.");
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const trx = await tx.transaction.findUnique({
       where: { id: transactionId },
       include: {
@@ -648,9 +713,9 @@ export async function voidTransactionAction(data: {
     }
 
     // 4. Catat pengeluaran kas refund pada shift aktif jika transaksi dibayar secara CASH
-    const cashPaid = trx.payments
-      .filter((p) => p.method === "CASH" && p.status === "SUCCESS")
-      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const cashPaid = (trx.payments || [])
+      .filter((p: any) => p.method === "CASH" && p.status === "SUCCESS")
+      .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
 
     if (cashPaid > 0) {
       const activeShift = await tx.shift.findFirst({
@@ -674,13 +739,21 @@ export async function voidTransactionAction(data: {
 
     // 5. Update LTV Customer jika ada
     if (trx.customerId) {
-      await tx.customer.update({
+      const cust = await tx.customer.findUnique({
         where: { id: trx.customerId },
-        data: {
-          visits: { decrement: 1 },
-          totalSpent: { decrement: Number(trx.totalAmount) },
-        },
+        select: { visits: true, totalSpent: true },
       });
+      if (cust) {
+        const newVisits = Math.max(0, (cust.visits || 0) - 1);
+        const newSpent = Math.max(0, Number(cust.totalSpent || 0) - Number(trx.totalAmount || 0));
+        await tx.customer.update({
+          where: { id: trx.customerId },
+          data: {
+            visits: newVisits,
+            totalSpent: newSpent,
+          },
+        });
+      }
     }
 
     return { transactionNumber: trx.transactionNumber };

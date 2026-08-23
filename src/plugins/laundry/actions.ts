@@ -4,17 +4,33 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasTenantPlugin } from "@/modules/tenant/plugin-helpers";
-import { LaundryStatus } from "@prisma/client";
+export type LaundryStatus =
+  | "RECEIVED"
+  | "WASHING"
+  | "DRYING"
+  | "IRONING"
+  | "READY"
+  | "COMPLETED"
+  | "CANCELLED";
 import { revalidatePath } from "next/cache";
 import { addDays, format, startOfDay } from "date-fns";
 
-async function requireTenantLaundryUser() {
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireTenantLaundryUser(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
-  const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "laundry");
   if (!isPluginActive) {
     throw new Error(
@@ -50,10 +66,10 @@ export async function getLaundryOrdersData(explicitOutletId?: string) {
     }),
   ]);
 
-  const activeOrders = orders.filter(
-    (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED"
+  const activeOrders = (orders as any[]).filter(
+    (o: any) => o.status !== "COMPLETED" && o.status !== "CANCELLED"
   );
-  const completedOrders = orders.filter((o) => o.status === "COMPLETED");
+  const completedOrders = (orders as any[]).filter((o: any) => o.status === "COMPLETED");
 
   return {
     orders,
@@ -177,7 +193,6 @@ export async function updateLaundryStatusAction(
   const updateData: any = { status };
   if (status === "COMPLETED") {
     updateData.completedAt = new Date();
-    updateData.paidStatus = "PAID";
 
     // Update akumulasi LTV Customer jika terkait pelanggan CRM
     if (order.customerId) {

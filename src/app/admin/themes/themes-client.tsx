@@ -104,7 +104,7 @@ export function AdminThemesClient({
 
       {/* Themes Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {themes.map((theme) => {
+        {themes.map((theme: any) => {
           const tokens = (theme.tokens as any) || {};
           const pColor = tokens.primaryColor || "#4f46e5";
           const aColor = tokens.accentColor || "#06b6d4";

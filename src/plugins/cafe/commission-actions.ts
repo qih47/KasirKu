@@ -62,7 +62,7 @@ export async function getCafeServiceChargePoolData(params?: {
   const tenantAttrs: Record<string, any> = ((tenant as any)?.attributes as any) || {};
   const serviceChargePercent = Number(tenantAttrs.serviceChargePercent || 5);
 
-  const totalOmzet = transactions.reduce((sum, t) => sum + Number(t.totalAmount), 0);
+  const totalOmzet = (transactions as any[]).reduce((sum: number, t: any) => sum + Number(t.totalAmount || 0), 0);
   const totalServiceChargeCollected = Math.round((totalOmzet * serviceChargePercent) / 100);
 
   // Bagi rata service charge ke seluruh staf aktif

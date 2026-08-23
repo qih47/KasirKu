@@ -4,16 +4,26 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasTenantPlugin } from "@/modules/tenant/plugin-helpers";
-import { TableStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-async function requireTenantCafeUser() {
+export type TableStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED";
+
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireTenantCafeUser(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
 
-  const user = session.user as any;
   const isPluginActive = await hasTenantPlugin(user.tenantId, "cafe");
   if (!isPluginActive) {
     throw new Error(
@@ -53,8 +63,8 @@ export async function getCafeTablesData(explicitOutletId?: string) {
 
   // Tentukan target outlet:
   let targetOutletId = explicitOutletId;
-  if (!targetOutletId || !allOutlets.some((o) => o.id === targetOutletId)) {
-    if (user.outletId && allOutlets.some((o) => o.id === user.outletId)) {
+  if (!targetOutletId || !allOutlets.some((o: any) => o.id === targetOutletId)) {
+    if (user.outletId && allOutlets.some((o: any) => o.id === user.outletId)) {
       targetOutletId = user.outletId;
     } else {
       targetOutletId = allOutlets[0]?.id;
@@ -63,40 +73,12 @@ export async function getCafeTablesData(explicitOutletId?: string) {
 
   if (!targetOutletId) throw new Error("Outlet tidak ditemukan.");
 
-  // Ambil atau inisialisasi default 8 meja jika belum ada
-  let tables = await prisma.cafeTable.findMany({
+  // Ambil data meja dari database
+  const tables = await prisma.cafeTable.findMany({
     where: { outletId: targetOutletId },
     orderBy: { tableNumber: "asc" },
   });
 
-  if (tables.length === 0) {
-    const defaultTables = [
-      { tableNumber: "Meja 01", capacity: 2 },
-      { tableNumber: "Meja 02", capacity: 4 },
-      { tableNumber: "Meja 03", capacity: 4 },
-      { tableNumber: "Meja 04", capacity: 6 },
-      { tableNumber: "Meja 05 (VIP)", capacity: 8 },
-      { tableNumber: "Outdoor 01", capacity: 4 },
-      { tableNumber: "Outdoor 02", capacity: 4 },
-    ];
-
-    for (const t of defaultTables) {
-      await prisma.cafeTable.create({
-        data: {
-          tenantId: user.tenantId,
-          outletId: targetOutletId,
-          tableNumber: t.tableNumber,
-          capacity: t.capacity,
-          status: "AVAILABLE",
-        },
-      });
-    }
-
-    tables = await prisma.cafeTable.findMany({
-      where: { outletId: targetOutletId },
-      orderBy: { tableNumber: "asc" },
-    });
-  }
 
   const [tenant, currentOutlet] = await Promise.all([
     prisma.tenant.findUnique({
@@ -109,9 +91,9 @@ export async function getCafeTablesData(explicitOutletId?: string) {
     }),
   ]);
 
-  const availableCount = tables.filter((t) => t.status === "AVAILABLE").length;
-  const occupiedCount = tables.filter((t) => t.status === "OCCUPIED").length;
-  const reservedCount = tables.filter((t) => t.status === "RESERVED").length;
+  const availableCount = (tables as any[]).filter((t: any) => t.status === "AVAILABLE").length;
+  const occupiedCount = (tables as any[]).filter((t: any) => t.status === "OCCUPIED").length;
+  const reservedCount = (tables as any[]).filter((t: any) => t.status === "RESERVED").length;
 
   return {
     tables,
@@ -133,9 +115,10 @@ export async function createCafeTableAction(data: {
   outletId: string;
   tableNumber: string;
   capacity?: number;
+  areaZone?: string;
 }) {
   const user = await requireTenantCafeUser();
-  const { outletId, tableNumber, capacity = 4 } = data;
+  const { outletId, tableNumber, capacity = 4, areaZone = "INDOOR" } = data;
 
   if (!tableNumber) throw new Error("Nomor/Nama meja wajib diisi.");
 
@@ -145,6 +128,7 @@ export async function createCafeTableAction(data: {
       outletId,
       tableNumber: tableNumber.trim(),
       capacity,
+      areaZone: areaZone || "INDOOR",
       status: "AVAILABLE",
     },
   });
@@ -269,7 +253,7 @@ export async function transferTableAction(data: {
   }
 
   // Atomic swap in transaction
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     // 1. Move guest info to target table and set to OCCUPIED
     await tx.cafeTable.update({
       where: { id: targetTableId },
@@ -291,7 +275,7 @@ export async function transferTableAction(data: {
     });
 
     // 3. If there are active LiveOrders on the source table, update their tableNumber
-    if (sourceTable.outletId) {
+    if (sourceTable.outletId && tx.liveOrder) {
       await tx.liveOrder.updateMany({
         where: {
           outletId: sourceTable.outletId,

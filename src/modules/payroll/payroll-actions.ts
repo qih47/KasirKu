@@ -473,9 +473,9 @@ export async function getPayrollData(params?: {
     };
   });
 
-  const totalPayrollExpenditure = records.reduce((sum, r) => sum + r.takeHomePay, 0);
-  const totalBaseSalarySum = records.reduce((sum, r) => sum + (r.isProrated && r.salaryType === 'MONTHLY' ? Math.round((r.workUnits / 26) * r.baseSalary) : (r.salaryType === 'DAILY' || r.salaryType === 'PER_SHIFT' ? r.workUnits * r.baseSalary : r.baseSalary)), 0);
-  const totalCommissionsSum = records.reduce((sum, r) => sum + r.totalCommissions, 0);
+  const totalPayrollExpenditure = (records as any[]).reduce((sum: number, r: any) => sum + r.takeHomePay, 0);
+  const totalBaseSalarySum = (records as any[]).reduce((sum: number, r: any) => sum + (r.isProrated && r.salaryType === 'MONTHLY' ? Math.round((r.workUnits / 26) * r.baseSalary) : (r.salaryType === 'DAILY' || r.salaryType === 'PER_SHIFT' ? r.workUnits * r.baseSalary : r.baseSalary)), 0);
+  const totalCommissionsSum = (records as any[]).reduce((sum: number, r: any) => sum + r.totalCommissions, 0);
 
   return JSON.parse(
     JSON.stringify({

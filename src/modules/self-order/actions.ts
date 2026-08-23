@@ -3,16 +3,28 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { LiveOrderStatus, LiveOrderPaymentStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { calculateItemCommission } from "@/modules/commission/commission-engine";
 
-async function requireAuth() {
+export type LiveOrderStatus = "PENDING" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
+export type LiveOrderPaymentStatus = "UNPAID_CASH" | "PAID_ONLINE";
+
+interface AuthenticatedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  outletId?: string | null;
+}
+
+async function requireAuth(): Promise<AuthenticatedUser> {
   const session = await getServerSession(authOptions);
-  if (!session || !(session.user as any)?.tenantId) {
+  const user = session?.user as unknown as AuthenticatedUser | undefined;
+  if (!session || !user?.tenantId) {
     throw new Error("Akses ditolak: Anda harus Login Ke Akun Bisnis.");
   }
-  return session.user as any;
+  return user;
 }
 
 export interface LiveOrderItem {
@@ -54,7 +66,7 @@ export async function hasSelfOrderPlugin(tenantId: string): Promise<boolean> {
       isActive: true,
       plugins: {
         some: {
-          plugin: { code: "self_order" },
+          plugin: { code: { in: ["cafe", "self_order"] } },
           isActive: true,
         },
       },
@@ -217,7 +229,7 @@ export async function submitSelfOrderAction(data: {
     }
   }
 
-  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+  const subtotal = (items as any[]).reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
   const totalAmount = subtotal;
 
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -319,7 +331,7 @@ export async function checkoutLiveOrderAction(data: {
   const transactionNumber = `TRX-${todayStr}-${randomSuffix}`;
 
   // Atomic transaction
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     // 1. Buat Transaksi POS
     const transaction = await tx.transaction.create({
       data: {
@@ -554,7 +566,7 @@ export async function getPublicSelfOrderMenuData(
 
   const activeSub = tenant.subscriptions?.[0];
   const isSelfOrderActive = activeSub?.plugins?.some(
-    (tp) => tp.plugin.code === "self_order"
+    (tp: any) => tp.plugin.code === "self_order"
   ) ?? false;
 
   const targetOutlet = tenant.outlets[0] || null;
@@ -582,7 +594,7 @@ export async function getPublicSelfOrderMenuData(
   });
 
   const categories = Array.from(
-    new Set(products.map((p) => p.category || "Umum"))
+    new Set(products.map((p: any) => p.category || "Umum"))
   );
 
   return {
@@ -595,7 +607,7 @@ export async function getPublicSelfOrderMenuData(
       outletId: targetOutlet?.id || null,
       outletName: targetOutlet?.name || "Outlet Utama",
     },
-    tables: cafeTables.map((t) => ({
+    tables: cafeTables.map((t: any) => ({
       id: t.id,
       tableNumber: t.tableNumber,
       capacity: t.capacity,
@@ -603,7 +615,7 @@ export async function getPublicSelfOrderMenuData(
       status: t.status,
     })),
     selectedTable: tableQuery || cafeTables[0]?.tableNumber || "Meja 01",
-    products: products.map((p) => ({
+    products: products.map((p:any) => ({
       id: p.id,
       name: p.name,
       price: Number(p.price),

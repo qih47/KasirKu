@@ -33,8 +33,8 @@ export function calculateRetailEffectivePrice(
   if (attributes.wholesaleTiers && attributes.wholesaleTiers.length > 0) {
     // Cari tier dengan minQty terbesar yang memenuhi
     const eligibleTiers = attributes.wholesaleTiers
-      .filter((t) => qty >= t.minQty)
-      .sort((a, b) => b.minQty - a.minQty);
+      .filter((t: WholesaleTier) => qty >= t.minQty)
+      .sort((a: WholesaleTier, b: WholesaleTier) => b.minQty - a.minQty);
 
     if (eligibleTiers.length > 0) {
       const bestTier = eligibleTiers[0];

@@ -1,6 +1,9 @@
 import { WidgetDefinition } from "./widget-types";
 
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
+  // ==========================================
+  // 1. SUMMARY & UTILITY UMUM
+  // ==========================================
   {
     key: "WIDGET_DIGITAL_CLOCK",
     title: "Jam Digital & Status Operasional",
@@ -72,16 +75,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     requiredPlugin: null,
   },
   {
-    key: "WIDGET_VERTICAL_STATUS",
-    title: "Status Operasional (Meja/Kursi/Rak)",
-    category: "VERTICAL",
-    description: "Status meja aktif (Cafe), antrean kapster (Barber), atau status rak cucian (Laundry).",
-    defaultColSpan: 2,
-    allowedColSpans: [2, 3, 4],
-    icon: "Store",
-    requiredPlugin: null,
-  },
-  {
     key: "WIDGET_PEAK_HOURS_MINI",
     title: "Grafik Jam Ramai Hari Ini",
     category: "CHART",
@@ -89,6 +82,250 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultColSpan: 2,
     allowedColSpans: [2, 4],
     icon: "Flame",
+    requiredPlugin: null,
+  },
+
+  // ==========================================
+  // 2. VERTIKAL: BARBERSHOP & SALON
+  // ==========================================
+  {
+    key: "WIDGET_BARBER_LIVE_CHAIRS",
+    title: "Monitor Kursi Cukur Realtime",
+    category: "VERTICAL",
+    description: "Mini visual status kursi pangkas aktif, kapster yang bertugas, dan tamu yang sedang dilayani.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Scissors",
+    requiredPlugin: "barbershop",
+  },
+  {
+    key: "WIDGET_BARBER_QUEUE_STREAM",
+    title: "Live Antrean Tamu Hari Ini",
+    category: "VERTICAL",
+    description: "Daftar antrean tamu aktif hari ini lengkap dengan estimasi waktu tunggu dan tombol panggil.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Users",
+    requiredPlugin: "barbershop",
+  },
+  {
+    key: "WIDGET_BARBER_STYLIST_LEADERBOARD",
+    title: "Top Kapster & Komisi Hari Ini",
+    category: "VERTICAL",
+    description: "Ranking stylist berdasarkan jumlah kepala yang dicukur dan akumulasi komisi yang terkumpul.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "Award",
+    requiredPlugin: "barbershop",
+  },
+  {
+    key: "WIDGET_BARBER_SERVICE_RATIO",
+    title: "Rasio Jasa Pangkas vs Pomade Retail",
+    category: "VERTICAL",
+    description: "Komposisi perolehan omzet dari jasa pangkas/treatment vs penjualan produk grooming fisik.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "ShoppingBag",
+    requiredPlugin: "barbershop",
+  },
+
+  // ==========================================
+  // 3. VERTIKAL: CAFE & RESTO (F&B)
+  // ==========================================
+  {
+    key: "WIDGET_CAFE_TABLE_MAP",
+    title: "Denah & Status Meja Realtime",
+    category: "VERTICAL",
+    description: "Mini grid status meja (Kosong, Terisi Tamu & Open Bill, Reservasi).",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Coffee",
+    requiredPlugin: "cafe",
+  },
+  {
+    key: "WIDGET_CAFE_KITCHEN_MONITOR",
+    title: "Antrean Pesanan Dapur (KOT)",
+    category: "VERTICAL",
+    description: "Status tiket pesanan dapur yang sedang disiapkan (Preparing) vs siap saji (Ready).",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "Utensils",
+    requiredPlugin: "cafe",
+  },
+  {
+    key: "WIDGET_CAFE_SELF_ORDER_FEED",
+    title: "Pesanan Masuk dari QR Meja",
+    category: "VERTICAL",
+    description: "Live stream pesanan self-order yang baru saja di-checkout tamu dari HP di meja.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "QrCode",
+    requiredPlugin: "cafe",
+  },
+  {
+    key: "WIDGET_CAFE_BEVERAGE_MIX",
+    title: "Komposisi Menu & Varian Populer",
+    category: "VERTICAL",
+    description: "Rasio penjualan kopi vs non-kopi vs makanan beserta varian add-ons terpopuler.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "Sliders",
+    requiredPlugin: "cafe",
+  },
+
+  // ==========================================
+  // 4. VERTIKAL: LAUNDRY KILOAN & SATUAN
+  // ==========================================
+  {
+    key: "WIDGET_LAUNDRY_STAGE_PIPELINE",
+    title: "Pipeline Tahapan Cucian Hari Ini",
+    category: "VERTICAL",
+    description: "Visual kanban status cucian: Diterima -> Dicuci -> Dikeringkan -> Disetrika -> Di Rak.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Shirt",
+    requiredPlugin: "laundry",
+  },
+  {
+    key: "WIDGET_LAUNDRY_WEIGHT_TODAY",
+    title: "Total Timbangan Kg & Pcs Masuk",
+    category: "VERTICAL",
+    description: "Akumulasi berat timbangan kiloan (Kg) dan jumlah pakaian satuan (Pcs) yang masuk hari ini.",
+    defaultColSpan: 1,
+    allowedColSpans: [1, 2],
+    icon: "Scale",
+    requiredPlugin: "laundry",
+  },
+  {
+    key: "WIDGET_LAUNDRY_RACK_ALERT",
+    title: "Cucian Siap Ambil & Notifikasi WA",
+    category: "VERTICAL",
+    description: "Daftar nota cucian yang sudah selesai di rak dan tombol pintas kirim pesan WhatsApp.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "CheckCircle2",
+    requiredPlugin: "laundry",
+  },
+  {
+    key: "WIDGET_LAUNDRY_FRAGRANCE_POPULAR",
+    title: "Aroma Parfum Terfavorit",
+    category: "VERTICAL",
+    description: "Ranking aroma parfum laundry yang paling banyak dipilih pelanggan.",
+    defaultColSpan: 1,
+    allowedColSpans: [1, 2],
+    icon: "Sparkles",
+    requiredPlugin: "laundry",
+  },
+
+  // ==========================================
+  // 5. VERTIKAL: RETAIL & TOKO MODERN
+  // ==========================================
+  {
+    key: "WIDGET_RETAIL_FAST_MOVING",
+    title: "Top 5 SKU Paling Cepat Laku",
+    category: "VERTICAL",
+    description: "Daftar produk retail dengan kecepatan perputaran stok paling tinggi hari ini.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Package",
+    requiredPlugin: "retail",
+  },
+  {
+    key: "WIDGET_RETAIL_DEAD_STOCK",
+    title: "Peringatan Dead-Stock (> 30 Hari)",
+    category: "VERTICAL",
+    description: "Daftar barang yang tidak terjual > 30 hari di rak toko untuk rekomendasi promo/diskon.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "AlertCircle",
+    requiredPlugin: "retail",
+  },
+  {
+    key: "WIDGET_RETAIL_STOCK_VALUATION",
+    title: "Total Valuasi Nilai Stok Toko",
+    category: "VERTICAL",
+    description: "Total nilai modal rupiah seluruh persediaan barang fisik yang ada di toko dan gudang.",
+    defaultColSpan: 1,
+    allowedColSpans: [1, 2],
+    icon: "Layers",
+    requiredPlugin: "retail",
+  },
+  {
+    key: "WIDGET_RETAIL_CUSTOMER_DEBT",
+    title: "Rekap Kasbon / Piutang Pelanggan",
+    category: "VERTICAL",
+    description: "Total piutang kasbon pelanggan yang belum lunas beserta daftar jatuh tempo terdekat.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "BookOpen",
+    requiredPlugin: "retail",
+  },
+
+  // ==========================================
+  // 6. MULTI-OUTLET (PRO & ENTERPRISE)
+  // ==========================================
+  {
+    key: "WIDGET_OUTLET_LEADERBOARD",
+    title: "Perbandingan Performa Antar Cabang",
+    category: "MULTI_OUTLET",
+    description: "Komparasi omzet harian, jumlah transaksi, dan pencapaian target antara seluruh cabang outlet.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 3, 4],
+    icon: "Building2",
+    requiredPlugin: null,
+  },
+  {
+    key: "WIDGET_STOCK_TRANSFER_RADAR",
+    title: "Monitor Mutasi & Transfer Stok",
+    category: "MULTI_OUTLET",
+    description: "Status pengiriman dan perpindahan stok barang antar cabang yang sedang dalam perjalanan.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "ArrowRightLeft",
+    requiredPlugin: null,
+  },
+  {
+    key: "WIDGET_OUTLET_SHIFT_MONITOR",
+    title: "Status Shift Kasir Seluruh Cabang",
+    category: "MULTI_OUTLET",
+    description: "Monitor status buka/tutup shift kasir dan kasir yang bertugas di masing-masing cabang.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "Monitor",
+    requiredPlugin: null,
+  },
+
+  // ==========================================
+  // 7. FINANSIAL & KASIR (UNIVERSAL)
+  // ==========================================
+  {
+    key: "WIDGET_CASH_DRAWER_LIVE",
+    title: "Posisi Kas Laci Shift Aktif",
+    category: "FINANCIAL",
+    description: "Rincian modal awal kasir, uang masuk, uang keluar, dan estimasi saldo kas fisik di laci.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "Banknote",
+    requiredPlugin: null,
+  },
+  {
+    key: "WIDGET_PAYMENT_BREAKDOWN",
+    title: "Proporsi Metode Pembayaran",
+    category: "FINANCIAL",
+    description: "Grafik persentase transaksi non-tunai (QRIS / EDC Bank) vs uang tunai cash hari ini.",
+    defaultColSpan: 2,
+    allowedColSpans: [2, 4],
+    icon: "CreditCard",
+    requiredPlugin: null,
+  },
+  {
+    key: "WIDGET_COMMISSION_ACCRUAL",
+    title: "Akumulasi Komisi Staf Bulan Ini",
+    category: "FINANCIAL",
+    description: "Total komisi yang telah dihasilkan seluruh staf dan belum dicairkan pada periode aktif.",
+    defaultColSpan: 1,
+    allowedColSpans: [1, 2],
+    icon: "Coins",
     requiredPlugin: null,
   },
 ];

@@ -259,11 +259,11 @@ export function ReceiptDesignerClient({ initialData }: ReceiptDesignerClientProp
   };
 
   const sampleTransactionData: TransactionReceiptData = {
-    storeName: initialData.businessName || "Artisan Coffee Lab",
-    outletName: initialData.primaryOutlet?.name || "Cabang Senopati",
-    address: initialData.primaryOutlet?.address || "Jl. Senopati No. 88, Jakarta Selatan",
-    phone: "0812-3456-7890",
-    headerNote: rc.headerText || "Selamat Menikmati Kopi Spesialti Kami",
+    storeName: initialData.businessName || "Toko Anda",
+    outletName: initialData.primaryOutlet?.name || "Cabang Utama",
+    address: initialData.primaryOutlet?.address || "",
+    phone: initialData.primaryOutlet?.phone || "",
+    headerNote: rc.headerText || "",
     logoUrl: initialData.logoUrl || null,
     invoiceNo: "#INV-20260818-0912",
     dateTime: "18/08/2026 14:35 WIB",

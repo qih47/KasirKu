@@ -727,10 +727,14 @@ export function RegisterClient({
                   </div>
                   <span className="text-[11px] leading-relaxed" style={{ color: t.textMuted }}>
                     Saya menyetujui{" "}
-                    <a href="#" className="text-indigo-500 hover:text-indigo-400 font-semibold underline">Ketentuan Layanan</a>
+                    <Link href="/terms" target="_blank" className="text-indigo-500 hover:text-indigo-400 font-bold underline">
+                      Syarat &amp; Ketentuan Layanan (ToS)
+                    </Link>
                     {" "}&amp;{" "}
-                    <a href="#" className="text-indigo-500 hover:text-indigo-400 font-semibold underline">Kebijakan Privasi</a>
-                    {" "}Qassa POS.
+                    <Link href="/privacy" target="_blank" className="text-indigo-500 hover:text-indigo-400 font-bold underline">
+                      Kebijakan Privasi (UU PDP)
+                    </Link>
+                    {" "}KasirKu SaaS.
                   </span>
                 </label>
 

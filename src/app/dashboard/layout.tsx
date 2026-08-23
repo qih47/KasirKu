@@ -23,6 +23,11 @@ export default async function DashboardLayout({
   }
 
   const user = session.user as any;
+
+  // Kasir role isolation guard
+  if (user.role === "KASIR") {
+    redirect("/pos");
+  }
   const [activePlugins, activeBroadcast, tenant] = await Promise.all([
     getTenantActivePlugins(user.tenantId),
     getActiveBroadcastForTenant(),
@@ -254,10 +259,10 @@ export default async function DashboardLayout({
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {tenant?.logoUrl ? (
+            {(tenant?.logoUrl || (tenant?.receiptConfig as any)?.logoUrl) ? (
               <img
-                src={tenant.logoUrl}
-                alt={tenant.businessName || "Logo"}
+                src={tenant?.logoUrl || (tenant?.receiptConfig as any)?.logoUrl || ""}
+                alt={tenant?.businessName || "Logo"}
                 className="w-10 h-10 rounded-2xl object-cover border border-slate-200 dark:border-slate-800 shadow-md flex-shrink-0"
               />
             ) : (

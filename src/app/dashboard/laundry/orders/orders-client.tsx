@@ -6,6 +6,7 @@ import { toastError } from "@/lib/swal";
 import {
   createLaundryOrderAction,
   updateLaundryStatusAction,
+  LaundryStatus,
 } from "@/plugins/laundry/actions";
 import {
   Shirt,
@@ -22,8 +23,8 @@ import {
   ArrowRight,
   Package,
   Layers,
+  Building2,
 } from "lucide-react";
-import { LaundryStatus } from "@prisma/client";
 
 export function LaundryOrdersClient({
   initialData,
@@ -38,10 +39,10 @@ export function LaundryOrdersClient({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [serviceType, setServiceType] = useState<"KILOAN" | "SATUAN">("KILOAN");
-  const [weightKg, setWeightKg] = useState<number | "">(3);
-  const [unitQty, setUnitQty] = useState<number | "">(1);
-  const [pricePerUnit, setPricePerUnit] = useState<number | "">(8000);
-  const [fragrance, setFragrance] = useState("Sakura Blossom");
+  const [weightKg, setWeightKg] = useState<number | "">("");
+  const [unitQty, setUnitQty] = useState<number | "">("");
+  const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
+  const [fragrance, setFragrance] = useState("Original Fresh");
   const [rackNumber, setRackNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [estimatedDays, setEstimatedDays] = useState(2);
@@ -173,9 +174,31 @@ export function LaundryOrdersClient({
       {/* Header Laundry */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            <Shirt className="w-3.5 h-3.5" />
-            Modul Laundry Kiloan & Satuan
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 text-xs font-semibold uppercase tracking-wider">
+              <Shirt className="w-3.5 h-3.5" />
+              Modul Laundry Kiloan & Satuan
+            </div>
+
+            {/* Multi-Outlet Switcher for Owner */}
+            {data.outlets && data.outlets.length > 1 && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700">
+                <Building2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <select
+                  value={data.currentOutletId}
+                  onChange={(e) => {
+                    window.location.href = `/dashboard/laundry/orders?outletId=${e.target.value}`;
+                  }}
+                  className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-0 cursor-pointer p-0 pr-1"
+                >
+                  {data.outlets.map((o: any) => (
+                    <option key={o.id} value={o.id} className="dark:bg-slate-900">
+                      Cabang: {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
             Live Order Tracking & Cucian
@@ -417,7 +440,6 @@ export function LaundryOrdersClient({
                     onChange={(e) => {
                       const val = e.target.value as "KILOAN" | "SATUAN";
                       setServiceType(val);
-                      setPricePerUnit(val === "KILOAN" ? 8000 : 15000);
                     }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
                   >

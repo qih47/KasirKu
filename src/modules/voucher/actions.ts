@@ -115,11 +115,11 @@ export async function getVouchersData(params?: {
   // Filter status jika dipilih
   let filtered = formatted;
   if (params?.status === "ACTIVE") {
-    filtered = formatted.filter((v) => v.isActive && !v.isExpired && !v.isQuotaFull);
+    filtered = formatted.filter((v: any) => v.isActive && !v.isExpired && !v.isQuotaFull);
   } else if (params?.status === "EXPIRED") {
-    filtered = formatted.filter((v) => v.isExpired);
+    filtered = formatted.filter((v: any) => v.isExpired);
   } else if (params?.status === "INACTIVE") {
-    filtered = formatted.filter((v) => !v.isActive);
+    filtered = formatted.filter((v: any) => !v.isActive);
   }
 
   return {

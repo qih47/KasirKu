@@ -138,6 +138,8 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
   const handleConfigChange = (key: keyof ReceiptConfig, value: any) => {
     setReceiptConfig((prev) => ({
       ...prev,
@@ -145,7 +147,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -154,40 +156,52 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 512;
-        let width = img.width;
-        let height = img.height;
+    setIsUploadingLogo(true);
+    setErrorMsg(null);
 
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/webp", 0.88);
-          setLogoUrl(compressedDataUrl);
-          setErrorMsg(null);
-        } else {
-          setLogoUrl(event.target?.result as string);
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+      const response = await fetch("/api/uploads/logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Gagal mengunggah logo.");
+      }
+
+      setLogoUrl(data.logoUrl);
+      setSuccessMsg("Logo berhasil diunggah dan tersimpan permanen ke profil bisnis!");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Terjadi kesalahan saat mengunggah logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    setIsUploadingLogo(true);
+    setErrorMsg(null);
+    try {
+      const response = await fetch("/api/uploads/logo", {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Gagal menghapus logo.");
+      }
+      setLogoUrl("");
+      setSuccessMsg("Logo berhasil dihapus dari profil bisnis.");
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menghapus logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -251,15 +265,15 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     }
   };
 
-  // Sample transaction data for 100% unified thermal live preview
+  // Sample transaction data for unified thermal live preview
   const sampleTransactionData: TransactionReceiptData = {
-    storeName: businessName || "KAFEKU",
+    storeName: businessName || "Toko Anda",
     legalName: receiptConfig.legalName,
     npwp: receiptConfig.npwp,
     outletName: initialData.primaryOutlet?.name || "Cabang Utama",
-    address: address || "Jl. Sudirman No. 45, Jakarta",
-    phone: phone || "0812-3456-7890",
-    headerNote: receiptConfig.headerText || "Selamat Menikmati",
+    address: address || "",
+    phone: phone || "",
+    headerNote: receiptConfig.headerText || "",
     logoUrl: receiptConfig.logoUrl || logoUrl || null,
     invoiceNo: "#INV-5078",
     dateTime: "14:30 WIB",
@@ -497,7 +511,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                   {logoMode === "UPLOAD" ? (
                     <div className="space-y-2">
                       <label
-                        className="flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-2xl cursor-pointer hover:border-indigo-500 transition group"
+                        className="flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-2xl cursor-pointer hover:border-indigo-500 transition group relative"
                         style={{
                           backgroundColor: "var(--theme-inner-bg, #f8fafc)",
                           borderColor: "var(--theme-card-border, #e2e8f0)",
@@ -507,16 +521,21 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                           type="file"
                           accept="image/png, image/jpeg, image/webp, image/svg+xml"
                           onChange={handleFileUpload}
+                          disabled={isUploadingLogo}
                           className="hidden"
                         />
                         <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                          <Upload className="w-5 h-5" />
+                          {isUploadingLogo ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Upload className="w-5 h-5" />
+                          )}
                         </div>
                         <p className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                          Klik untuk Pilih Logo dari Perangkat
+                          {isUploadingLogo ? "Sedang Mengunggah & Menyimpan Logo..." : "Klik untuk Pilih Logo dari Perangkat"}
                         </p>
                         <p className="text-[10px] mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                          Format PNG, JPG, WebP, SVG (Otomatis Dioptimasi)
+                          Format PNG, JPG, WebP, SVG (Langsung Tersimpan Otomatis)
                         </p>
                       </label>
 
@@ -524,14 +543,15 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                         <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
                           <div className="flex items-center gap-2 min-w-0">
                             <img src={logoUrl} alt="Logo" className="w-7 h-7 rounded-lg object-cover border" />
-                            <span className="text-[11px] font-bold truncate" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-                              Logo Berhasil Dipasang
+                            <span className="text-[11px] font-bold text-emerald-600 truncate flex items-center gap-1">
+                              <span>✓ Logo Tersimpan Permanen</span>
                             </span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => setLogoUrl("")}
-                            className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-1"
+                            onClick={handleDeleteLogo}
+                            disabled={isUploadingLogo}
+                            className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-1 disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Hapus Logo</span>
@@ -557,8 +577,9 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                         {logoUrl && (
                           <button
                             type="button"
-                            onClick={() => setLogoUrl("")}
-                            className="px-3 py-2 rounded-xl text-xs font-bold border hover:bg-rose-500/10 text-rose-500 transition"
+                            onClick={handleDeleteLogo}
+                            disabled={isUploadingLogo}
+                            className="px-3 py-2 rounded-xl text-xs font-bold border hover:bg-rose-500/10 text-rose-500 transition disabled:opacity-50"
                             style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}
                           >
                             Hapus

@@ -63,7 +63,7 @@ export default async function AdminAuditPage() {
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {logs.length > 0 ? (
-                logs.map((log) => (
+                logs.map((log: any) => (
                   <tr key={log.id} className="hover:bg-slate-800/30 transition">
                     <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString("id-ID", {

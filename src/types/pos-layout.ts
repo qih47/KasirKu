@@ -3,6 +3,7 @@ import { BusinessVertical } from "./receipt";
 export type PosLayoutType =
   | "STANDARD"
   | "CAFE_QUICK_ORDER"
+  | "CAFE_RESTO"
   | "BARBERSHOP_STATION"
   | "RETAIL_FAST_BARCODE"
   | "LAUNDRY_WEIGHING";

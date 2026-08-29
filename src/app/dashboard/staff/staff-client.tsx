@@ -103,6 +103,7 @@ export function StaffClient({
   ];
 
   // Filters
+  const [filterDivision, setFilterDivision] = useState<"ALL" | "CAFE" | "BARBER" | "LAUNDRY" | "RETAIL">("ALL");
   const [filterOutlet, setFilterOutlet] = useState<string>("ALL");
   const [filterPosition, setFilterPosition] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -331,6 +332,21 @@ export function StaffClient({
   const filteredStaff = data.staffList.filter((s) => {
     if (filterOutlet !== "ALL" && s.outletId !== filterOutlet) return false;
     if (filterPosition !== "ALL" && s.position !== filterPosition) return false;
+
+    if (filterDivision === "CAFE") {
+      const isCafe = ["BARISTA", "WAITER", "COOK", "BARTENDER"].includes(s.position) || (s.position || "").toUpperCase().includes("BARISTA") || (s.position || "").toUpperCase().includes("CHEF");
+      if (!isCafe) return false;
+    } else if (filterDivision === "BARBER") {
+      const isBarber = ["BARBER", "HAIR_STYLIST"].includes(s.position) || (s.position || "").toUpperCase().includes("BARBER") || (s.position || "").toUpperCase().includes("KAPSTER");
+      if (!isBarber) return false;
+    } else if (filterDivision === "LAUNDRY") {
+      const isLaundry = ["PENCUCI", "PENYETRIKA", "KURIR"].includes(s.position) || (s.position || "").toUpperCase().includes("LAUNDRY") || (s.position || "").toUpperCase().includes("CUCI") || (s.position || "").toUpperCase().includes("SETRIKA");
+      if (!isLaundry) return false;
+    } else if (filterDivision === "RETAIL") {
+      const isRetail = ["KASIR", "PRAMUNIAGA", "STAFF_GUDANG"].includes(s.position);
+      if (!isRetail) return false;
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = s.name?.toLowerCase().includes(q);
@@ -424,40 +440,118 @@ export function StaffClient({
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Outlet Filter */}
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <Store className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={filterOutlet}
-              onChange={(e) => setFilterOutlet(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">Semua Cabang</option>
-              {data.outlets.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* Division Tabs & Filter Row */}
+      <div className="space-y-3">
+        {/* Division Quick Tabs */}
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setFilterDivision("ALL")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              filterDivision === "ALL"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Semua Divisi</span>
+          </button>
 
-          {/* Position Filter */}
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={filterPosition}
-              onChange={(e) => setFilterPosition(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+          {isCafeActive && (
+            <button
+              type="button"
+              onClick={() => setFilterDivision("CAFE")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                filterDivision === "CAFE"
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
             >
-              <option value="ALL">Semua Posisi Jabatan</option>
-              <option value="KASIR">Kasir POS</option>
-              <option value="BARISTA">Barista</option>
-              <option value="WAITER">Waiter / Server</option>
-              <option value="BARBER">Barber / Stylist</option>
-              <option value="PENYETRIKA">Penyetrika (Laundry)</option>
+              <Coffee className="w-3.5 h-3.5" />
+              <span>Tim Cafe &amp; Resto</span>
+            </button>
+          )}
+
+          {isBarberActive && (
+            <button
+              type="button"
+              onClick={() => setFilterDivision("BARBER")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                filterDivision === "BARBER"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              <span>Tim Barbershop</span>
+            </button>
+          )}
+
+          {isLaundryActive && (
+            <button
+              type="button"
+              onClick={() => setFilterDivision("LAUNDRY")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                filterDivision === "LAUNDRY"
+                  ? "bg-cyan-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              <Shirt className="w-3.5 h-3.5" />
+              <span>Tim Laundry</span>
+            </button>
+          )}
+
+          {isRetailActive && (
+            <button
+              type="button"
+              onClick={() => setFilterDivision("RETAIL")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                filterDivision === "RETAIL"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Tim Kasir &amp; Retail</span>
+            </button>
+          )}
+        </div>
+
+        {/* Filter & Search Bar */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Outlet Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Store className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={filterOutlet}
+                onChange={(e) => setFilterOutlet(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Cabang</option>
+                {data.outlets.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Position Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={filterPosition}
+                onChange={(e) => setFilterPosition(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Posisi Jabatan</option>
+                <option value="KASIR">Kasir POS</option>
+                <option value="BARISTA">Barista</option>
+                <option value="WAITER">Waiter / Server</option>
+                <option value="BARBER">Barber / Stylist</option>
+                <option value="PENYETRIKA">Penyetrika (Laundry)</option>
               <option value="PENCUCI">Pencuci (Laundry)</option>
               <option value="KURIR">Kurir Delivery</option>
               <option value="STAFF_GUDANG">Staff Gudang</option>
@@ -478,6 +572,7 @@ export function StaffClient({
           />
         </div>
       </div>
+    </div>
 
       {/* Staff Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
@@ -774,11 +869,90 @@ export function StaffClient({
                 </div>
               </div>
 
+              {/* Divisi Kerja Vertikal */}
+              {data.activePlugins && data.activePlugins.length > 0 && (
+                <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                    Divisi Penempatan Staf:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {isCafeActive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPosition("BARISTA");
+                          setHasPosAccess(true);
+                        }}
+                        className={`p-2 rounded-xl border text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          ["BARISTA", "WAITER", "COOK", "BARTENDER"].includes(position)
+                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        <Coffee className="w-3.5 h-3.5" />
+                        <span>Cafe</span>
+                      </button>
+                    )}
+                    {isBarberActive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPosition("BARBER");
+                          setIsCommissionActive(true);
+                          setCommissionPercent("30");
+                          setHasPosAccess(true);
+                        }}
+                        className={`p-2 rounded-xl border text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          ["BARBER", "HAIR_STYLIST"].includes(position)
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        <Scissors className="w-3.5 h-3.5" />
+                        <span>Barber</span>
+                      </button>
+                    )}
+                    {isLaundryActive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPosition("PENCUCI");
+                          setHasPosAccess(false);
+                        }}
+                        className={`p-2 rounded-xl border text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          ["PENCUCI", "PENYETRIKA", "KURIR"].includes(position)
+                            ? "bg-cyan-600 text-white border-cyan-600 shadow-xs"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        <Shirt className="w-3.5 h-3.5" />
+                        <span>Laundry</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPosition("KASIR");
+                        setHasPosAccess(true);
+                      }}
+                      className={`p-2 rounded-xl border text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        ["KASIR", "PRAMUNIAGA", "STAFF_GUDANG", "SUPERVISOR"].includes(position)
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                          : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>Kasir / Retail</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Jabatan / Role (Dinamis Sesuai Plugin Bisnis) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    Posisi / Jabatan <span className="text-red-500">*</span>
+                    Posisi / Jabatan Spesifik <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={position}

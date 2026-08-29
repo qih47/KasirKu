@@ -85,11 +85,26 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
     defaultPreset = laundryReceiptPreset;
   }
 
+  const activePlugins = (activeSub?.plugins || []).map((tp: any) => ({
+    code: tp.plugin?.code?.toLowerCase() || "",
+    name: tp.plugin?.name || "",
+  }));
+
+  // Initial sub-presets per vertikal
+  const existingPresets = savedConfig.presets || {};
+  const mergedPresets: Record<string, ReceiptConfig> = {
+    CAFE: { ...cafeReceiptPreset, ...(existingPresets.CAFE || {}) },
+    BARBERSHOP: { ...barbershopReceiptPreset, ...(existingPresets.BARBERSHOP || {}) },
+    LAUNDRY: { ...laundryReceiptPreset, ...(existingPresets.LAUNDRY || {}) },
+    RETAIL: { ...retailReceiptPreset, ...(existingPresets.RETAIL || {}) },
+  };
+
   const mergedConfig: ReceiptConfig = {
     ...defaultPreset,
     ...savedConfig,
     vertical: detectedVertical,
     logoUrl: tenant.logoUrl || savedConfig.logoUrl || null,
+    presets: mergedPresets,
   };
 
   const purchasedLayoutIds: string[] = savedConfig.purchasedLayoutIds || [];
@@ -178,6 +193,7 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       logoUrl: tenant.logoUrl,
       receiptConfig: mergedConfig,
       detectedVertical,
+      activePlugins,
       isTrial,
       isPaidActive,
       tierName: activeSub?.licenseTier?.name || (isTrial ? "Trial Aktif" : "Lisensi Aktif"),
@@ -193,8 +209,39 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       activePosLayout,
       activeReceiptTemplate: mergedConfig.templateStyle || "DEFAULT",
       shiftMode: tenant.shiftMode || "FAST",
+      verticalConfig: (tenant.attributes as any)?.verticalConfig || {},
     })
   );
+}
+
+export async function updateTenantVerticalConfigAction(verticalConfig: Record<string, any>) {
+  const user = await requireOwner();
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+  });
+  if (!tenant) throw new Error("Tenant tidak ditemukan.");
+
+  const currentAttrs = (tenant.attributes as any) || {};
+  const updatedAttrs = {
+    ...currentAttrs,
+    verticalConfig: {
+      ...(currentAttrs.verticalConfig || {}),
+      ...verticalConfig,
+    },
+  };
+
+  await prisma.tenant.update({
+    where: { id: user.tenantId },
+    data: {
+      attributes: updatedAttrs,
+    },
+  });
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/store");
+  revalidatePath("/pos");
+  return { success: true, verticalConfig: updatedAttrs.verticalConfig };
 }
 
 export async function updateTenantShiftModeAction(shiftMode: "FAST" | "STRICT") {
@@ -252,9 +299,16 @@ export async function updateTenantBrandingAction(data: {
   }
 
   const existingConfig = (tenant.receiptConfig as any) || defaultReceiptConfig;
+  const existingPresets = existingConfig.presets || {};
+  const updatedPresets = {
+    ...existingPresets,
+    ...(receiptConfig?.presets || {}),
+  };
+
   const updatedConfig: any = {
     ...existingConfig,
     ...receiptConfig,
+    presets: updatedPresets,
     logoUrl: logoUrl !== undefined ? logoUrl : existingConfig.logoUrl,
     phone: phone !== undefined ? phone : existingConfig.phone,
     templateStyle: activeReceiptTemplate || receiptConfig?.templateStyle || existingConfig.templateStyle,

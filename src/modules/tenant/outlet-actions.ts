@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -16,7 +17,7 @@ async function requireOwner() {
 export async function getOutletsData() {
   const user = await requireOwner();
 
-  const [tenant, activeSub] = await Promise.all([
+  const [tenant, activeSub, tenantPlugins] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: user.tenantId },
       include: {
@@ -38,6 +39,7 @@ export async function getOutletsData() {
       where: { tenantId: user.tenantId, isActive: true },
       include: { licenseTier: true },
     }),
+    getTenantActivePlugins(user.tenantId),
   ]);
 
   if (!tenant) throw new Error("Tenant tidak ditemukan.");
@@ -49,6 +51,10 @@ export async function getOutletsData() {
 
   return {
     outlets: tenant.outlets,
+    activePlugins: (tenantPlugins || []).map((p: any) => ({
+      code: p.code,
+      name: p.name,
+    })),
     currentCount,
     outletLimit,
     canAddOutlet,
@@ -59,9 +65,10 @@ export async function getOutletsData() {
 export async function createOutletAction(data: {
   name: string;
   address?: string;
+  activeVerticals?: string[];
 }) {
   const user = await requireOwner();
-  const { name, address } = data;
+  const { name, address, activeVerticals } = data;
 
   if (!name.trim()) {
     throw new Error("Nama cabang outlet wajib diisi.");
@@ -92,6 +99,7 @@ export async function createOutletAction(data: {
       tenantId: user.tenantId,
       name: name.trim(),
       address: address?.trim() || null,
+      operatingHours: activeVerticals && activeVerticals.length > 0 ? { activeVerticals } : undefined,
       isActive: true,
     },
   });
@@ -124,9 +132,10 @@ export async function updateOutletAction(data: {
   outletId: string;
   name: string;
   address?: string;
+  activeVerticals?: string[];
 }) {
   const user = await requireOwner();
-  const { outletId, name, address } = data;
+  const { outletId, name, address, activeVerticals } = data;
 
   if (!name.trim()) throw new Error("Nama cabang outlet wajib diisi.");
 
@@ -138,16 +147,25 @@ export async function updateOutletAction(data: {
     throw new Error("Outlet tidak ditemukan.");
   }
 
+  const existingHours = (outlet.operatingHours as any) || {};
+  const updatedHours = {
+    ...existingHours,
+    activeVerticals: activeVerticals !== undefined ? activeVerticals : existingHours.activeVerticals,
+  };
+
   const updated = await prisma.outlet.update({
     where: { id: outletId },
     data: {
       name: name.trim(),
       address: address?.trim() || null,
+      operatingHours: updatedHours,
     },
   });
 
   revalidatePath("/dashboard/outlets");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/pos");
   return { success: true, outlet: updated };
 }
 

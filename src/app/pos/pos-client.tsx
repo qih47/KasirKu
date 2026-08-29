@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { swalWarning, swalConfirm, toastError, toastSuccess } from "@/lib/swal";
 import Link from "next/link";
 import {
@@ -166,6 +167,10 @@ export function PosClient({
   const { locale, tr, t } = useTranslation();
   const [shiftData, setShiftData] = useState(initialShiftData);
   const [products, setProducts] = useState(initialProducts);
+  const [mounted, setMounted] = useState<boolean>(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Dynamic Theming & Layout Engine from Context & DB
   const { themeTokens, posLayout: dynamicPosLayout } = useDynamicTheme();
@@ -461,6 +466,38 @@ export function PosClient({
       : defaultVertical
   );
 
+  const [showStationSelectorModal, setShowStationSelectorModal] = useState<boolean>(false);
+
+  // Check URL search parameters on mount (e.g. /pos?vertical=CAFE&outletId=...)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const vertParam = params.get("vertical")?.toUpperCase();
+      const outletParam = params.get("outletId");
+
+      if (outletParam) {
+        setShiftData((prev: any) => ({ ...prev, currentOutletId: outletParam }));
+      }
+
+      if (vertParam === "CAFE" && hasCafePlugin) {
+        setActiveVerticalPos("CAFE");
+        setShowStationSelectorModal(false);
+      } else if (vertParam === "BARBERSHOP" && hasBarbershopPlugin) {
+        setActiveVerticalPos("BARBERSHOP");
+        setShowStationSelectorModal(false);
+      } else if (vertParam === "LAUNDRY" && hasLaundryPlugin) {
+        setActiveVerticalPos("LAUNDRY");
+        setShowStationSelectorModal(false);
+      } else if (vertParam === "RETAIL" && hasRetailPlugin) {
+        setActiveVerticalPos("RETAIL");
+        setShowStationSelectorModal(false);
+      } else if (!vertParam && hasMultipleVerticals) {
+        // No vertical in URL and tenant has multi-vertical -> immediately prompt to choose station
+        setShowStationSelectorModal(true);
+      }
+    }
+  }, [hasCafePlugin, hasBarbershopPlugin, hasLaundryPlugin, hasRetailPlugin, hasMultipleVerticals]);
+
   // Dynamic POS Screen Layout from Active Vertical
   const posLayout: PosLayoutType =
     activeVerticalPos === "CAFE"
@@ -654,11 +691,34 @@ export function PosClient({
     setShowReceiptModal(true);
   };
 
-  // 2. Barbershop Station Workflow States
-  const barbersList = staffList.filter((s: any) => s.position === "BARBER" || s.role === "KASIR" || s.position === "KASIR");
+  // 2. Barbershop Station Workflow States (Filtered by Division)
+  const barbersList = staffList.filter((s: any) =>
+    s.position === "BARBER" ||
+    (s.position || "").toUpperCase().includes("BARBER") ||
+    (s.position || "").toUpperCase().includes("KAPSTER") ||
+    (s.position || "").toUpperCase().includes("STYLIST")
+  );
+  const effectiveBarbers = barbersList.length > 0 ? barbersList : staffList;
+
+  const laundryStaffList = staffList.filter((s: any) =>
+    (s.position || "").toUpperCase().includes("LAUNDRY") ||
+    (s.position || "").toUpperCase().includes("CUCI") ||
+    (s.position || "").toUpperCase().includes("SETRIKA") ||
+    (s.position || "").toUpperCase().includes("OPERATOR")
+  );
+  const effectiveLaundryStaff = laundryStaffList.length > 0 ? laundryStaffList : staffList;
+
+  const cafeStaffList = staffList.filter((s: any) =>
+    (s.position || "").toUpperCase().includes("BARISTA") ||
+    (s.position || "").toUpperCase().includes("CHEF") ||
+    (s.position || "").toUpperCase().includes("WAITER") ||
+    (s.position || "").toUpperCase().includes("DAPUR")
+  );
+  const effectiveCafeStaff = cafeStaffList.length > 0 ? cafeStaffList : staffList;
+
   const [selectedChair, setSelectedChair] = useState<string>("Kursi 1");
-  const [selectedCapsterId, setSelectedCapsterId] = useState<string>(barbersList[0]?.id || staffList[0]?.id || "");
-  const [selectedCapster, setSelectedCapster] = useState<string>(barbersList[0]?.name || "Stylist");
+  const [selectedCapsterId, setSelectedCapsterId] = useState<string>(effectiveBarbers[0]?.id || staffList[0]?.id || "");
+  const [selectedCapster, setSelectedCapster] = useState<string>(effectiveBarbers[0]?.name || "Stylist");
   const [barberTip, setBarberTip] = useState<number>(0);
 
   // 3. Retail Fast-Barcode Workflow States
@@ -1475,7 +1535,7 @@ export function PosClient({
           footerNote: receiptConfig.footerText || "Terima kasih atas kunjungan Anda!",
           promoBannerText: receiptConfig.promoBannerText || undefined,
           socialMediaText: receiptConfig.socialMediaText || undefined,
-          vertical: receiptConfig.vertical || (hasBarbershopPlugin ? "BARBERSHOP" : hasCafePlugin ? "CAFE" : hasLaundryPlugin ? "LAUNDRY" : "RETAIL"),
+          vertical: activeVerticalPos || receiptConfig.vertical || "CAFE",
           stylistName: (cart.find((c) => c.staffId) as any)?.staffId
             ? staffList.find((s: any) => s.id === (cart.find((c) => c.staffId) as any)?.staffId)?.name
             : undefined,
@@ -1653,6 +1713,36 @@ export function PosClient({
 
   const [filterAllVerticalsInPos, setFilterAllVerticalsInPos] = useState<boolean>(false);
 
+  const getProductVertical = (p: any): "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" => {
+    // 1. Explicit vertical registration from product attributes
+    if (p.attributes?.verticalType === "BARBERSHOP") return "BARBERSHOP";
+    if (p.attributes?.verticalType === "CAFE") return "CAFE";
+    if (p.attributes?.verticalType === "LAUNDRY") return "LAUNDRY";
+    if (p.attributes?.verticalType === "RETAIL") return "RETAIL";
+
+    // 2. Fallback heuristic for legacy products without explicit verticalType
+    if (p.attributes?.durationMinutes !== undefined) return "BARBERSHOP";
+    if (p.attributes?.serviceUnit !== undefined || p.attributes?.estimateTime !== undefined) return "LAUNDRY";
+    if (["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || "")) return "LAUNDRY";
+    if (["Pangkas", "Pangkas Rambut", "Haircut", "Shaving", "Styling"].includes(p.category || "")) return "BARBERSHOP";
+    if (p.attributes?.unit === "Porsi" || p.attributes?.unit === "Cup" || p.attributes?.unit === "Plate" || p.attributes?.unit === "Glass") return "CAFE";
+    if (p.type === "JASA") return "BARBERSHOP";
+
+    return "RETAIL";
+  };
+
+  const checkProductMatchesVertical = (p: any, vertPos: string): boolean => {
+    const prodVertical = getProductVertical(p);
+    return prodVertical === vertPos;
+  };
+
+  const visibleCategories = useMemo(() => {
+    if (filterAllVerticalsInPos) return categories;
+    const activeProds = products.filter((p) => p.isActive && checkProductMatchesVertical(p, activeVerticalPos));
+    const matchedSet = new Set(activeProds.map((p) => p.category).filter(Boolean));
+    return categories.filter((c) => matchedSet.has(c));
+  }, [categories, products, activeVerticalPos, filterAllVerticalsInPos]);
+
   const filteredProducts = products.filter((p) => {
     const matchCat =
       selectedCategory === "ALL" || p.category === selectedCategory;
@@ -1665,26 +1755,7 @@ export function PosClient({
 
     let matchVertical = true;
     if (!filterAllVerticalsInPos) {
-      if (posLayout === "BARBERSHOP_STATION") {
-        matchVertical =
-          p.attributes?.verticalType === "BARBERSHOP" ||
-          p.attributes?.durationMinutes !== undefined ||
-          (p.type === "JASA" && !["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || ""));
-      } else if (posLayout === "LAUNDRY_WEIGHING") {
-        matchVertical =
-          p.attributes?.verticalType === "LAUNDRY" ||
-          p.attributes?.serviceUnit !== undefined ||
-          p.attributes?.estimateTime !== undefined ||
-          ["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || "");
-      } else if (posLayout === "CAFE_RESTO") {
-        matchVertical =
-          p.attributes?.verticalType === "CAFE" ||
-          p.attributes?.unit === "Porsi" ||
-          p.attributes?.unit === "Cup" ||
-          p.attributes?.unit === "Plate" ||
-          p.attributes?.unit === "Glass" ||
-          (p.attributes?.verticalType === undefined && p.type === "BARANG" && p.attributes?.durationMinutes === undefined && p.attributes?.serviceUnit === undefined);
-      }
+      matchVertical = checkProductMatchesVertical(p, activeVerticalPos);
     }
 
     return matchCat && matchSearch && matchVertical && p.isActive;
@@ -1755,94 +1826,65 @@ export function PosClient({
               </div>
             )}
             <div>
-              <p className="text-xs font-black flex items-center gap-1.5" style={{ color: textPrimary }}>
-                <span>{tenantInfo?.businessName || "POS"}</span>
-                <span className="opacity-40">&bull;</span>
-                <span>{shiftData.outlets.find((o) => o.id === shiftData.currentOutletId)?.name || "Outlet Utama"}</span>
-                {activeShift ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 text-[10px] font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Shift Aktif
+              <button
+                type="button"
+                onClick={() => setShowStationSelectorModal(true)}
+                className="text-left group cursor-pointer flex items-center gap-2"
+                title="Klik untuk ganti cabang atau stasiun kerja kasir"
+              >
+                <div>
+                  <p className="text-xs font-black flex items-center gap-1.5" style={{ color: textPrimary }}>
+                    <span>{tenantInfo?.businessName || "POS"}</span>
+                    <span className="opacity-40">&bull;</span>
+                    <span className="underline decoration-dotted decoration-indigo-400 group-hover:text-indigo-500 transition">
+                      {shiftData.outlets.find((o) => o.id === shiftData.currentOutletId)?.name || "Outlet Utama"}
+                    </span>
+                    {activeShift ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Shift Aktif
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 border border-rose-500/30 text-[10px] font-bold">
+                        Shift Tertutup
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Sleek Active Station Pill Badge */}
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-black border shadow-xs transition hover:scale-105"
+                  style={
+                    activeVerticalPos === "CAFE"
+                      ? { backgroundColor: "#fef3c7", color: "#b45309", borderColor: "#fde68a" }
+                      : activeVerticalPos === "BARBERSHOP"
+                      ? { backgroundColor: "#dbeafe", color: "#1d4ed8", borderColor: "#bfdbfe" }
+                      : activeVerticalPos === "LAUNDRY"
+                      ? { backgroundColor: "#cffafe", color: "#0e7490", borderColor: "#a5f3fc" }
+                      : { backgroundColor: "#e0e7ff", color: "#4338ca", borderColor: "#c7d2fe" }
+                  }
+                >
+                  {activeVerticalPos === "CAFE" && <Coffee className="w-3.5 h-3.5" />}
+                  {activeVerticalPos === "BARBERSHOP" && <Scissors className="w-3.5 h-3.5" />}
+                  {activeVerticalPos === "LAUNDRY" && <Shirt className="w-3.5 h-3.5" />}
+                  {activeVerticalPos === "RETAIL" && <ShoppingBag className="w-3.5 h-3.5" />}
+                  <span>
+                    {activeVerticalPos === "CAFE"
+                      ? "Stasiun Kafe & Resto"
+                      : activeVerticalPos === "BARBERSHOP"
+                      ? "Stasiun Barbershop"
+                      : activeVerticalPos === "LAUNDRY"
+                      ? "Stasiun Laundry"
+                      : "Stasiun Retail"}
                   </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 border border-rose-500/30 text-[10px] font-bold">
-                    Shift Tertutup
-                  </span>
-                )}
-              </p>
+                  {hasMultipleVerticals && <span className="text-[10px] opacity-70">▾</span>}
+                </div>
+              </button>
             </div>
           </div>
 
         </div>
-
-        {/* Middle: Multi-Vertical POS Switcher (If Business has 2+ Verticals) */}
-        {hasMultipleVerticals && (
-          <div
-            className="flex items-center gap-1 p-1 rounded-2xl border shadow-inner overflow-x-auto"
-            style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}
-          >
-            {hasCafePlugin && (
-              <button
-                type="button"
-                onClick={() => setActiveVerticalPos("CAFE")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  activeVerticalPos === "CAFE"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
-                    : "hover:text-emerald-500 text-slate-500"
-                }`}
-                title="Beralih ke Mesin Kasir Kafe & Resto (Denah Meja & KOT)"
-              >
-                <Coffee className="w-3.5 h-3.5" />
-                <span>POS Kafe</span>
-              </button>
-            )}
-            {hasBarbershopPlugin && (
-              <button
-                type="button"
-                onClick={() => setActiveVerticalPos("BARBERSHOP")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  activeVerticalPos === "BARBERSHOP"
-                    ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
-                    : "hover:text-amber-500 text-slate-500"
-                }`}
-                title="Beralih ke Mesin Kasir Barbershop & Salon (Stasiun Kursi & Kapster)"
-              >
-                <Scissors className="w-3.5 h-3.5" />
-                <span>POS Barber</span>
-              </button>
-            )}
-            {hasLaundryPlugin && (
-              <button
-                type="button"
-                onClick={() => setActiveVerticalPos("LAUNDRY")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  activeVerticalPos === "LAUNDRY"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                    : "hover:text-purple-500 text-slate-500"
-                }`}
-                title="Beralih ke Mesin Kasir Laundry Kiloan & Satuan (Timbangan & Rak)"
-              >
-                <Shirt className="w-3.5 h-3.5" />
-                <span>POS Laundry</span>
-              </button>
-            )}
-            {hasRetailPlugin && (
-              <button
-                type="button"
-                onClick={() => setActiveVerticalPos("RETAIL")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  activeVerticalPos === "RETAIL"
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                    : "hover:text-blue-500 text-slate-500"
-                }`}
-                title="Beralih ke Mesin Kasir Toko Retail & Minimarket (Barcode & Grosir)"
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>POS Retail</span>
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Right Top Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1884,8 +1926,8 @@ export function PosClient({
                 <span className="hidden md:inline">Riwayat</span>
               </button>
 
-              {/* Manajemen Meja Kasir Button in Top Bar */}
-              {localCafeTables && localCafeTables.length > 0 && (
+              {/* Manajemen Meja Kasir Button in Top Bar (Khusus Stasiun Cafe) */}
+              {activeVerticalPos === "CAFE" && localCafeTables && localCafeTables.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setShowTableManagementModal(true)}
@@ -1911,8 +1953,8 @@ export function PosClient({
                 </button>
               )}
 
-              {/* Barbershop Queue Button in Top Bar */}
-              {hasBarbershopPlugin && (
+              {/* Barbershop Queue Button in Top Bar (Khusus Stasiun Barbershop) */}
+              {activeVerticalPos === "BARBERSHOP" && hasBarbershopPlugin && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1941,7 +1983,10 @@ export function PosClient({
 
               <button
                 type="button"
-                onClick={() => openLiveShiftSummary("SUMMARY")}
+                onClick={() => {
+                  setShiftModalActiveTab("SUMMARY");
+                  setShowShiftSummaryModal(true);
+                }}
                 className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-xs cursor-pointer"
                 style={{
                   backgroundColor: innerBoxBg,
@@ -1950,38 +1995,42 @@ export function PosClient({
                 }}
                 title="Laporan Rekapitulasi Kas, Omzet, dan Mutasi Kas Masuk/Keluar"
               >
-                <DollarSign className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="hidden md:inline">Kas & Rekap</span>
+                <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="hidden md:inline">Kas &amp; Rekap</span>
               </button>
 
-              {/* Quick Printer Setup Button */}
               <button
                 type="button"
-                onClick={() => setShowPrinterSetupModal(true)}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer"
+                onClick={() => setShowReceiptModal(true)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-xs cursor-pointer"
                 style={{
                   backgroundColor: innerBoxBg,
                   borderColor: cardBorder,
                   color: textPrimary,
                 }}
-                title="Pengaturan Cepat Printer Kasir & Ukuran Kertas"
+                title="Format &amp; Desain Kertas Struk"
               >
-                <Printer className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden lg:inline font-mono">{posPaperSize}</span>
+                <Printer className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden md:inline">
+                  {receiptConfig.printerPaperSize || "58mm"}
+                </span>
               </button>
 
               <button
-                onClick={openCloseShiftModal}
-                className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:border-rose-800 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer"
+                type="button"
+                onClick={() => setShowCloseShiftModal(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 cursor-pointer"
+                title="Tutup Shift & Hitung Total Kas Fisik"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Tutup Shift</span>
+                <span>Tutup Shift</span>
               </button>
             </>
           ) : (
             <button
+              type="button"
               onClick={() => setShowOpenShiftModal(true)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md text-white cursor-pointer"
               style={{ backgroundColor: primaryColor }}
             >
               <Clock className="w-4 h-4" />
@@ -2041,8 +2090,6 @@ export function PosClient({
             className="flex-1 flex flex-col overflow-hidden border-r transition-all"
             style={{ borderColor: cardBorder }}
           >
-
-
             {posLayout === "BARBERSHOP_STATION" && (
               <div
                 className="px-4 py-2 border-b flex items-center justify-between gap-3 text-xs font-bold"
@@ -2113,18 +2160,9 @@ export function PosClient({
                     <span>Auto-Scanner Active</span>
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    Arahkan barcode scanner ke produk untuk checkout cepat
+                    Arahkan barcode scanner atau ketik SKU produk untuk checkout cepat
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowNumpad(!showNumpad)}
-                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition flex items-center gap-1 ${showNumpad ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600"
-                    }`}
-                >
-                  <span>🔢 Numpad Kasir: {showNumpad ? "ON" : "OFF"}</span>
-                </button>
               </div>
             )}
 
@@ -2261,7 +2299,7 @@ export function PosClient({
                 >
                   Semua Kategori
                 </button>
-                {categories.map((cat) => (
+                {visibleCategories.map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
@@ -2831,37 +2869,49 @@ export function PosClient({
                   )}
                 </div>
 
-                {/* Specialized Numpad for Retail Fast-Barcode */}
-                {posLayout === "RETAIL_FAST_BARCODE" && showNumpad && (
-                  <div className="p-2 border-t bg-slate-50/80 dark:bg-slate-900/50 space-y-1">
-                    <div className="grid grid-cols-4 gap-1 text-xs font-black">
+                {/* Fast-Action Qty Toolbar for Retail */}
+                {posLayout === "RETAIL_FAST_BARCODE" && cart.length > 0 && (
+                  <div
+                    className="p-2.5 border-t space-y-1.5"
+                    style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-bold" style={{ color: textSecondary }}>
+                      <span>⚡ Ubah Cepat Qty:</span>
+                      <span className="text-indigo-600 font-extrabold truncate max-w-[150px]">
+                        {cart[selectedCartIdx !== null && cart[selectedCartIdx] ? selectedCartIdx : cart.length - 1]?.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5 text-xs font-black">
                       {[
-                        "1", "2", "3", "+1",
-                        "4", "5", "6", "+5",
-                        "7", "8", "9", "C",
-                        "0", "00", "Rp", "Pas",
-                      ].map((btn) => (
-                        <button
-                          key={btn}
-                          type="button"
-                          onClick={() => {
-                            if (btn === "C") {
-                              setAmountPaid("");
-                            } else if (btn === "Pas") {
-                              setAmountPaid(totalAmount);
-                            } else if (btn === "+1" && selectedCartIdx !== null && cart[selectedCartIdx]) {
-                              updateCartQty(cart[selectedCartIdx].productId, 1);
-                            } else if (btn === "+5" && selectedCartIdx !== null && cart[selectedCartIdx]) {
-                              updateCartQty(cart[selectedCartIdx].productId, 5);
-                            } else if (btn !== "+1" && btn !== "+5" && btn !== "Rp") {
-                              setAmountPaid((prev) => `${prev}${btn}`);
-                            }
-                          }}
-                          className="py-2 rounded-lg bg-white dark:bg-slate-800 border shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95 cursor-pointer"
-                        >
-                          {btn}
-                        </button>
-                      ))}
+                        { label: "+1", delta: 1 },
+                        { label: "+2", delta: 2 },
+                        { label: "+5", delta: 5 },
+                        { label: "+10", delta: 10 },
+                        { label: "🗑️ Hapus", delta: 0, isRemove: true },
+                      ].map((btn, idx) => {
+                        const targetItem = cart[selectedCartIdx !== null && cart[selectedCartIdx] ? selectedCartIdx : cart.length - 1];
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              if (!targetItem) return;
+                              if (btn.isRemove) {
+                                removeFromCart(targetItem.productId);
+                              } else {
+                                updateCartQty(targetItem.productId, btn.delta);
+                              }
+                            }}
+                            className={`py-2 rounded-xl border text-[11px] font-black transition cursor-pointer shadow-xs active:scale-95 flex items-center justify-center ${
+                              btn.isRemove
+                                ? "bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200"
+                                : "bg-white hover:bg-indigo-50 text-indigo-700 border-indigo-200"
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -5112,6 +5162,240 @@ export function PosClient({
           }}
         />
       )}
+
+      {/* 12. Modal Pemilihan Stasiun & Cabang Kasir (Station Selector) */}
+      {showStationSelectorModal &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+            <div
+              className="w-full max-w-xl rounded-3xl p-6 sm:p-8 shadow-2xl border space-y-6"
+              style={{
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+                color: textPrimary,
+                borderRadius: radius,
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: cardBorder }}>
+                <div>
+                  <span
+                    className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: `${primaryColor}15`,
+                      color: primaryColor,
+                      borderColor: `${primaryColor}30`,
+                    }}
+                  >
+                    Multi-Stasiun Kasir
+                  </span>
+                  <h3 className="text-lg font-black tracking-tight mt-1" style={{ color: textPrimary }}>
+                    Pilih Stasiun Kerja Kasir
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowStationSelectorModal(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Pilihan Cabang Aktif (Jika Lebih dari 1 Cabang) */}
+              {shiftData.outlets.length > 1 && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold block" style={{ color: textSecondary }}>
+                    Cabang Outlet Operasional:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {shiftData.outlets.map((o) => {
+                      const isSelected = o.id === shiftData.currentOutletId;
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => {
+                            setShiftData((prev: any) => ({ ...prev, currentOutletId: o.id }));
+                            toastSuccess(`Cabang kasir dialihkan ke "${o.name}"`);
+                          }}
+                          className={`p-3 rounded-2xl border text-left font-bold text-xs transition flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                          }`}
+                          style={!isSelected ? { backgroundColor: innerBoxBg, borderColor: cardBorder } : {}}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Store className="w-4 h-4" />
+                            <span className="truncate">{o.name}</span>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Pilihan Stasiun Kerja Vertikal */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold block" style={{ color: textSecondary }}>
+                  Mode Stasiun Kerja yang Ingin Dibuka:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {hasCafePlugin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveVerticalPos("CAFE");
+                        setShowStationSelectorModal(false);
+                        toastSuccess("✓ Beralih ke Stasiun Kasir Kafe & Resto");
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
+                        activeVerticalPos === "CAFE"
+                          ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-md"
+                          : "hover:border-emerald-300"
+                      }`}
+                      style={{ backgroundColor: innerBoxBg, borderColor: activeVerticalPos === "CAFE" ? "#10b981" : cardBorder }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold">
+                          <Coffee className="w-4 h-4" />
+                        </span>
+                        {activeVerticalPos === "CAFE" && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-black">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-xs" style={{ color: textPrimary }}>
+                        Stasiun Kafe &amp; Resto
+                      </div>
+                      <p className="text-[11px] leading-tight" style={{ color: textSecondary }}>
+                        Denah meja makan, tiket dapur (KOT), &amp; open bill tamu.
+                      </p>
+                    </button>
+                  )}
+
+                  {hasBarbershopPlugin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveVerticalPos("BARBERSHOP");
+                        setShowStationSelectorModal(false);
+                        toastSuccess("✓ Beralih ke Stasiun Kasir Barbershop");
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
+                        activeVerticalPos === "BARBERSHOP"
+                          ? "border-amber-500 ring-2 ring-amber-500/20 shadow-md"
+                          : "hover:border-amber-300"
+                      }`}
+                      style={{ backgroundColor: innerBoxBg, borderColor: activeVerticalPos === "BARBERSHOP" ? "#f59e0b" : cardBorder }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
+                          <Scissors className="w-4 h-4" />
+                        </span>
+                        {activeVerticalPos === "BARBERSHOP" && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-xs" style={{ color: textPrimary }}>
+                        Stasiun Barbershop
+                      </div>
+                      <p className="text-[11px] leading-tight" style={{ color: textSecondary }}>
+                        Antrean nomor kursi, booking jadwal, &amp; komisi kapster.
+                      </p>
+                    </button>
+                  )}
+
+                  {hasLaundryPlugin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveVerticalPos("LAUNDRY");
+                        setShowStationSelectorModal(false);
+                        toastSuccess("✓ Beralih ke Stasiun Kasir Laundry");
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
+                        activeVerticalPos === "LAUNDRY"
+                          ? "border-cyan-500 ring-2 ring-cyan-500/20 shadow-md"
+                          : "hover:border-cyan-300"
+                      }`}
+                      style={{ backgroundColor: innerBoxBg, borderColor: activeVerticalPos === "LAUNDRY" ? "#06b6d4" : cardBorder }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-600 flex items-center justify-center font-bold">
+                          <Shirt className="w-4 h-4" />
+                        </span>
+                        {activeVerticalPos === "LAUNDRY" && (
+                          <span className="px-2 py-0.5 rounded-full bg-cyan-500 text-white text-[10px] font-black">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-xs" style={{ color: textPrimary }}>
+                        Stasiun Kasir Laundry
+                      </div>
+                      <p className="text-[11px] leading-tight" style={{ color: textSecondary }}>
+                        Input timbangan Kg, pilihan parfum wangi, &amp; nomor rak simpan.
+                      </p>
+                    </button>
+                  )}
+
+                  {hasRetailPlugin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveVerticalPos("RETAIL");
+                        setShowStationSelectorModal(false);
+                        toastSuccess("✓ Beralih ke Stasiun Kasir Retail");
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
+                        activeVerticalPos === "RETAIL"
+                          ? "border-indigo-500 ring-2 ring-indigo-500/20 shadow-md"
+                          : "hover:border-indigo-300"
+                      }`}
+                      style={{ backgroundColor: innerBoxBg, borderColor: activeVerticalPos === "RETAIL" ? "#6366f1" : cardBorder }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-600 flex items-center justify-center font-bold">
+                          <ShoppingBag className="w-4 h-4" />
+                        </span>
+                        {activeVerticalPos === "RETAIL" && (
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-black">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-xs" style={{ color: textPrimary }}>
+                        Stasiun Kasir Retail
+                      </div>
+                      <p className="text-[11px] leading-tight" style={{ color: textSecondary }}>
+                        Scan barcode SKU cepat, numpad kuantiti, &amp; potongan grosir.
+                      </p>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowStationSelectorModal(false)}
+                  className="px-5 py-2.5 rounded-xl font-extrabold text-xs text-white transition shadow-md cursor-pointer"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  Mulai Bertransaksi
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

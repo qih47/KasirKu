@@ -92,16 +92,19 @@ export async function swalConfirm(
   return result.isConfirmed;
 }
 
-// ─── Toast ringan (pojok kanan, auto-dismiss) ─────────────────────────────────
+// ─── Toast ringan di tengah layar (auto-dismiss) ──────────────────────────────
 export const swalToast = Swal.mixin({
   toast: true,
-  position: "top-end",
+  position: "center",
   showConfirmButton: false,
-  timer: 3000,
+  showCancelButton: false,
+  showDenyButton: false,
+  backdrop: false,
+  timer: 1800,
   timerProgressBar: true,
   customClass: {
     popup:
-      "!rounded-2xl !font-sans !text-xs !shadow-xl dark:!bg-slate-800 dark:!text-slate-100 dark:!border dark:!border-slate-700",
+      "!rounded-3xl !py-4 !px-6 !font-sans !text-sm !font-bold !shadow-2xl dark:!bg-slate-900/95 dark:!text-slate-100 dark:!border dark:!border-slate-700 !bg-white/95 !text-slate-900 !backdrop-blur-md",
   },
   didOpen: (toast) => {
     toast.addEventListener("mouseenter", Swal.stopTimer);

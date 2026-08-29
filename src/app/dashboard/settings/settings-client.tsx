@@ -35,12 +35,26 @@ import {
   Clock,
   ShieldCheck,
   Ticket,
+  Coffee,
+  Scissors,
+  Shirt,
+  Layers,
+  ShoppingBag,
 } from "lucide-react";
 import {
   updateTenantBrandingAction,
   updateTenantShiftModeAction,
+  updateTenantVerticalConfigAction,
 } from "@/modules/tenant/settings-actions";
-import { ReceiptConfig, defaultReceiptConfig } from "@/types/receipt";
+import {
+  ReceiptConfig,
+  defaultReceiptConfig,
+  cafeReceiptPreset,
+  barbershopReceiptPreset,
+  laundryReceiptPreset,
+  retailReceiptPreset,
+  BusinessVertical,
+} from "@/types/receipt";
 import {
   DynamicReceiptRenderer,
   TransactionReceiptData,
@@ -54,6 +68,7 @@ interface SettingsClientProps {
     logoUrl?: string | null;
     receiptConfig: ReceiptConfig;
     detectedVertical: string;
+    activePlugins?: { code: string; name: string }[];
     isTrial: boolean;
     isPaidActive: boolean;
     tierName: string;
@@ -69,11 +84,12 @@ interface SettingsClientProps {
     activePosLayout: string;
     activeReceiptTemplate: string;
     shiftMode?: "FAST" | "STRICT";
+    verticalConfig?: Record<string, any>;
   };
 }
 
 export function SettingsClient({ initialData }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"BRANDING" | "THEMES" | "RECEIPT">("BRANDING");
+  const [activeTab, setActiveTab] = useState<"BRANDING" | "THEMES" | "RECEIPT" | "VERTICALS">("BRANDING");
 
   const outlets = initialData.outlets || [];
   const [selectedOutletId, setSelectedOutletId] = useState(
@@ -120,6 +136,73 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [activePosLayout, setActivePosLayout] = useState(initialData.activePosLayout || "DEFAULT");
   const [activeReceiptTemplate, setActiveReceiptTemplate] = useState(initialData.activeReceiptTemplate || "DEFAULT");
 
+  // Vertical Profile & Multi-Station Settings State
+  const initialVConfig = initialData.verticalConfig || {};
+  const [defaultStation, setDefaultStation] = useState<string>(initialVConfig.defaultStation || "AUTO");
+
+  // Cafe Settings
+  const [cafeAutoKOT, setCafeAutoKOT] = useState<boolean>(initialVConfig.cafe?.autoPrintKitchen ?? true);
+  const [cafeEnableTables, setCafeEnableTables] = useState<boolean>(initialVConfig.cafe?.enableTableManagement ?? true);
+  const [cafeServiceCharge, setCafeServiceCharge] = useState<number | string>(initialVConfig.cafe?.serviceChargePercent ?? 0);
+
+  // Barbershop Settings
+  const [barberDuration, setBarberDuration] = useState<number | string>(initialVConfig.barbershop?.defaultDurationMinutes ?? 30);
+  const [barberEnableQueue, setBarberEnableQueue] = useState<boolean>(initialVConfig.barbershop?.enableQueueBooking ?? true);
+  const [barberCommissionDefault, setBarberCommissionDefault] = useState<number | string>(initialVConfig.barbershop?.commissionSplitDefault ?? 40);
+  const [barberAutoAssignChair, setBarberAutoAssignChair] = useState<boolean>(initialVConfig.barbershop?.autoAssignNextChair ?? true);
+
+  // Laundry Settings
+  const [laundryWeightUnit, setLaundryWeightUnit] = useState<string>(initialVConfig.laundry?.defaultWeightUnit || "Kg");
+  const [laundryEstimate, setLaundryEstimate] = useState<string>(initialVConfig.laundry?.defaultEstimate || "2 Hari");
+  const [laundryScents, setLaundryScents] = useState<string>(initialVConfig.laundry?.availableScents || "Lavender, Ocean Fresh, Floral, Vanilla");
+  const [laundryRackPrefix, setLaundryRackPrefix] = useState<string>(initialVConfig.laundry?.rackStoragePrefix || "RAK-");
+
+  // Retail Settings
+  const [retailAutoScan, setRetailAutoScan] = useState<boolean>(initialVConfig.retail?.enableFastBarcodeScanner ?? true);
+  const [retailQuickQty, setRetailQuickQty] = useState<boolean>(initialVConfig.retail?.enableQuickQtyToolbar ?? true);
+  const [retailWholesale, setRetailWholesale] = useState<boolean>(initialVConfig.retail?.wholesaleAutoDiscount ?? true);
+
+  const [savingVerticals, setSavingVerticals] = useState<boolean>(false);
+
+  const handleSaveVerticals = async () => {
+    setSavingVerticals(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await updateTenantVerticalConfigAction({
+        defaultStation,
+        cafe: {
+          autoPrintKitchen: cafeAutoKOT,
+          enableTableManagement: cafeEnableTables,
+          serviceChargePercent: Number(cafeServiceCharge) || 0,
+        },
+        barbershop: {
+          defaultDurationMinutes: Number(barberDuration) || 30,
+          enableQueueBooking: barberEnableQueue,
+          commissionSplitDefault: Number(barberCommissionDefault) || 0,
+          autoAssignNextChair: barberAutoAssignChair,
+        },
+        laundry: {
+          defaultWeightUnit: laundryWeightUnit,
+          defaultEstimate: laundryEstimate,
+          availableScents: laundryScents,
+          rackStoragePrefix: laundryRackPrefix,
+        },
+        retail: {
+          enableFastBarcodeScanner: retailAutoScan,
+          enableQuickQtyToolbar: retailQuickQty,
+          wholesaleAutoDiscount: retailWholesale,
+        },
+      });
+      setSuccessMsg("✓ Profil & Konfigurasi Stasiun Vertikal berhasil disimpan!");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menyimpan konfigurasi vertikal.");
+    } finally {
+      setSavingVerticals(false);
+    }
+  };
+
   // Advance Customizer Accordion State
   const [isAdvanceOpen, setIsAdvanceOpen] = useState(initialData.hasReceiptProPlugin || false);
 
@@ -128,9 +211,24 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [socialTiktok, setSocialTiktok] = useState((initialData.receiptConfig as any)?.socialMediaTiktok || "");
   const [socialWebsite, setSocialWebsite] = useState((initialData.receiptConfig as any)?.socialMediaWebsite || "");
 
-  // Receipt Config State
+  // Multi-Vertical Sub-Presets Management
+  const initialPresets: Record<string, ReceiptConfig> = {
+    CAFE: { ...cafeReceiptPreset, ...(initialData.receiptConfig?.presets?.CAFE || {}) },
+    BARBERSHOP: { ...barbershopReceiptPreset, ...(initialData.receiptConfig?.presets?.BARBERSHOP || {}) },
+    LAUNDRY: { ...laundryReceiptPreset, ...(initialData.receiptConfig?.presets?.LAUNDRY || {}) },
+    RETAIL: { ...retailReceiptPreset, ...(initialData.receiptConfig?.presets?.RETAIL || {}) },
+  };
+
+  const detectedVert = (initialData.detectedVertical as any) || "CAFE";
+  const [activeVerticalPresetTab, setActiveVerticalPresetTab] = useState<"CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL">(
+    ["CAFE", "BARBERSHOP", "LAUNDRY", "RETAIL"].includes(detectedVert) ? detectedVert : "CAFE"
+  );
+
+  const [verticalPresets, setVerticalPresets] = useState<Record<string, ReceiptConfig>>(initialPresets);
+
+  // Receipt Config State (Active Sub-Preset)
   const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
-    ...defaultReceiptConfig,
+    ...(initialPresets[activeVerticalPresetTab] || defaultReceiptConfig),
     ...(initialData.receiptConfig || {}),
   });
 
@@ -141,10 +239,36 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   const handleConfigChange = (key: keyof ReceiptConfig, value: any) => {
-    setReceiptConfig((prev) => ({
+    setReceiptConfig((prev) => {
+      const updated = {
+        ...prev,
+        [key]: value,
+      };
+      setVerticalPresets((vPrev) => ({
+        ...vPrev,
+        [activeVerticalPresetTab]: updated,
+      }));
+      return updated;
+    });
+  };
+
+  const handleSwitchVerticalPreset = (newVert: "CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL") => {
+    // Save current active config to verticalPresets before switching
+    setVerticalPresets((prev) => ({
       ...prev,
-      [key]: value,
+      [activeVerticalPresetTab]: receiptConfig,
     }));
+    setActiveVerticalPresetTab(newVert);
+    const targetPreset = verticalPresets[newVert] || (
+      newVert === "CAFE"
+        ? cafeReceiptPreset
+        : newVert === "BARBERSHOP"
+        ? barbershopReceiptPreset
+        : newVert === "LAUNDRY"
+        ? laundryReceiptPreset
+        : retailReceiptPreset
+    );
+    setReceiptConfig(targetPreset);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,6 +352,10 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
           phone: phone.trim(),
           logoUrl: logoUrl.trim() || null,
           templateStyle: activeReceiptTemplate as any,
+          presets: {
+            ...verticalPresets,
+            [activeVerticalPresetTab]: receiptConfig,
+          },
           ...({
             socialMediaInstagram: socialInstagram.trim() || undefined,
             socialMediaTiktok: socialTiktok.trim() || undefined,
@@ -265,7 +393,38 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     }
   };
 
-  // Sample transaction data for unified thermal live preview
+  // Sample transaction data for dynamic live preview per active vertical
+  const getSampleItems = () => {
+    if (activeVerticalPresetTab === "BARBERSHOP") {
+      return [
+        { name: "Gentlemen Haircut + Wash", qty: 1, price: 65000, subtotal: 65000, notes: "Fade Cut, Hair Tonic" },
+        { name: "Matte Clay Pomade 100gr", qty: 1, price: 85000, subtotal: 85000 },
+      ];
+    }
+    if (activeVerticalPresetTab === "LAUNDRY") {
+      return [
+        { name: "Cuci Komplit Kiloan (3.5 Kg)", qty: 1, price: 35000, subtotal: 35000, notes: "Parfum Sakura Fresh, Lipat Rapi" },
+        { name: "Bed Cover King Size", qty: 1, price: 30000, subtotal: 30000, notes: "Vacuum Pack" },
+      ];
+    }
+    if (activeVerticalPresetTab === "RETAIL") {
+      return [
+        { name: "Minyak Goreng 2L Pouch", qty: 1, price: 34500, subtotal: 34500, barcode: "899123456789" },
+        { name: "Sabun Cuci Piring 750ml", qty: 2, price: 13500, subtotal: 27000, barcode: "899987654321" },
+        { name: "Biskuit Cokelat Kaleng", qty: 1, price: 42000, subtotal: 42000, barcode: "899555666777" },
+      ];
+    }
+    // Default Cafe & F&B
+    return [
+      { name: "Kopi Susu Gula Aren", qty: 1, price: 22000, subtotal: 22000, notes: "Normal Ice, Less Sweet" },
+      { name: "Iced Caramel Macchiato", qty: 1, price: 28000, subtotal: 28000, notes: "Extra Shot" },
+      { name: "Butter Croissant", qty: 1, price: 24000, subtotal: 24000 },
+    ];
+  };
+
+  const sampleItems = getSampleItems();
+  const sampleSubtotal = sampleItems.reduce((sum, it) => sum + it.subtotal, 0);
+
   const sampleTransactionData: TransactionReceiptData = {
     storeName: businessName || "Toko Anda",
     legalName: receiptConfig.legalName,
@@ -275,32 +434,36 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
     phone: phone || "",
     headerNote: receiptConfig.headerText || "",
     logoUrl: receiptConfig.logoUrl || logoUrl || null,
-    invoiceNo: "#INV-5078",
+    invoiceNo: activeVerticalPresetTab === "LAUNDRY" ? "LND-20260828-001" : "#INV-5078",
     dateTime: "14:30 WIB",
-    cashierName: "Rian (Kasir)",
-    queueNumber: "#A-24",
-    tableNumber: "Meja 08",
-    orderType: "Dine In",
-    items: [
-      { name: "Kopi Susu Gula Aren", qty: 1, price: 22000, subtotal: 22000, notes: "Normal Ice, Less Sweet" },
-      { name: "Iced Caramel Macchiato", qty: 1, price: 28000, subtotal: 28000, notes: "Extra Shot" },
-      { name: "Butter Croissant", qty: 1, price: 24000, subtotal: 24000 },
-    ],
-    subtotal: 74000,
-    discountAmount: receiptConfig.showDiscount ? Math.round((74000 * (receiptConfig.discountPercent || 10)) / 100) : 0,
-    taxPb1Amount: receiptConfig.showPb1 ? Math.round((74000 * (receiptConfig.pb1Percent || 10)) / 100) : 0,
-    taxPpnAmount: receiptConfig.showTax ? Math.round((74000 * (receiptConfig.taxPercent || 11)) / 100) : 0,
-    serviceChargeAmount: receiptConfig.showServiceCharge ? Math.round((74000 * (receiptConfig.servicePercent || 5)) / 100) : 0,
+    cashierName: activeVerticalPresetTab === "BARBERSHOP" ? "Rian (Kapster)" : activeVerticalPresetTab === "LAUNDRY" ? "Siti (Operator)" : "Rian (Kasir)",
+    queueNumber: activeVerticalPresetTab === "BARBERSHOP" ? "#B-12" : "#A-24",
+    tableNumber: activeVerticalPresetTab === "CAFE" ? "Meja 08" : activeVerticalPresetTab === "LAUNDRY" ? "Rak B-04" : undefined,
+    orderType: activeVerticalPresetTab === "CAFE" ? "Dine In" : activeVerticalPresetTab === "LAUNDRY" ? "Express 1 Hari" : "Walk-in",
+    vertical: activeVerticalPresetTab,
+    stylistName: activeVerticalPresetTab === "BARBERSHOP" ? "Rian" : undefined,
+    chairNumber: activeVerticalPresetTab === "BARBERSHOP" ? 2 : undefined,
+    laundryServiceType: activeVerticalPresetTab === "LAUNDRY" ? "KILOAN" : undefined,
+    laundryWeight: activeVerticalPresetTab === "LAUNDRY" ? 3.5 : undefined,
+    laundryFragrance: activeVerticalPresetTab === "LAUNDRY" ? "Sakura Fresh" : undefined,
+    laundryRack: activeVerticalPresetTab === "LAUNDRY" ? "Rak B-04" : undefined,
+    laundryEstimatedCompletionDate: activeVerticalPresetTab === "LAUNDRY" ? "29 Agu 2026, 17:00 WIB" : undefined,
+    items: sampleItems,
+    subtotal: sampleSubtotal,
+    discountAmount: receiptConfig.showDiscount ? Math.round((sampleSubtotal * (receiptConfig.discountPercent || 10)) / 100) : 0,
+    taxPb1Amount: (receiptConfig.showPb1 && activeVerticalPresetTab === "CAFE") ? Math.round((sampleSubtotal * (receiptConfig.pb1Percent || 10)) / 100) : 0,
+    taxPpnAmount: receiptConfig.showTax ? Math.round((sampleSubtotal * (receiptConfig.taxPercent || 11)) / 100) : 0,
+    serviceChargeAmount: (receiptConfig.showServiceCharge && activeVerticalPresetTab === "CAFE") ? Math.round((sampleSubtotal * (receiptConfig.servicePercent || 5)) / 100) : 0,
     adminFeeAmount: receiptConfig.showAdminFee ? Number(receiptConfig.adminFeeAmount || 1000) : 0,
     grandTotal:
-      74000 +
-      (receiptConfig.showTax ? Math.round((74000 * (receiptConfig.taxPercent || 11)) / 100) : 0) +
-      (receiptConfig.showPb1 ? Math.round((74000 * (receiptConfig.pb1Percent || 10)) / 100) : 0) +
-      (receiptConfig.showServiceCharge ? Math.round((74000 * (receiptConfig.servicePercent || 5)) / 100) : 0) +
+      sampleSubtotal +
+      (receiptConfig.showTax ? Math.round((sampleSubtotal * (receiptConfig.taxPercent || 11)) / 100) : 0) +
+      ((receiptConfig.showPb1 && activeVerticalPresetTab === "CAFE") ? Math.round((sampleSubtotal * (receiptConfig.pb1Percent || 10)) / 100) : 0) +
+      ((receiptConfig.showServiceCharge && activeVerticalPresetTab === "CAFE") ? Math.round((sampleSubtotal * (receiptConfig.servicePercent || 5)) / 100) : 0) +
       (receiptConfig.showAdminFee ? Number(receiptConfig.adminFeeAmount || 1000) : 0) -
-      (receiptConfig.showDiscount ? Math.round((74000 * (receiptConfig.discountPercent || 10)) / 100) : 0),
+      (receiptConfig.showDiscount ? Math.round((sampleSubtotal * (receiptConfig.discountPercent || 10)) / 100) : 0),
     paymentMethod: "QRIS",
-    amountPaid: 74000,
+    amountPaid: sampleSubtotal,
     changeAmount: 0,
     coupon: receiptConfig.dynamicCoupon?.enabled
       ? {
@@ -408,6 +571,21 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Konfigurasi Struk</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("VERTICALS")}
+            className="px-4 py-2 text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+            style={{
+              borderRadius: "calc(var(--theme-radius, 1.5rem) * 0.5)",
+              backgroundColor: activeTab === "VERTICALS" ? "var(--theme-card-bg, #ffffff)" : "transparent",
+              color: activeTab === "VERTICALS" ? "var(--theme-primary, #4f46e5)" : "var(--theme-text-secondary, #64748b)",
+              boxShadow: activeTab === "VERTICALS" ? "0 2px 8px rgba(0,0,0,0.06)" : "none",
+            }}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Profil &amp; Stasiun Vertikal</span>
           </button>
         </div>
       </div>
@@ -1024,6 +1202,84 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Sisi Kiri: Panel Pengaturan Struk (7 Kolom) */}
           <div className="lg:col-span-7 space-y-5">
+            {/* Sub-Preset Vertikal Selector Bar */}
+            <div
+              className="p-4 sm:p-5 border shadow-sm space-y-3"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.25rem)",
+              }}
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">
+                    Konfigurasi Struk Spesifik Vertikal
+                  </span>
+                  <h4 className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Pilih Format Struk yang Ingin Disesuaikan:
+                  </h4>
+                </div>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                  Sub-Preset Terisolasi
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchVerticalPreset("CAFE")}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeVerticalPresetTab === "CAFE"
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Coffee className="w-3.5 h-3.5" />
+                  <span>Cafe &amp; Resto</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSwitchVerticalPreset("BARBERSHOP")}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeVerticalPresetTab === "BARBERSHOP"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                  <span>Barbershop</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSwitchVerticalPreset("LAUNDRY")}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeVerticalPresetTab === "LAUNDRY"
+                      ? "bg-cyan-600 text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Shirt className="w-3.5 h-3.5" />
+                  <span>Laundry</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSwitchVerticalPreset("RETAIL")}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeVerticalPresetTab === "RETAIL"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Retail &amp; Mart</span>
+                </button>
+              </div>
+            </div>
+
             {/* Kartu 1: Pemilihan Tema Struk Aktif */}
             <div
               className="p-5 sm:p-6 border shadow-sm space-y-3"
@@ -2079,6 +2335,422 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
                     Powered by Qassa POS
                   </p>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PROFIL & STASIUN VERTIKAL */}
+      {activeTab === "VERTICALS" && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header Action & Save */}
+          <div
+            className="p-6 border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            style={{
+              backgroundColor: "var(--theme-card-bg, #ffffff)",
+              borderColor: "var(--theme-card-border, #e2e8f0)",
+              borderRadius: "var(--theme-radius, 1.5rem)",
+            }}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 font-black text-xs flex items-center gap-1.5">
+                  <Layers className="w-4 h-4" />
+                  <span>Multi-Vertikal Modular</span>
+                </span>
+                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
+                  {initialData.activePlugins?.length || 0} Plugin Aktif
+                </span>
+              </div>
+              <h2 className="text-base font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                Pengaturan Profil Operasional &amp; Stasiun Vertikal
+              </h2>
+              <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Sesuaikan alur kerja operasional spesifik per jenis usaha: Kafe, Barbershop, Laundry, dan Toko Retail.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveVerticals}
+              disabled={savingVerticals}
+              className="px-6 py-2.5 rounded-xl font-black text-xs text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {savingVerticals ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>Simpan Profil Vertikal</span>
+            </button>
+          </div>
+
+          {/* Stasiun Default Saat Buka Kasir */}
+          <div
+            className="p-6 border shadow-sm space-y-4"
+            style={{
+              backgroundColor: "var(--theme-card-bg, #ffffff)",
+              borderColor: "var(--theme-card-border, #e2e8f0)",
+              borderRadius: "var(--theme-radius, 1.5rem)",
+            }}
+          >
+            <div className="border-b pb-3 space-y-1" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+              <h3 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                <Monitor className="w-4 h-4 text-indigo-500" />
+                <span>Stasiun Kasir Utama (Default POS)</span>
+              </h3>
+              <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                Tentukan stasiun kerja kasir yang otomatis aktif saat pertama kali kasir membuka layar transaksi POS.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { id: "AUTO", name: "Otomatis (Pilih di Layar)", icon: Layers, desc: "Kasir memilih stasiun saat pertama login." },
+                { id: "CAFE", name: "Stasiun Kafe & Resto", icon: Coffee, desc: "Denah meja makan & tiket dapur KOT." },
+                { id: "BARBERSHOP", name: "Stasiun Barbershop", icon: Scissors, desc: "Antrean potong, kursi, & komisi kapster." },
+                { id: "LAUNDRY", name: "Stasiun Laundry", icon: Shirt, desc: "Timbangan Kg & pilihan parfum wangi." },
+                { id: "RETAIL", name: "Stasiun Retail", icon: ShoppingBag, desc: "Scan barcode cepat & toolbar kuantiti." },
+              ].map((s) => {
+                const isSelected = defaultStation === s.id;
+                const IconComp = s.icon;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setDefaultStation(s.id)}
+                    className={`p-4 rounded-2xl border text-left transition space-y-2 cursor-pointer ${
+                      isSelected
+                        ? "border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20 shadow-sm"
+                        : "hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                    style={!isSelected ? { backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" } : {}}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${isSelected ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}>
+                        <IconComp className="w-4 h-4" />
+                      </span>
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-indigo-600" />}
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-xs" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                        {s.name}
+                      </div>
+                      <p className="text-[11px] leading-tight mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                        {s.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Grid Konfigurasi Spesifik Per Vertikal */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. KAFE & RESTO */}
+            <div
+              className="p-6 border shadow-sm space-y-5"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center font-bold">
+                    <Coffee className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Modul Kafe &amp; Resto
+                    </h3>
+                    <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">F&amp;B Operations</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Tiket Dapur (KOT) Otomatis
+                    </div>
+                    <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Cetak tiket pesanan dapur saat pesanan meja disimpan.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={cafeAutoKOT}
+                    onChange={(e) => setCafeAutoKOT(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Manajemen &amp; Denah Meja
+                    </div>
+                    <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Tampilkan tombol denah meja dan open bill di header kasir POS.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={cafeEnableTables}
+                    onChange={(e) => setCafeEnableTables(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Biaya Layanan Resto / Service Charge (%):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={cafeServiceCharge}
+                    onChange={(e) => setCafeServiceCharge(e.target.value)}
+                    placeholder="Contoh: 5"
+                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. BARBERSHOP */}
+            <div
+              className="p-6 border shadow-sm space-y-5"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-bold">
+                    <Scissors className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Modul Barbershop &amp; Salon
+                    </h3>
+                    <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Grooming &amp; Booking</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Integrasi Antrean Kursi di POS
+                    </div>
+                    <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Munculkan tombol antrean kursi &amp; status potong di layar kasir.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={barberEnableQueue}
+                    onChange={(e) => setBarberEnableQueue(e.target.checked)}
+                    className="w-4 h-4 text-amber-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Durasi Standar (Menit):
+                    </label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="180"
+                      value={barberDuration}
+                      onChange={(e) => setBarberDuration(e.target.value)}
+                      placeholder="30"
+                      className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Komisi Default Kapster (%):
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={barberCommissionDefault}
+                      onChange={(e) => setBarberCommissionDefault(e.target.value)}
+                      placeholder="40"
+                      className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30 transition"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. LAUNDRY */}
+            <div
+              className="p-6 border shadow-sm space-y-5"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-600 flex items-center justify-center font-bold">
+                    <Shirt className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Modul Laundry &amp; Cuci
+                    </h3>
+                    <span className="text-[10px] text-cyan-600 font-bold uppercase tracking-wider">Kiloan &amp; Satuan</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Satuan Timbangan Utama:
+                    </label>
+                    <select
+                      value={laundryWeightUnit}
+                      onChange={(e) => setLaundryWeightUnit(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition cursor-pointer"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    >
+                      <option value="Kg">Kilogram (Kg)</option>
+                      <option value="Pcs">Satuan (Pcs / Lembar)</option>
+                      <option value="Meter">Meter (Karpet/Gorden)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Estimasi Pengerjaan:
+                    </label>
+                    <input
+                      type="text"
+                      value={laundryEstimate}
+                      onChange={(e) => setLaundryEstimate(e.target.value)}
+                      placeholder="Contoh: 2 Hari"
+                      className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition"
+                      style={{
+                        backgroundColor: "var(--theme-input-bg, #ffffff)",
+                        borderColor: "var(--theme-card-border, #e2e8f0)",
+                        color: "var(--theme-text-primary, #0f172a)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Pilihan Varian Parfum (Pisahkan Koma):
+                  </label>
+                  <input
+                    type="text"
+                    value={laundryScents}
+                    onChange={(e) => setLaundryScents(e.target.value)}
+                    placeholder="Lavender, Ocean Fresh, Floral, Vanilla"
+                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. RETAIL */}
+            <div
+              className="p-6 border shadow-sm space-y-5"
+              style={{
+                backgroundColor: "var(--theme-card-bg, #ffffff)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+                borderRadius: "var(--theme-radius, 1.5rem)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-600 flex items-center justify-center font-bold">
+                    <ShoppingBag className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Modul Retail &amp; Toko
+                    </h3>
+                    <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">Fast Checkout</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Auto-Focus Barcode Scanner
+                    </div>
+                    <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Input barcode otomatis fokus dan langsung memasukkan item ke keranjang saat discan.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={retailAutoScan}
+                    onChange={(e) => setRetailAutoScan(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: "var(--theme-inner-bg, #f8fafc)", borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                      Bilah Toolbar Kuantiti Cepat
+                    </div>
+                    <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                      Tombol cepat kuantiti (+1, +2, +5, +10) di bawah keranjang belanja.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={retailQuickQty}
+                    onChange={(e) => setRetailQuickQty(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                  />
+                </div>
               </div>
             </div>
           </div>

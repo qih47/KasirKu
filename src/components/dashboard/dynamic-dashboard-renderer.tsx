@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useDynamicTheme, BUILTIN_THEME_PRESETS } from "@/components/theme/dynamic-theme-provider";
 import { DashboardWidgetId } from "@/types/plugin-package";
+import { OpenPosButton } from "@/components/pos/open-pos-button";
 
 export interface DashboardMetricsData {
   tenantName: string;
@@ -547,14 +548,12 @@ export function DynamicDashboardRenderer({
         </div>
 
         <div className="relative z-10 flex items-center gap-3">
-          <Link
-            href="/pos"
-            className="px-5 py-2.5 bg-white font-extrabold text-xs shadow-lg hover:bg-slate-50 transition flex items-center gap-2 rounded-xl"
-            style={{ color: primaryColor }}
-          >
-            <span>Buka Kasir (POS)</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          <OpenPosButton
+            activePlugins={data.activePlugins || []}
+            primaryColor="#ffffff"
+            className="px-5 py-2.5 bg-white font-extrabold text-xs shadow-lg hover:bg-slate-50 transition flex items-center gap-2 rounded-xl text-slate-900 cursor-pointer"
+            buttonText="Buka Kasir POS"
+          />
         </div>
       </div>
 

@@ -51,6 +51,10 @@ import {
   Trash2,
   Wallet,
   Receipt,
+  Coffee,
+  Scissors,
+  Shirt,
+  ShoppingBag,
 } from "lucide-react";
 
 export function PayrollClient({
@@ -67,6 +71,7 @@ export function PayrollClient({
     hasSavedSnapshots?: boolean;
     records: PayrollStaffRecord[];
     outlets: any[];
+    activePlugins?: Array<{ code: string; name: string }>;
     businessName: string;
     summary: {
       totalStaffCount: number;
@@ -80,11 +85,17 @@ export function PayrollClient({
   const [month, setMonth] = useState(initialData.selectedMonth);
   const [outletId, setOutletId] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterDivision, setFilterDivision] = useState<"ALL" | "CAFE" | "BARBER" | "LAUNDRY" | "RETAIL">("ALL");
   const [loading, setLoading] = useState(false);
   const [cutoffDay, setCutoffDay] = useState<number>(initialData.payrollCutoffDay || 25);
   const [savingCutoff, setSavingCutoff] = useState(false);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [lockingPeriod, setLockingPeriod] = useState(false);
+
+  const isCafeActive = (data.activePlugins || []).some((p) => p.code === "cafe");
+  const isBarberActive = (data.activePlugins || []).some((p) => p.code === "barbershop");
+  const isLaundryActive = (data.activePlugins || []).some((p) => p.code === "laundry");
+  const isRetailActive = (data.activePlugins || []).some((p) => p.code === "retail");
 
   // Tab: "PAYROLL" | "ADVANCES" | "HISTORY"
   const [activeTab, setActiveTab] = useState<"PAYROLL" | "ADVANCES" | "HISTORY">("PAYROLL");
@@ -1092,7 +1103,6 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
         <>
 
           {/* Cut-off Info & Payday Cycle Configuration Banner (Fully Theme Responsive) */}
-
           <div
             className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl border shadow-xs animate-fadeIn"
             style={{
@@ -1100,41 +1110,28 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
               borderColor: "var(--theme-card-border, rgba(99, 102, 241, 0.2))",
             }}
           >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-2xl text-white flex items-center justify-center font-bold text-base shadow-sm flex-shrink-0"
-                style={{
-                  backgroundColor: "var(--theme-primary, #4f46e5)",
-                }}
-              >
-                📅
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="font-black text-xs sm:text-sm"
-                    style={{ color: "var(--theme-text-primary, #0f172a)" }}
-                  >
-                    Periode Cut-Off: {data.periodLabel}
-                  </span>
-                  <span
-                    className="px-2 py-0.5 rounded-md font-extrabold text-[10px]"
-                    style={{
-                      backgroundColor: "rgba(99, 102, 241, 0.15)",
-                      color: "var(--theme-primary, #6366f1)",
-                      border: "1px solid var(--theme-card-border, rgba(99, 102, 241, 0.3))",
-                    }}
-                  >
-                    {cutoffDay === 1 ? "1 - 31 Kalender" : `Tgl ${cutoffDay} - ${cutoffDay - 1}`}
-                  </span>
-                </div>
-                <p
-                  className="text-[11px] font-medium mt-0.5"
-                  style={{ color: "var(--theme-text-secondary, #64748b)" }}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border"
+                  style={{
+                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                    color: "#059669",
+                    borderColor: "rgba(16, 185, 129, 0.25)",
+                  }}
                 >
-                  Komisi kasir POS &amp; rekap lembur ditarik otomatis sesuai rentang cut-off Bisnis.
-                </p>
+                  {(data as any).isPeriodLocked ? "Periode Terkunci" : "Draft Aktif (Bisa Diedit)"}
+                </span>
+                <span className="text-xs font-bold text-slate-400">
+                  {outletId === "ALL" ? "Seluruh Cabang" : data.outlets.find((o) => o.id === outletId)?.name}
+                </span>
               </div>
+              <h2
+                className="text-base sm:text-lg font-black tracking-tight"
+                style={{ color: "var(--theme-text-primary, #0f172a)" }}
+              >
+                Periode Gaji: {data.periodLabel}
+              </h2>
             </div>
 
             {/* Tanggal Gajian Dropdown Selector */}
@@ -1217,6 +1214,82 @@ Terima kasih atas dedikasi dan kerja keras Anda! 🙏`;
               </p>
               <p className="text-[11px] text-slate-500 font-medium">Di seluruh outlet aktif</p>
             </div>
+          </div>
+
+          {/* Division Quick Tabs */}
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-sm overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setFilterDivision("ALL")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                filterDivision === "ALL"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Semua Divisi</span>
+            </button>
+
+            {isCafeActive && (
+              <button
+                type="button"
+                onClick={() => setFilterDivision("CAFE")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  filterDivision === "CAFE"
+                    ? "bg-amber-600 text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Coffee className="w-3.5 h-3.5" />
+                <span>Tim Cafe &amp; Resto</span>
+              </button>
+            )}
+
+            {isBarberActive && (
+              <button
+                type="button"
+                onClick={() => setFilterDivision("BARBER")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  filterDivision === "BARBER"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                <span>Tim Barbershop</span>
+              </button>
+            )}
+
+            {isLaundryActive && (
+              <button
+                type="button"
+                onClick={() => setFilterDivision("LAUNDRY")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  filterDivision === "LAUNDRY"
+                    ? "bg-cyan-600 text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Shirt className="w-3.5 h-3.5" />
+                <span>Tim Laundry</span>
+              </button>
+            )}
+
+            {isRetailActive && (
+              <button
+                type="button"
+                onClick={() => setFilterDivision("RETAIL")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  filterDivision === "RETAIL"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Tim Kasir &amp; Retail</span>
+              </button>
+            )}
           </div>
 
           {/* Search Bar & Action Buttons (Simpan Draft / Kunci Periode) */}

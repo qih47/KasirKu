@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 import { getActiveBroadcastForTenant } from "@/modules/superadmin/broadcast-actions";
 import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
+import { OpenPosButton } from "@/components/pos/open-pos-button";
 
 export default async function DashboardLayout({
   children,
@@ -35,6 +36,10 @@ export default async function DashboardLayout({
       ? prisma.tenant.findUnique({
           where: { id: user.tenantId },
           include: {
+            outlets: {
+              where: { isActive: true },
+              select: { id: true, name: true, operatingHours: true },
+            },
             subscriptions: {
               where: { isActive: true },
               include: {
@@ -318,14 +323,12 @@ export default async function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              href="/pos"
-              className="px-4 py-2 rounded-xl text-white text-xs font-black shadow-md transition-all duration-150 active:scale-95 flex items-center gap-2"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              <span>Buka Kasir POS</span>
-            </Link>
+            <OpenPosButton
+              outlets={tenant?.outlets || []}
+              activePlugins={activePlugins || []}
+              currentOutletId={user.outletId}
+              primaryColor={primaryColor}
+            />
 
             <div
               className={`hidden sm:block text-right pl-2 border-l ${

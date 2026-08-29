@@ -93,6 +93,7 @@ export interface ReceiptConfig {
   purchasedThemeIds?: string[]; // Daftar ID tema struk yang sudah dibeli oleh tenant
   posLayout?: "STANDARD" | "CAFE_QUICK_ORDER" | "CAFE_RESTO" | "BARBERSHOP_STATION" | "RETAIL_FAST_BARCODE" | "LAUNDRY_WEIGHING";
   purchasedLayoutIds?: string[]; // Daftar ID tema layout POS yang sudah dibeli oleh tenant
+  presets?: Partial<Record<BusinessVertical, ReceiptConfig>>; // Sub-presets khusus per industri vertikal
 }
 
 // Receipt Theme Metadata for Store Catalog

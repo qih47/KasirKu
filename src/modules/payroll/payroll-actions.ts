@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 
 async function requireOwner() {
   const session = await getServerSession(authOptions);
@@ -281,7 +282,7 @@ export async function getPayrollData(params?: {
     whereStaff.outletId = params.outletId;
   }
 
-  const [staffList, commissions, savedSnapshots, activeAdvances] = await Promise.all([
+  const [staffList, commissions, savedSnapshots, activeAdvances, tenantActivePlugins] = await Promise.all([
     prisma.user.findMany({
       where: whereStaff,
       orderBy: { name: "asc" },
@@ -319,6 +320,7 @@ export async function getPayrollData(params?: {
       },
       orderBy: { createdAt: "asc" },
     }),
+    getTenantActivePlugins(user.tenantId),
   ]);
 
   const isPeriodLocked = savedSnapshots.length > 0 && savedSnapshots.every((s: any) => s.isLocked);
@@ -489,6 +491,10 @@ export async function getPayrollData(params?: {
       hasSavedSnapshots: savedSnapshots.length > 0,
       records,
       outlets: tenant?.outlets || [],
+      activePlugins: (tenantActivePlugins || []).map((p: any) => ({
+        code: p.code || p.plugin?.code || "",
+        name: p.name || p.plugin?.name || "",
+      })),
       businessName: tenant?.businessName || "Bisnis Saya",
       summary: {
         totalStaffCount: records.length,

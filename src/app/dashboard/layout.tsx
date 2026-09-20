@@ -3,9 +3,10 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Store, LogOut, LayoutDashboard, ShoppingCart, Package, Users, Settings, Bell, Radio, Info, AlertTriangle } from "lucide-react";
+import { Store, LogOut, LayoutDashboard, ShoppingCart, ShoppingBag, Package, Users, Settings, Bell, Radio, Info, AlertTriangle } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { DashboardNavLinks } from "./dashboard-nav-links";
+import { UserNavMenu } from "@/components/layout/user-nav-menu";
 import { prisma } from "@/lib/prisma";
 import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 import { getActiveBroadcastForTenant } from "@/modules/superadmin/broadcast-actions";
@@ -322,7 +323,23 @@ export default async function DashboardLayout({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Store & Marketplace CTA */}
+            <Link
+              href="/dashboard/store"
+              className={`hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-2xl border font-black text-xs transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md ${
+                isLuxeDark
+                  ? "bg-slate-800/90 hover:bg-slate-800 border-amber-500/40 text-amber-300 hover:border-amber-400"
+                  : "bg-amber-50 hover:bg-amber-100/90 border-amber-300 text-amber-950 hover:border-amber-400"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <span>Store &amp; Tema</span>
+              <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                PRO
+              </span>
+            </Link>
+
             <OpenPosButton
               outlets={tenant?.outlets || []}
               activePlugins={activePlugins || []}
@@ -330,19 +347,16 @@ export default async function DashboardLayout({
               primaryColor={primaryColor}
             />
 
-            <div
-              className={`hidden sm:block text-right pl-2 border-l ${
-                isLuxeDark ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <p className={`text-xs font-bold ${isLuxeDark ? "text-slate-100" : "text-slate-900"}`}>
-                {user.name}
-              </p>
-              <p className={`text-[11px] ${isLuxeDark ? "text-slate-400" : "text-slate-500"}`}>
-                {user.email}
-              </p>
-            </div>
-            <SignOutButton />
+            <UserNavMenu
+              user={{
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                image: user.image,
+              }}
+              primaryColor={primaryColor}
+              isLuxeDark={isLuxeDark}
+            />
           </div>
         </div>
       </header>

@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
     "db:setup": "prisma generate && prisma db push && npm run db:seed",
-    "db:reset": "prisma db push --force-reset && npm run db:seed"
+    "db:reset": "prisma db push --force-reset && npm run db:seed",
+    "tunnel": "node scripts/tunnel.js",
+    "ngrok": "node scripts/tunnel.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -38,6 +40,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@ngrok/ngrok": "^1.7.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.17.16",
     "@types/react": "^18.3.18",

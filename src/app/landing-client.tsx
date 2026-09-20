@@ -269,10 +269,10 @@ export function LandingClient({
         className="border-b sticky top-0 z-50 backdrop-blur-xl transition-colors duration-300"
         style={{ backgroundColor: t.navBg, borderColor: t.borderSoft }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-1 group">
-            <div className="relative w-20 h-20 group-hover:scale-105 transition">
+          <Link href="/" className="flex items-center gap-1 group flex-shrink-0">
+            <div className="relative w-10 h-10 sm:w-16 sm:h-16 group-hover:scale-105 transition flex-shrink-0">
               <Image
                 src="/smLogo.png"
                 alt="Qassa Logo"
@@ -282,18 +282,18 @@ export function LandingClient({
               />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-2xl tracking-tight" style={{ color: t.text }}>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-black text-lg sm:text-2xl tracking-tight" style={{ color: t.text }}>
                   Qassa
                 </span>
                 <span
-                  className="text-[10px] px-2.5 py-0.5 rounded-full font-extrabold border uppercase tracking-wider"
+                  className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-extrabold border uppercase tracking-wider"
                   style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
                 >
                   Cloud POS
                 </span>
               </div>
-              <p className="text-[10px] font-medium" style={{ color: t.textMuted }}>
+              <p className="hidden sm:block text-[10px] font-medium" style={{ color: t.textMuted }}>
                 Smart Multi-Vertical Platform
               </p>
             </div>
@@ -309,31 +309,31 @@ export function LandingClient({
           </nav>
 
           {/* Right CTA + Dark/Light Toggle */}
-          <div className="flex items-center gap-2">
-
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* Dark / Light Mode Toggle */}
             <button
               type="button"
               onClick={() => setIsDark(!isDark)}
               title={isDark ? (locale === "en" ? "Switch to Light Mode" : "Ganti ke Mode Terang") : (locale === "en" ? "Switch to Dark Mode" : "Ganti ke Mode Gelap")}
-              className="w-9 h-9 rounded-xl flex items-center justify-center border transition-all hover:scale-105"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border transition-all hover:scale-105 flex-shrink-0"
               style={{ backgroundColor: t.toggleBg, borderColor: t.borderSoft, color: t.textSub }}
             >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+              {isDark ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500" />}
             </button>
 
             <Link
               href="/login"
-              className="px-4 py-2.5 rounded-xl text-xs font-bold transition"
+              className="px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition flex-shrink-0"
               style={{ color: t.textSub }}
             >
               {locale === "en" ? "Sign In" : "Masuk"}
             </Link>
             <Link
               href="/register"
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 transition flex items-center gap-1.5 active:scale-95"
+              className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-md shadow-indigo-600/25 transition flex items-center gap-1 active:scale-95 flex-shrink-0 whitespace-nowrap"
             >
-              <span>{trialCtaLabel}</span>
+              <span className="hidden sm:inline">{trialCtaLabel}</span>
+              <span className="sm:hidden">Coba Gratis</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -341,17 +341,17 @@ export function LandingClient({
       </header>
 
       {/* ── HERO ── */}
-      <section className="relative z-10 pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8">
+      <section className="relative z-10 pt-10 pb-16 sm:pt-24 sm:pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-6 sm:space-y-8">
         <div
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-extrabold"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[11px] sm:text-xs font-extrabold max-w-full"
           style={{ backgroundColor: t.pillBg, borderColor: t.pillBorder, color: t.pillText }}
         >
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>{locale === "en" ? "Next-Gen Multi-Vertical Smart POS Platform" : "Platform POS Multi-Vertikal Generasi Terbaru di Indonesia"}</span>
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+          <span className="truncate">{locale === "en" ? "Next-Gen Multi-Vertical Smart POS Platform" : "Platform POS Multi-Vertikal Generasi Terbaru di Indonesia"}</span>
         </div>
 
-        <div className="space-y-4 max-w-4xl mx-auto">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15]" style={{ color: t.text }}>
+        <div className="space-y-3 sm:space-y-4 max-w-4xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.2]" style={{ color: t.text }}>
             {locale === "en" ? (
               <>
                 One Intelligent POS Platform for{" "}
@@ -368,7 +368,7 @@ export function LandingClient({
               </>
             )}
           </h1>
-          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed font-medium" style={{ color: t.textSub }}>
+          <p className="text-xs sm:text-lg max-w-2xl mx-auto leading-relaxed font-medium px-2" style={{ color: t.textSub }}>
             {locale === "en" ? (
               <>
                 Qassa delivers tailor-made POS workflows for{" "}
@@ -386,14 +386,14 @@ export function LandingClient({
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
           <Link
             href="/register"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-2xl shadow-indigo-600/35 transition flex items-center justify-center gap-2 active:scale-95"
+            className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition flex items-center justify-center gap-2 active:scale-95"
           >
             <span>{trialHeroCtaLabel}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             href="/demo"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl border transition flex items-center justify-center gap-2 text-sm font-bold active:scale-95"
+            className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-2xl border transition flex items-center justify-center gap-2 text-sm font-bold active:scale-95"
             style={{ backgroundColor: t.bgCard, borderColor: t.borderSoft, color: t.text }}
           >
             <Play className="w-4 h-4 text-indigo-500 fill-indigo-500" />
@@ -401,24 +401,24 @@ export function LandingClient({
           </Link>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold pt-3" style={{ color: t.textMuted }}>
+        <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2.5 sm:gap-6 text-xs font-semibold pt-3" style={{ color: t.textMuted }}>
           {["Tanpa Kartu Kredit", "Aktif Seketika dalam 1 Menit", "Dukungan Printer & Multi-Hardware"].map((g) => (
             <span key={g} className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              {g}
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+              <span>{g}</span>
             </span>
           ))}
         </div>
       </section>
 
       {/* ── LIVE VERTICAL EXPLORER ── */}
-      <section id="solutions" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
-        <div className="text-center space-y-2.5 max-w-2xl mx-auto">
-          <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-500">
+      <section id="solutions" className="relative z-10 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6 sm:space-y-8">
+        <div className="text-center space-y-2.5 max-w-2xl mx-auto px-2">
+          <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-indigo-500">
             Alur Kasir Adaptif Sesuai Usaha Anda
           </span>
-          <h2 className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
-            Pilih Bidang Bisnis & Rasakan Alurnya
+          <h2 className="text-2xl sm:text-4xl font-black tracking-tight" style={{ color: t.text }}>
+            Pilih Bidang Bisnis &amp; Rasakan Alurnya
           </h2>
           <p className="text-xs sm:text-sm leading-relaxed" style={{ color: t.textSub }}>
             Qassa mengadaptasi layar kasir, tombol, dan komponen struk sesuai ritme operasional usaha Anda.
@@ -426,32 +426,34 @@ export function LandingClient({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center justify-center gap-2 overflow-x-auto pb-2">
-          {[
-            { id: "cafe", label: "☕ Cafe & Resto" },
-            { id: "barbershop", label: "💈 Barbershop & Salon" },
-            { id: "retail", label: "🛒 Retail & Mart" },
-            { id: "laundry", label: "🧺 Laundry Service" },
-          ].map((tab) => {
-            const active = activeVerticalTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveVerticalTab(tab.id as any)}
-                className="px-5 py-3 rounded-2xl text-xs font-extrabold transition-all whitespace-nowrap border"
-                style={{
-                  backgroundColor: active ? "#4F46E5" : t.bgCard,
-                  color: active ? "#FFFFFF" : t.textSub,
-                  borderColor: active ? "#4F46E5" : t.borderSoft,
-                  boxShadow: active ? "0 4px 20px rgba(79,70,229,0.35)" : "none",
-                  transform: active ? "scale(1.05)" : "scale(1)",
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="w-full overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex items-center justify-start sm:justify-center gap-2 min-w-max px-2 sm:px-0">
+            {[
+              { id: "cafe", label: "☕ Cafe & Resto" },
+              { id: "barbershop", label: "💈 Barbershop & Salon" },
+              { id: "retail", label: "🛒 Retail & Mart" },
+              { id: "laundry", label: "🧺 Laundry Service" },
+            ].map((tab) => {
+              const active = activeVerticalTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveVerticalTab(tab.id as any)}
+                  className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-extrabold transition-all whitespace-nowrap border flex-shrink-0 cursor-pointer"
+                  style={{
+                    backgroundColor: active ? "#4F46E5" : t.bgCard,
+                    color: active ? "#FFFFFF" : t.textSub,
+                    borderColor: active ? "#4F46E5" : t.borderSoft,
+                    boxShadow: active ? "0 4px 20px rgba(79,70,229,0.35)" : "none",
+                    transform: active ? "scale(1.02)" : "scale(1)",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Simulation Card */}

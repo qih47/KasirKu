@@ -9,11 +9,14 @@ export default async function CustomerMenuPage({
   params,
   searchParams,
 }: {
-  params: { tenantId: string };
-  searchParams?: { table?: string; outlet?: string };
+  params: Promise<{ tenantId: string }>;
+  searchParams?: Promise<{ table?: string; outlet?: string }>;
 }) {
+  const { tenantId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+
   const tenant = await prisma.tenant.findUnique({
-    where: { id: params.tenantId },
+    where: { id: tenantId },
     include: {
       outlets: {
         where: { isActive: true },
@@ -27,7 +30,7 @@ export default async function CustomerMenuPage({
   }
 
   // 1. Guard Plugin: Cek apakah tenant berlangganan modul QR Self-Order
-  const isEnabled = await hasSelfOrderPlugin(params.tenantId);
+  const isEnabled = await hasSelfOrderPlugin(tenantId);
 
   if (!isEnabled) {
     return (
@@ -67,8 +70,8 @@ export default async function CustomerMenuPage({
 
   // Tentukan target outlet berdasarkan QR query param ?outlet=[id]
   const targetOutlet =
-    (searchParams?.outlet
-      ? (tenant.outlets as any[]).find((o: any) => o.id === searchParams.outlet)
+    (resolvedSearchParams?.outlet
+      ? (tenant.outlets as any[]).find((o: any) => o.id === resolvedSearchParams.outlet)
       : null) ||
     tenant.outlets[0] ||
     null;
@@ -76,7 +79,7 @@ export default async function CustomerMenuPage({
   const [products, tables] = await Promise.all([
     prisma.product.findMany({
       where: {
-        tenantId: params.tenantId,
+        tenantId: tenantId,
         isActive: true,
         ...(targetOutlet ? { OR: [{ outletId: null }, { outletId: targetOutlet.id }] } : {}),
       },
@@ -88,7 +91,7 @@ export default async function CustomerMenuPage({
           orderBy: { tableNumber: "asc" },
         })
       : prisma.cafeTable.findMany({
-          where: { tenantId: params.tenantId },
+          where: { tenantId: tenantId },
           orderBy: { tableNumber: "asc" },
         }),
   ]);
@@ -107,7 +110,7 @@ export default async function CustomerMenuPage({
         tableNumber: t.tableNumber,
         status: t.status,
       }))}
-      initialTableQuery={searchParams?.table}
+      initialTableQuery={resolvedSearchParams?.table}
       products={(products as any[]).map((p: any) => ({
         id: p.id,
         name: p.name,

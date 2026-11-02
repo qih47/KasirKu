@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyMidtransWebhookSignature } from "@/lib/midtrans";
+import { markPaymentIntentPaid, getPaymentIntent } from "@/lib/payment-intent-store";
 import { addDays, addMonths } from "date-fns";
 
 export async function POST(req: NextRequest) {
@@ -56,7 +57,11 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     // 2. SKENARIO A: TRANSAKSI KASIR POS (Dynamic QRIS / Online Payment)
     // =========================================================================
-    if (order_id.startsWith("TRX-") || order_id.startsWith("POS-")) {
+    if (isPaid && (order_id.startsWith("POS-") || order_id.startsWith("TRX-"))) {
+        markPaymentIntentPaid(order_id);
+      }
+
+      if (order_id.startsWith("TRX-") || order_id.startsWith("POS-")) {
       const transaction = await prisma.transaction.findFirst({
         where: {
           OR: [{ transactionNumber: order_id }, { id: order_id }],
@@ -129,52 +134,96 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
-    // 3. SKENARIO B: TAGIHAN LANGGANAN SAAS (SUB- / INV-)
+    // 3. SKENARIO B: TAGIHAN LANGGANAN SAAS (SUB_ / SUB- / INV-)
     // =========================================================================
-    if (order_id.startsWith("SUB-") || order_id.startsWith("INV-")) {
-      // Format: SUB-{tenantId}-{tierCode}-{months}-{timestamp}
-      const parts = order_id.split("-");
-      if (parts.length >= 4 && isPaid) {
-        const tenantId = parts[1];
-        const tierCode = parts[2]?.toLowerCase();
-        const durationMonths = parseInt(parts[3], 10) || 1;
+    if (order_id.startsWith("SUB") || order_id.startsWith("INV")) {
+      if (isPaid) {
+        markPaymentIntentPaid(order_id);
+        const stored = getPaymentIntent(order_id);
+        let tenantId = stored?.tenantId;
+        let tierCode = stored?.tierCode;
+        let durationMonths = stored?.durationMonths;
+        let selectedPluginIds = stored?.selectedPluginIds || [];
 
-        const licenseTier = await prisma.licenseTier.findUnique({
-          where: { code: tierCode },
-        });
+        if (!tenantId && order_id.includes("_")) {
+          // Reconstruct dari format SUB_{tenantHex}_{tierCode}_{duration}M_{time}
+          const parts = order_id.split("_");
+          const tenantHex = parts[1];
+          if (tenantHex && tenantHex.length === 32) {
+            tenantId = tenantHex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
+          }
+          tierCode = parts[2]?.toLowerCase();
+          durationMonths = parseInt(parts[3], 10) || 1;
+        }
 
-        if (licenseTier && tenantId) {
-          const startDate = new Date();
-          const endDate = addMonths(startDate, durationMonths);
-
-          // Nonaktifkan subscription lama
-          await prisma.tenantSubscription.updateMany({
-            where: { tenantId, isActive: true },
-            data: { isActive: false },
-          });
-
-          // Buat subscription baru
-          await prisma.tenantSubscription.create({
-            data: {
-              tenantId,
-              licenseTierId: licenseTier.id,
-              billingCycle: durationMonths >= 12 ? "ANNUAL" : "MONTHLY",
-              durationMonths,
-              durationKey: `${durationMonths}M`,
-              currentPeriodStart: startDate,
-              currentPeriodEnd: endDate,
-              isActive: true,
+        if (tenantId) {
+          const licenseTier = await prisma.licenseTier.findFirst({
+            where: {
+              OR: [
+                { code: (tierCode || "pro").toLowerCase() },
+                { code: { startsWith: (tierCode || "pro").toLowerCase().slice(0, 3) } },
+              ],
             },
           });
 
-          // Aktifkan tenant status
-          await prisma.tenant.update({
-            where: { id: tenantId },
-            data: {
-              status: "ACTIVE",
-              lockedAt: null,
-            },
-          });
+          if (licenseTier) {
+            const effDuration = durationMonths || 1;
+            const startDate = new Date();
+            const endDate = addMonths(startDate, effDuration);
+
+            const existingSub = await prisma.tenantSubscription.findFirst({
+              where: { tenantId, isActive: true },
+              include: { theme: true },
+            });
+
+            await prisma.$transaction(async (tx: any) => {
+              await tx.tenantSubscription.updateMany({
+                where: { tenantId, isActive: true },
+                data: { isActive: false },
+              });
+
+              const newSub = await tx.tenantSubscription.create({
+                data: {
+                  tenantId,
+                  licenseTierId: licenseTier.id,
+                  billingCycle: effDuration >= 12 ? "ANNUAL" : "MONTHLY",
+                  durationMonths: effDuration,
+                  durationKey: `${effDuration}M`,
+                  currentPeriodStart: startDate,
+                  currentPeriodEnd: endDate,
+                  isActive: true,
+                },
+              });
+
+              if (existingSub?.theme) {
+                await tx.tenantTheme.create({
+                  data: {
+                    subscriptionId: newSub.id,
+                    themeId: existingSub.theme.themeId,
+                    customConfig: existingSub.theme.customConfig,
+                  },
+                });
+              }
+
+              for (const pid of selectedPluginIds) {
+                await tx.tenantPlugin.create({
+                  data: {
+                    subscriptionId: newSub.id,
+                    pluginId: pid,
+                    isActive: true,
+                  },
+                });
+              }
+
+              await tx.tenant.update({
+                where: { id: tenantId },
+                data: {
+                  status: "ACTIVE",
+                  lockedAt: null,
+                },
+              });
+            });
+          }
         }
       }
     }

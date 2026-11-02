@@ -122,22 +122,44 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
   const isUpgrading = selectedRank > currentRank;
   const isBasicSelected = selectedTier?.code?.toLowerCase() === "basic";
 
-  // Enforcement: Jika memilih tier Basic, pastikan hanya 1 vertikal yang dipilih
+  const VERTICAL_CODES = ["barbershop", "cafe", "retail", "laundry"];
+
+  // Enforcement: Jika memilih tier Basic, pastikan hanya 1 vertikal bisnis yang dipilih
   useEffect(() => {
-    if (isBasicSelected && selectedPluginIds.length > 1) {
-      setSelectedPluginIds([selectedPluginIds[0]]);
+    if (isBasicSelected) {
+      const selectedVerticals = selectedPluginIds.filter((pId) => {
+        const p = data.availablePlugins.find((ap: any) => ap.id === pId);
+        return p && VERTICAL_CODES.includes(p.code?.toLowerCase());
+      });
+      if (selectedVerticals.length > 1) {
+        const keepVertical = selectedVerticals[0];
+        const nonVerticals = selectedPluginIds.filter((pId) => {
+          const p = data.availablePlugins.find((ap: any) => ap.id === pId);
+          return p && !VERTICAL_CODES.includes(p.code?.toLowerCase());
+        });
+        setSelectedPluginIds([keepVertical, ...nonVerticals]);
+      }
     }
-  }, [selectedTierId, isBasicSelected]);
+  }, [selectedTierId, isBasicSelected, data.availablePlugins]);
 
   // Toggle Plugin Selection
   const togglePlugin = (pluginId: string) => {
-    if (isBasicSelected) {
-      // Basic hanya boleh 1 vertikal (ganti pilihan secara langsung)
-      setSelectedPluginIds([pluginId]);
+    const targetPlugin = data.availablePlugins.find((p: any) => p.id === pluginId);
+    const isVertical = targetPlugin && VERTICAL_CODES.includes(targetPlugin.code?.toLowerCase());
+
+    if (isBasicSelected && isVertical) {
+      // Basic hanya boleh 1 vertikal bisnis: ganti vertikal bisnis tanpa menghapus add-on lain
+      setSelectedPluginIds((prev) => {
+        const nonVerticals = prev.filter((pId) => {
+          const p = data.availablePlugins.find((ap: any) => ap.id === pId);
+          return p && !VERTICAL_CODES.includes(p.code?.toLowerCase());
+        });
+        return [pluginId, ...nonVerticals];
+      });
       return;
     }
 
-    // PRO / Enterprise: Multi-vertikal bebas
+    // Add-on atau PRO / Enterprise: Multi-vertikal bebas
     setSelectedPluginIds((prev) =>
       prev.includes(pluginId)
         ? prev.filter((id) => id !== pluginId)
@@ -145,17 +167,36 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
     );
   };
 
-  // Kalkulasi Biaya Upgrade & Tambahan (Delta Pricing & Prorated untuk durasi fleksibel)
+  // Kalkulasi Biaya Upgrade & Tambahan (Delta Pricing, Proration & Co-Terming)
   const isDurationChanged = selectedDurationKey !== initialDurationKey;
   const isOngoingMonthlyActive = initialDurationKey === "1M" && !isTrial && !data.tenant?.isExpired;
   const isTierChanged = selectedTierId !== currentTierId;
+  const remainingDays = Math.max(0, data.tenant?.daysRemaining || 0);
+
+  // Deteksi aksi spesifik langganan
+  const actionType: "RENEW" | "UPGRADE_TIER" | "ADD_PLUGIN_MID_CYCLE" | "DOWNGRADE" =
+    isDowngrading
+      ? "DOWNGRADE"
+      : isTierChanged
+        ? "UPGRADE_TIER"
+        : (!isDurationChanged && !isTrial && !data.tenant?.isExpired)
+          ? "ADD_PLUGIN_MID_CYCLE"
+          : "RENEW";
 
   let tierCostToday = 0;
+  let tierProratedCredit = 0;
+
   if (selectedTier) {
     const monthlyPrice = Number(selectedTier.priceMonthly);
     const tierCalc = calculateDurationPrice(monthlyPrice, selectedDuration);
 
-    if (isTierChanged || isTrial || data.tenant?.isExpired) {
+    if (isTierChanged && !isTrial && !data.tenant?.isExpired && remainingDays > 0) {
+      // Upgrade di tengah masa aktif: potong nilai prorata sisa hari paket lama
+      const oldMonthly = Number(data.currentTier?.priceMonthly || 0);
+      const oldDailyRate = oldMonthly / 30;
+      tierProratedCredit = Math.round(Math.min(tierCalc.totalPrice, remainingDays * oldDailyRate));
+      tierCostToday = Math.max(0, tierCalc.totalPrice - tierProratedCredit);
+    } else if (isTierChanged || isTrial || data.tenant?.isExpired) {
       tierCostToday = tierCalc.totalPrice;
     } else if (isDurationChanged && isOngoingMonthlyActive) {
       tierCostToday = Math.max(0, tierCalc.totalPrice - monthlyPrice);
@@ -177,7 +218,16 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
     let isProrated1Month = false;
 
     if (isSelected) {
-      if (!wasAlreadyActive || isTrial || data.tenant?.isExpired) {
+      if (!wasAlreadyActive) {
+        if (actionType === "ADD_PLUGIN_MID_CYCLE" && remainingDays > 0) {
+          // Co-termed: plugin baru dihitung prorata sisa hari paket utama
+          const fraction = Math.max(0.1, remainingDays / 30);
+          costToday = Math.round(monthlyPrice * fraction);
+          isProrated1Month = true;
+        } else {
+          costToday = pluginCalc.totalPrice;
+        }
+      } else if (isTrial || data.tenant?.isExpired) {
         costToday = pluginCalc.totalPrice;
       } else if (isDurationChanged && isOngoingMonthlyActive) {
         costToday = Math.max(0, pluginCalc.totalPrice - monthlyPrice);
@@ -312,6 +362,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
         durationMonths: selectedDuration.months,
         billingCycle: selectedDuration.months >= 12 ? "ANNUAL" : "MONTHLY",
         selectedPluginIds: customPluginIds || selectedPluginIds,
+        actionType,
       });
 
       if (res.success) {
@@ -900,7 +951,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
               Total Pembayaran Hari Ini
             </span>
             <div className="text-3xl font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
-              Rp {grandTotalToday.toLocaleString("id-ID")}
+              Rp {(invoiceData?.grossAmount || invoiceData?.totalAmount || grandTotalToday).toLocaleString("id-ID")}
               <span className="text-xs font-medium ml-1" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
                 / {selectedDuration.label}
               </span>
@@ -1266,7 +1317,7 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
                       <p className="font-bold text-slate-700 dark:text-slate-300">Panduan Pembayaran:</p>
                       <p>1. Buka Mobile Banking / ATM {selectedVaBank.toUpperCase()}</p>
                       <p>2. Pilih menu Transfer &gt; Virtual Account</p>
-                      <p>3. Masukkan nominal tagihan tepat: <strong>Rp {grandTotalToday.toLocaleString("id-ID")}</strong></p>
+                      <p>3. Masukkan nominal tagihan tepat: <strong>Rp {(invoiceData?.grossAmount || invoiceData?.totalAmount || grandTotalToday).toLocaleString("id-ID")}</strong></p>
                     </div>
 
                     <button

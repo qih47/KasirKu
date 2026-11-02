@@ -6,7 +6,11 @@ import { SettingsClient } from "./settings-client";
 import { Lock, Home, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session) {
     redirect("/login");
@@ -54,6 +58,7 @@ export default async function SettingsPage() {
     );
   }
 
+  const resolvedParams = searchParams ? await searchParams : undefined;
   const data = await getTenantSettingsData();
-  return <SettingsClient initialData={data} />;
+  return <SettingsClient initialData={data} initialTab={resolvedParams?.tab as any} />;
 }

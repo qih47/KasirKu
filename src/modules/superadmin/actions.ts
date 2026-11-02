@@ -5,8 +5,17 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { addDays } from "date-fns";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export type TenantStatus = "TRIAL" | "ACTIVE" | "LOCKED" | "FROZEN";
+
+export async function requireSuperAdminOrRedirect() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any)?.role !== "SUPER_ADMIN") {
+    redirect("/admin/login");
+  }
+  return session.user as any;
+}
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions);
@@ -93,26 +102,28 @@ export async function getSuperAdminDashboardData() {
     },
   });
 
-  return {
-    metrics: {
-      totalTenants,
-      trialTenants,
-      activeTenants,
-      lockedTenants,
-      frozenTenants,
-      estimatedMRR,
-      estimatedARR,
-      totalActiveVouchers,
-    },
-    recentTenants: tenants,
-    pluginsDistribution: plugins,
-  };
+  return JSON.parse(
+    JSON.stringify({
+      metrics: {
+        totalTenants,
+        trialTenants,
+        activeTenants,
+        lockedTenants,
+        frozenTenants,
+        estimatedMRR,
+        estimatedARR,
+        totalActiveVouchers,
+      },
+      recentTenants: tenants,
+      pluginsDistribution: plugins,
+    })
+  );
 }
 
 export async function getAllTenants() {
   await requireSuperAdmin();
 
-  return prisma.tenant.findMany({
+  const tenants = await prisma.tenant.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       users: { where: { role: "OWNER" } },
@@ -126,6 +137,8 @@ export async function getAllTenants() {
       },
     },
   });
+
+  return JSON.parse(JSON.stringify(tenants));
 }
 
 export async function extendTenantTrial(tenantId: string, daysToAdd: number) {
@@ -230,7 +243,7 @@ export async function getCatalogPricingData() {
     prisma.theme.findMany({ orderBy: { priceMonthly: "asc" } }),
   ]);
 
-  return { licenseTiers, plugins, themes };
+  return JSON.parse(JSON.stringify({ licenseTiers, plugins, themes }));
 }
 
 export async function updateLicenseTierAction(
@@ -276,6 +289,10 @@ export async function updateLicenseTierAction(
   });
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/dashboard/subscription");
+  revalidatePath("/dashboard/store");
+  revalidatePath("/");
+  revalidatePath("/pos");
   return { success: true };
 }
 
@@ -324,6 +341,10 @@ export async function updatePluginAction(
   });
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/dashboard/subscription");
+  revalidatePath("/dashboard/store");
+  revalidatePath("/");
+  revalidatePath("/pos");
   return { success: true };
 }
 
@@ -366,6 +387,10 @@ export async function updateThemeAction(
   });
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/dashboard/subscription");
+  revalidatePath("/dashboard/store");
+  revalidatePath("/");
+  revalidatePath("/pos");
   return { success: true };
 }
 
@@ -397,7 +422,11 @@ export async function getAuditLogsList(params?: { search?: string; limit?: numbe
 }
 
 // Helper auto-seed jika tabel katalog belum memiliki record awal
+let isCatalogSeededCache = false;
+
 async function ensureDefaultCatalogSeeded() {
+  if (isCatalogSeededCache) return;
+
   const licenseCount = await prisma.licenseTier.count();
   if (licenseCount === 0) {
     await prisma.licenseTier.createMany({
@@ -490,4 +519,6 @@ async function ensureDefaultCatalogSeeded() {
       ],
     });
   }
+
+  isCatalogSeededCache = true;
 }

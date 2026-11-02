@@ -21,16 +21,13 @@ export default async function SuperAdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerSession(authOptions);
-
-  // Jika belum login atau bukan role SUPER_ADMIN, redirect ke login admin
-  if (!session || (session.user as any)?.role !== "SUPER_ADMIN") {
-    // Abaikan jika halaman yang diakses adalah /admin/login (Next.js layout wraps all sub-routes, tapi login page ditangani)
-    // Supaya aman jika login page dirender di luar layout, Next.js nested layout akan apply.
-    // Tapi untuk /admin/login, kita return langsung children jika login route.
-  }
-
   const user = session?.user as any;
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
+
+  // Jika bukan SuperAdmin (misal saat mengakses /admin/login), render children tanpa sidebar
+  if (!isSuperAdmin) {
+    return <div className="min-h-screen bg-slate-950 text-slate-100">{children}</div>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 selection:bg-indigo-600 selection:text-white">

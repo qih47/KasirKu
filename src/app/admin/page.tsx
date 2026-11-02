@@ -1,4 +1,4 @@
-import { getSuperAdminDashboardData } from "@/modules/superadmin/actions";
+import { getSuperAdminDashboardData, requireSuperAdminOrRedirect } from "@/modules/superadmin/actions";
 import Link from "next/link";
 import {
   Building2,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 export default async function SuperAdminDashboardPage() {
+  await requireSuperAdminOrRedirect();
   const { metrics, recentTenants, pluginsDistribution } =
     await getSuperAdminDashboardData();
 

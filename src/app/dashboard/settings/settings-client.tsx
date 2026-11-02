@@ -85,11 +85,28 @@ interface SettingsClientProps {
     activeReceiptTemplate: string;
     shiftMode?: "FAST" | "STRICT";
     verticalConfig?: Record<string, any>;
+    themeShell?: {
+      dashboardNavPosition?: "TOP_NAV" | "SIDEBAR_LEFT";
+      sidebarCollapsedDefault?: boolean;
+      posCategoryPosition?: "TOP_PILLS" | "SIDEBAR_LEFT";
+      posCartDock?: "RIGHT" | "LEFT";
+      posGridColumns?: 3 | 4 | 5;
+      posCardStyle?: "GRID_CARD" | "LARGE_PHOTO" | "COMPACT_ROW";
+      mode?: "light" | "dark";
+      primaryColor?: string;
+      accentColor?: string;
+      radius?: string;
+    };
   };
+  initialTab?: "BRANDING" | "THEMES" | "RECEIPT" | "VERTICALS";
 }
 
-export function SettingsClient({ initialData }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"BRANDING" | "THEMES" | "RECEIPT" | "VERTICALS">("BRANDING");
+export function SettingsClient({ initialData, initialTab }: SettingsClientProps) {
+  const [activeTab, setActiveTab] = useState<"BRANDING" | "THEMES" | "RECEIPT" | "VERTICALS">(
+    initialTab && ["BRANDING", "THEMES", "RECEIPT", "VERTICALS"].includes(initialTab)
+      ? initialTab
+      : "BRANDING"
+  );
 
   const outlets = initialData.outlets || [];
   const [selectedOutletId, setSelectedOutletId] = useState(
@@ -135,6 +152,16 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
   const [activeUiThemeId, setActiveUiThemeId] = useState(initialData.activeUiThemeId || initialData.ownedUiThemes?.[0]?.id || "");
   const [activePosLayout, setActivePosLayout] = useState(initialData.activePosLayout || "DEFAULT");
   const [activeReceiptTemplate, setActiveReceiptTemplate] = useState(initialData.activeReceiptTemplate || "DEFAULT");
+  const [shellConfig, setShellConfig] = useState({
+    dashboardNavPosition: initialData.themeShell?.dashboardNavPosition || "TOP_NAV",
+    sidebarCollapsedDefault: initialData.themeShell?.sidebarCollapsedDefault || false,
+    posCategoryPosition: initialData.themeShell?.posCategoryPosition || "TOP_PILLS",
+    posCartDock: initialData.themeShell?.posCartDock || "RIGHT",
+    posGridColumns: initialData.themeShell?.posGridColumns || 4,
+    posCardStyle: initialData.themeShell?.posCardStyle || "GRID_CARD",
+    mode: initialData.themeShell?.mode || "light",
+    primaryColor: initialData.themeShell?.primaryColor || "#4f46e5",
+  });
 
   // Vertical Profile & Multi-Station Settings State
   const initialVConfig = initialData.verticalConfig || {};
@@ -347,6 +374,7 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
         activeUiThemeId: activeUiThemeId || undefined,
         activePosLayout,
         activeReceiptTemplate,
+        themeShell: shellConfig as any,
         receiptConfig: {
           ...receiptConfig,
           phone: phone.trim(),
@@ -1178,19 +1206,272 @@ export function SettingsClient({ initialData }: SettingsClientProps) {
               </div>
             </div>
 
+            {/* Dynamic Shell & Navigation Customizer */}
+            <div
+              className="p-5 sm:p-6 border rounded-2xl space-y-5"
+              style={{
+                backgroundColor: "var(--theme-inner-bg, #f8fafc)",
+                borderColor: "var(--theme-card-border, #e2e8f0)",
+              }}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-wider block" style={{ color: "var(--theme-primary, #4f46e5)" }}>
+                    4. Arsitektur Navigasi &amp; Tata Letak Dinamis (Dashboard &amp; POS)
+                  </span>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    Atur posisi menu navigasi (di atas sebagai Topbar atau di kiri sebagai Sidebar) serta konfigurasi layar Kasir POS.
+                  </p>
+                </div>
+                <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-600 border border-indigo-500/20">
+                  ⚡ Live Dynamic Shell Engine
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* 1. Posisi Navigasi Dashboard */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Posisi Navigasi Dashboard
+                  </label>
+                  <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    Tampilkan menu utama secara horizontal di atas atau vertikal di kiri layar.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, dashboardNavPosition: "TOP_NAV" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.dashboardNavPosition === "TOP_NAV"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>━━ Topbar Atas</span>
+                      <span className="text-[9px] font-medium opacity-75">Tab Horizontal</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, dashboardNavPosition: "SIDEBAR_LEFT" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.dashboardNavPosition === "SIDEBAR_LEFT"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>▌ Sidebar Kiri</span>
+                      <span className="text-[9px] font-medium opacity-75">Panel Vertikal</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Posisi Kategori & Stasiun POS */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Navigasi Kategori &amp; Stasiun POS
+                  </label>
+                  <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    Pilih posisi daftar kategori &amp; pemilih stasiun vertikal di layar kasir POS.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, posCategoryPosition: "TOP_PILLS" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.posCategoryPosition === "TOP_PILLS"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>━━ Pills Atas</span>
+                      <span className="text-[9px] font-medium opacity-75">Baris Atas</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, posCategoryPosition: "SIDEBAR_LEFT" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.posCategoryPosition === "SIDEBAR_LEFT"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>▌ Sidebar Kiri</span>
+                      <span className="text-[9px] font-medium opacity-75">Navigasi Kiri</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Posisi Keranjang POS */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Posisi Panel Keranjang POS
+                  </label>
+                  <p className="text-[11px]" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                    Sesuaikan sisi panel ringkasan belanja dan tombol bayar di mesin kasir.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, posCartDock: "RIGHT" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.posCartDock === "RIGHT"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>Keranjang Kanan ▐</span>
+                      <span className="text-[9px] font-medium opacity-75">Standar Kasir</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, posCartDock: "LEFT" }))}
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                        shellConfig.posCartDock === "LEFT"
+                          ? "border-indigo-600 bg-indigo-500/10 text-indigo-600 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <span>▌ Keranjang Kiri</span>
+                      <span className="text-[9px] font-medium opacity-75">Mode Kidal / Tablet</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Gaya Kartu Produk POS */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Gaya Kartu Produk POS
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    {[
+                      { id: "GRID_CARD", label: "Grid Standar" },
+                      { id: "LARGE_PHOTO", label: "Foto Besar" },
+                      { id: "COMPACT_ROW", label: "List Cepat" },
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setShellConfig((prev) => ({ ...prev, posCardStyle: st.id as any }))}
+                        className={`px-2 py-2 rounded-lg border text-[11px] font-bold transition ${
+                          shellConfig.posCardStyle === st.id
+                            ? "border-indigo-600 bg-indigo-500/10 text-indigo-600"
+                            : "border-slate-200 dark:border-slate-700 opacity-75"
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5. Kepadatan Kolom Grid POS */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Jumlah Kolom Katalog POS
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    {[3, 4, 5].map((cols) => (
+                      <button
+                        key={cols}
+                        type="button"
+                        onClick={() => setShellConfig((prev) => ({ ...prev, posGridColumns: cols as 3 | 4 | 5 }))}
+                        className={`px-2 py-2 rounded-lg border text-[11px] font-bold transition ${
+                          shellConfig.posGridColumns === cols
+                            ? "border-indigo-600 bg-indigo-500/10 text-indigo-600"
+                            : "border-slate-200 dark:border-slate-700 opacity-75"
+                        }`}
+                      >
+                        {cols} Kolom
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 6. Mode Nuansa Layar */}
+                <div
+                  className="p-4 rounded-xl border space-y-2.5"
+                  style={{
+                    backgroundColor: "var(--theme-card-bg, #ffffff)",
+                    borderColor: "var(--theme-card-border, #e2e8f0)",
+                  }}
+                >
+                  <label className="text-xs font-extrabold block" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Nuansa Layar (Light / Dark)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, mode: "light" }))}
+                      className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition ${
+                        shellConfig.mode === "light"
+                          ? "border-amber-500 bg-amber-500/10 text-amber-600"
+                          : "border-slate-200 dark:border-slate-700 opacity-75"
+                      }`}
+                    >
+                      ☀️ Mode Terang
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShellConfig((prev) => ({ ...prev, mode: "dark" }))}
+                      className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition ${
+                        shellConfig.mode === "dark"
+                          ? "border-indigo-500 bg-indigo-500/15 text-indigo-400"
+                          : "border-slate-200 dark:border-slate-700 opacity-75"
+                      }`}
+                    >
+                      🌙 Mode Gelap
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="pt-4 border-t flex items-center justify-between" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
               <span className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
-                💡 Pengaturan tema yang dipilih akan langsung diterapkan setelah disimpan.
+                💡 Pengaturan tema &amp; posisi navigasi yang dipilih akan langsung diterapkan ke seluruh sistem.
               </span>
               <button
                 type="button"
-                onClick={() => handleSave()}
+                onClick={async () => {
+                  await handleSave();
+                  window.location.reload();
+                }}
                 disabled={saving}
                 className="px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 disabled:opacity-50"
                 style={{ backgroundColor: "var(--theme-primary, #4f46e5)" }}
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Terapkan Tema Terpilih</span>
+                <span>Terapkan Tema &amp; Tata Letak</span>
               </button>
             </div>
           </div>

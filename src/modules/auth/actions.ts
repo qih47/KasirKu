@@ -231,28 +231,28 @@ export async function verifyOtpAndRegisterTenant(
       initialReceiptConfig = {
         ...barbershopReceiptPreset,
         posLayout: "BARBERSHOP_STATION",
-        purchasedLayoutIds: ["BARBERSHOP_STATION", "CAFE_QUICK_ORDER"],
+        purchasedLayoutIds: ["BARBERSHOP_STATION"],
       };
       initialPosLayout = "BARBERSHOP_STATION";
     } else if (vCode === "retail") {
       initialReceiptConfig = {
         ...retailReceiptPreset,
         posLayout: "RETAIL_FAST_BARCODE",
-        purchasedLayoutIds: ["RETAIL_FAST_BARCODE", "CAFE_QUICK_ORDER"],
+        purchasedLayoutIds: ["RETAIL_FAST_BARCODE"],
       };
       initialPosLayout = "RETAIL_FAST_BARCODE";
     } else if (vCode === "laundry") {
       initialReceiptConfig = {
         ...laundryReceiptPreset,
         posLayout: "LAUNDRY_WEIGHING",
-        purchasedLayoutIds: ["LAUNDRY_WEIGHING", "CAFE_QUICK_ORDER"],
+        purchasedLayoutIds: ["LAUNDRY_WEIGHING"],
       };
       initialPosLayout = "LAUNDRY_WEIGHING";
     } else {
       initialReceiptConfig = {
         ...cafeReceiptPreset,
         posLayout: "CAFE_QUICK_ORDER",
-        purchasedLayoutIds: ["CAFE_QUICK_ORDER", "BARBERSHOP_STATION"],
+        purchasedLayoutIds: ["CAFE_QUICK_ORDER"],
       };
       initialPosLayout = "CAFE_QUICK_ORDER";
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toastError, toastSuccess } from "@/lib/swal";
+import { toastError, toastSuccess, swalConfirm } from "@/lib/swal";
 import {
   ShoppingBag,
   Printer,
@@ -129,6 +129,14 @@ export function StoreClient({ initialData }: StoreClientProps) {
   const handlePurchaseOrApplyReceiptTheme = async (
     theme: ReceiptThemeItem
   ) => {
+    if (theme.priceMonthly > 0 && !purchasedIds.includes(theme.id)) {
+      const confirmed = await swalConfirm(
+        "Beli Tema Struk",
+        `Beli tema struk "${theme.name}" seharga Rp ${theme.priceMonthly.toLocaleString("id-ID")}/bulan dan pasang sekarang?`,
+        { confirmText: "Beli & Terapkan", cancelText: "Batal" }
+      );
+      if (!confirmed) return;
+    }
     setLoadingId(theme.id);
     try {
       const res = await purchaseReceiptThemeAction(theme.id);
@@ -149,6 +157,14 @@ export function StoreClient({ initialData }: StoreClientProps) {
   };
 
   const handlePurchaseOrApplyPosLayout = async (layout: PosLayoutItem) => {
+    if (layout.priceMonthly > 0 && !purchasedLayoutIds.includes(layout.id)) {
+      const confirmed = await swalConfirm(
+        "Beli Layout Kasir POS",
+        `Beli layout kasir "${layout.name}" seharga Rp ${layout.priceMonthly.toLocaleString("id-ID")}/bulan dan pasang sekarang?`,
+        { confirmText: "Beli & Pasang", cancelText: "Batal" }
+      );
+      if (!confirmed) return;
+    }
     setLoadingId(layout.id);
     try {
       const res = await purchasePosLayoutAction(layout.id);
@@ -169,6 +185,15 @@ export function StoreClient({ initialData }: StoreClientProps) {
   };
 
   const handleApplyUiTheme = async (themeId: string, themeName: string) => {
+    const targetTheme = (initialData.uiThemes || []).find((t: any) => t.id === themeId);
+    if (targetTheme && Number(targetTheme.priceMonthly) > 0 && activeUiThemeId !== themeId) {
+      const confirmed = await swalConfirm(
+        "Beli Tema UI Premium",
+        `Aktifkan Tema UI "${themeName}" seharga Rp ${Number(targetTheme.priceMonthly).toLocaleString("id-ID")}/bulan?`,
+        { confirmText: "Beli & Aktifkan", cancelText: "Batal" }
+      );
+      if (!confirmed) return;
+    }
     setLoadingId(themeId);
     try {
       const res = await applyUiThemeAction(themeId);

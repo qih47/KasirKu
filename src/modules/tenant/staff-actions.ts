@@ -128,8 +128,7 @@ export async function createStaffAction(data: {
       throw new Error("Password akses POS minimal harus 6 karakter.");
     }
 
-    if (outletId) {
-      const [tenant, currentCount] = await Promise.all([
+    const [tenant, currentCount] = await Promise.all([
         prisma.tenant.findUnique({
           where: { id: user.tenantId },
           include: {
@@ -137,6 +136,7 @@ export async function createStaffAction(data: {
               where: { isActive: true },
               include: { licenseTier: true },
             },
+            outlets: true,
           },
         }),
         prisma.user.count({
@@ -144,22 +144,21 @@ export async function createStaffAction(data: {
             tenantId: user.tenantId,
             role: "KASIR",
             hasPosAccess: true,
-            outletId,
             isActive: true,
-          } as any,
+            ...(outletId ? { outletId } : {}),
+          },
         }),
       ]);
 
       const activeSub = tenant?.subscriptions?.[0];
       const kasirLimit = activeSub?.licenseTier?.kasirLimitPerOutlet ?? 5;
+      const effectiveLimit = outletId ? kasirLimit : kasirLimit * Math.max(1, tenant?.outlets?.length || 1);
 
-      if (kasirLimit !== null && currentCount >= kasirLimit) {
+      if (kasirLimit !== null && currentCount >= effectiveLimit) {
         throw new Error(
-          `Kuota kasir aktif untuk cabang ini sudah penuh (${currentCount}/${kasirLimit} kasir pada ${activeSub?.licenseTier?.name || "Lisensi Bisnis"
-          }). Silakan upgrade lisensi atau nonaktifkan akses POS kasir lain.`
+          `Kuota kasir aktif ${outletId ? "untuk cabang ini" : "bisnis"} sudah penuh (${currentCount}/${effectiveLimit} kasir pada ${activeSub?.licenseTier?.name || "Lisensi Bisnis"}). Silakan upgrade lisensi atau nonaktifkan akses POS kasir lain.`
         );
       }
-    }
   }
 
   // Cek duplikasi email di tenant
@@ -326,6 +325,41 @@ export async function toggleStaffStatusAction(userId: string) {
 
   if (targetStaff.role === "OWNER") {
     throw new Error("Akun Owner tidak dapat dinonaktifkan dari menu ini.");
+  }
+
+  // Jika akan mengaktifkan kembali staf yang memiliki akses POS, cek kuota kasir
+  if (!targetStaff.isActive && targetStaff.role === "KASIR" && targetStaff.hasPosAccess) {
+    const [tenant, currentCount] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+        include: {
+          subscriptions: {
+            where: { isActive: true },
+            include: { licenseTier: true },
+          },
+          outlets: true,
+        },
+      }),
+      prisma.user.count({
+        where: {
+          tenantId: user.tenantId,
+          role: "KASIR",
+          hasPosAccess: true,
+          isActive: true,
+          ...(targetStaff.outletId ? { outletId: targetStaff.outletId } : {}),
+        },
+      }),
+    ]);
+
+    const activeSub = tenant?.subscriptions?.[0];
+    const kasirLimit = activeSub?.licenseTier?.kasirLimitPerOutlet ?? 5;
+    const effectiveLimit = targetStaff.outletId ? kasirLimit : kasirLimit * Math.max(1, tenant?.outlets?.length || 1);
+
+    if (kasirLimit !== null && currentCount >= effectiveLimit) {
+      throw new Error(
+        `Tidak dapat mengaktifkan kasir. Kuota kasir aktif ${targetStaff.outletId ? "cabang ini" : "bisnis"} sudah penuh (${currentCount}/${effectiveLimit} kasir). Harap upgrade lisensi atau nonaktifkan kasir lain terlebih dahulu.`
+      );
+    }
   }
 
   await prisma.user.update({

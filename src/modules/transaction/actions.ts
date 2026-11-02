@@ -284,13 +284,15 @@ export async function createTransactionAction(data: {
       },
     });
 
-    // 2b. Jika ada customerId, akumulasikan statistik pelanggan (visits & totalSpent)
+    // 2b. Jika ada customerId, akumulasikan statistik pelanggan (visits, totalSpent & loyalty points: 1 poin per Rp 10.000)
     if (customerId) {
+      const pointsEarned = Math.floor(totalAmount / 10000);
       await tx.customer.update({
         where: { id: customerId },
         data: {
           visits: { increment: 1 },
           totalSpent: { increment: totalAmount },
+          points: { increment: pointsEarned },
           lastVisitAt: new Date(),
         },
       });
@@ -502,7 +504,7 @@ export async function createTransactionAction(data: {
           totalAmount,
           fragrance: laundryDetails.fragrance || "Standard Fresh",
           status: "RECEIVED",
-          notes: `Pembayaran Kasir POS #${transactionNumber}`,
+          notes: `Pembayaran Kasir POS #${transactionNumber}${laundryDetails.rackNumber ? ` | ${laundryDetails.rackNumber}` : ""} — ${items.map((i) => `${i.name} (x${i.qty})`).join(", ")}`,
         },
       });
     }
@@ -581,6 +583,8 @@ export async function createTransactionAction(data: {
   revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard/cafe/tables");
+  revalidatePath("/dashboard/laundry/orders");
+  revalidatePath("/dashboard/barbershop/bookings");
   revalidatePath("/dashboard/reports");
 
   return JSON.parse(JSON.stringify({ success: true, ...result }));

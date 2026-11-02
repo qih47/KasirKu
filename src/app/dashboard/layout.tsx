@@ -3,15 +3,14 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Store, LogOut, LayoutDashboard, ShoppingCart, ShoppingBag, Package, Users, Settings, Bell, Radio, Info, AlertTriangle } from "lucide-react";
-import { SignOutButton } from "@/components/sign-out-button";
+import { Store, ShoppingBag, Radio } from "lucide-react";
 import { DashboardNavLinks } from "./dashboard-nav-links";
 import { UserNavMenu } from "@/components/layout/user-nav-menu";
 import { prisma } from "@/lib/prisma";
 import { getTenantActivePlugins } from "@/modules/tenant/plugin-helpers";
 import { getActiveBroadcastForTenant } from "@/modules/superadmin/broadcast-actions";
-import { LanguageSwitcher } from "@/lib/i18n/language-switcher";
 import { OpenPosButton } from "@/components/pos/open-pos-button";
+import { ThemeShellConfig } from "@/modules/tenant/theme-actions";
 
 export default async function DashboardLayout({
   children,
@@ -57,36 +56,68 @@ export default async function DashboardLayout({
   const activeSub = tenant?.subscriptions?.[0];
   const isTrial = tenant?.status === "TRIAL";
   const tierName = activeSub?.licenseTier?.name || "Langganan";
-  
+
   let trialRemainingDays = 0;
   if (isTrial && tenant?.trialEndAt) {
     const now = new Date();
     const end = new Date(tenant.trialEndAt);
     trialRemainingDays = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
   }
-  
-  // Theme Engine (Fully dynamic from database)
+
+  // Theme Engine + Dynamic Shell Customizer (Merged from Theme Tokens + CustomConfig + Tenant Attributes)
   const appliedTheme = activeSub?.theme?.theme;
-  const tokens = (appliedTheme?.tokens as any) || {};
-  const primaryColor = tokens.primaryColor || tokens.colors?.primary || "#4f46e5";
-  const accentColor = tokens.accentColor || tokens.colors?.accent || "#06b6d4";
-  const isDark = tokens.mode === "dark" || tokens.layoutStyle === "LUXE";
+  const baseTokens = (appliedTheme?.tokens as any) || {};
+  const customConfig = (activeSub?.theme?.customConfig as any) || {};
+  const tenantAttrs = (tenant?.attributes as any) || {};
+
+  const shellConfig: ThemeShellConfig = {
+    dashboardNavPosition: "TOP_NAV",
+    sidebarCollapsedDefault: false,
+    posCategoryPosition: "TOP_PILLS",
+    posCartDock: "RIGHT",
+    posGridColumns: 4,
+    posCardStyle: "GRID_CARD",
+    ...(baseTokens.shell || {}),
+    ...(customConfig.shell || {}),
+    ...(tenantAttrs.themeShell || {}),
+  };
+
+  const tokens = {
+    ...baseTokens,
+    ...customConfig,
+  };
+
+  const primaryColor = shellConfig.primaryColor || tokens.primaryColor || tokens.colors?.primary || "#4f46e5";
+  const accentColor = shellConfig.accentColor || tokens.accentColor || tokens.colors?.accent || "#06b6d4";
+  const effectiveMode = shellConfig.mode || tokens.mode || (tokens.layoutStyle === "LUXE" ? "dark" : "light");
+  const isDark = effectiveMode === "dark";
   const isLuxeDark = isDark;
   const layoutStyle = tokens.layoutStyle || (isDark ? "LUXE" : "MODERN");
-  const isWarm = layoutStyle === "WARM";
+  const isWarm = !isDark && layoutStyle === "WARM";
   const isCompact = layoutStyle === "COMPACT";
   const fontFamily = tokens.fontFamily || tokens.typography?.fontFamily || "inherit";
-  const radius = tokens.radius || tokens.effects?.borderRadius || (isCompact ? "0.375rem" : isWarm ? "1.75rem" : "1.25rem");
+  const radius = shellConfig.radius || tokens.radius || tokens.effects?.borderRadius || (isCompact ? "0.375rem" : isWarm ? "1.75rem" : "1.25rem");
 
-
-  const bgStyle = tokens.bgStyle || tokens.colors?.background || (isDark ? "radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.09) 0%, transparent 60%), #090D16" : isWarm ? "radial-gradient(circle at 10% 20%, rgba(217, 119, 6, 0.05) 0%, transparent 40%), #F7F3EB" : isCompact ? "#ECEFF1" : "#F8FAFC");
-  const cardBg = tokens.cardBg || tokens.colors?.card || (isDark ? "#111A2E" : isWarm ? "#FFFDF9" : "#FFFFFF");
-  const cardBorder = tokens.cardBorder || tokens.colors?.border || (isDark ? "#1E293B" : isWarm ? "#E8DCB8" : isCompact ? "#CBD5E1" : "rgba(226, 232, 240, 0.9)");
-  const cardShadow = tokens.cardShadow || (isDark ? "0 10px 30px -5px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.04)" : isCompact ? "0 1px 3px rgba(0,0,0,0.06)" : "0 4px 20px -2px rgba(0, 0, 0, 0.03)");
-  const textPrimary = tokens.textPrimary || tokens.colors?.primaryForeground || (isDark ? "#F8FAFC" : isWarm ? "#29180E" : "#0F172A");
-  const textSecondary = tokens.textSecondary || (isDark ? "#94A3B8" : isWarm ? "#785D4F" : "#64748B");
-  const innerBoxBg = tokens.innerBoxBg || tokens.colors?.backgroundMuted || (isDark ? "#162035" : isWarm ? "#F3EDE2" : isCompact ? "#F1F5F9" : "#F8F9FD");
-  const inputBg = tokens.inputBg || (isDark ? "#0B1120" : isWarm ? "#FFFDF9" : "#FFFFFF");
+  const bgStyle = isDark
+    ? tokens.mode === "dark" && tokens.bgStyle
+      ? tokens.bgStyle
+      : "radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.09) 0%, transparent 60%), #090D16"
+    : isWarm
+    ? "radial-gradient(circle at 10% 20%, rgba(217, 119, 6, 0.05) 0%, transparent 40%), #F7F3EB"
+    : isCompact
+    ? "#ECEFF1"
+    : "#F8FAFC";
+  const cardBg = isDark ? (tokens.mode === "dark" && tokens.cardBg ? tokens.cardBg : "#111A2E") : isWarm ? "#FFFDF9" : "#FFFFFF";
+  const cardBorder = isDark ? (tokens.mode === "dark" && tokens.cardBorder ? tokens.cardBorder : "#1E293B") : isWarm ? "#E8DCB8" : isCompact ? "#CBD5E1" : "rgba(226, 232, 240, 0.9)";
+  const cardShadow = isDark
+    ? "0 10px 30px -5px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.04)"
+    : isCompact
+    ? "0 1px 3px rgba(0,0,0,0.06)"
+    : "0 4px 20px -2px rgba(0, 0, 0, 0.03)";
+  const textPrimary = isDark ? "#F8FAFC" : isWarm ? "#29180E" : "#0F172A";
+  const textSecondary = isDark ? "#94A3B8" : isWarm ? "#785D4F" : "#64748B";
+  const innerBoxBg = isDark ? "#162035" : isWarm ? "#F3EDE2" : isCompact ? "#F1F5F9" : "#F8F9FD";
+  const inputBg = isDark ? "#0B1120" : isWarm ? "#FFFDF9" : "#FFFFFF";
 
   // Dynamic Header Styles
   let headerBg = "border-slate-200/80 bg-white/90";
@@ -107,6 +138,8 @@ export default async function DashboardLayout({
     logoText = "text-emerald-950";
   }
 
+  const isSidebarMode = shellConfig.dashboardNavPosition === "SIDEBAR_LEFT";
+  const containerWidthClass = isSidebarMode ? "max-w-[1480px]" : "max-w-7xl";
 
   return (
     <div
@@ -245,7 +278,7 @@ export default async function DashboardLayout({
       {/* Active Broadcast Announcement Banner */}
       {activeBroadcast && (
         <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-600 text-white px-4 py-2 text-xs shadow-sm">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className={`${containerWidthClass} mx-auto flex items-center justify-between gap-3`}>
             <div className="flex items-center gap-2">
               <span className="p-1 rounded-lg bg-white/20 text-amber-300">
                 <Radio className="w-3.5 h-3.5 animate-pulse" />
@@ -263,7 +296,7 @@ export default async function DashboardLayout({
       <header
         className={`border-b backdrop-blur-md sticky top-0 z-40 transition-colors duration-300 ${headerBg}`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className={`${containerWidthClass} mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
             {(tenant?.logoUrl || (tenant?.receiptConfig as any)?.logoUrl) ? (
               <img
@@ -298,7 +331,7 @@ export default async function DashboardLayout({
                       borderColor: `${primaryColor}40`,
                     }}
                   >
-                    {tierName} • Aktif
+                    {tierName} &bull; Aktif
                   </span>
                 )}
                 {appliedTheme && (
@@ -310,7 +343,7 @@ export default async function DashboardLayout({
                       borderColor: isLuxeDark ? "#f59e0b40" : "#cbd5e1",
                     }}
                   >
-                    Tema: {appliedTheme.name.split(" ")[1] || appliedTheme.name}
+                    Tema: {appliedTheme.name.split(" ")[1] || appliedTheme.name} &bull; {isSidebarMode ? "Sidebar Kiri" : "Top Nav"}
                   </span>
                 )}
               </div>
@@ -361,19 +394,22 @@ export default async function DashboardLayout({
         </div>
       </header>
 
-      {/* Main Content Body */}
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Content Body (Supports both TOP_NAV and SIDEBAR_LEFT dynamically) */}
+      <div className={`flex-1 ${containerWidthClass} mx-auto w-full px-4 sm:px-6 lg:px-8 py-6`}>
         <DashboardNavLinks
           activePlugins={activePlugins}
           themeTokens={{ primaryColor, accentColor, layoutStyle, isLuxeDark }}
-        />
-        {children}
+          shellConfig={shellConfig}
+        >
+          {children}
+        </DashboardNavLinks>
       </div>
 
       {/* Footer */}
       <footer className={`border-t py-4 text-center text-xs transition-colors ${footerBg}`}>
         POS Universal SaaS Platform &copy; 2026 &bull; Theme:{" "}
-        <strong>{appliedTheme?.name || "Modern Minimalist"}</strong>
+        <strong>{appliedTheme?.name || "Modern Minimalist"}</strong> &bull; Mode Navigasi:{" "}
+        <strong>{isSidebarMode ? "Sidebar Vertikal Kiri" : "Topbar Horizontal"}</strong>
       </footer>
     </div>
   );

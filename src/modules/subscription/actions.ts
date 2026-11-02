@@ -35,7 +35,13 @@ export async function getSubscriptionData() {
       where: { id: user.tenantId },
       include: {
         outlets: true,
-        users: { where: { role: "KASIR" } },
+        users: {
+          where: {
+            role: "KASIR",
+            isActive: true,
+            hasPosAccess: true,
+          },
+        },
         subscriptions: {
           where: { isActive: true },
           include: {
@@ -138,9 +144,10 @@ export async function upgradeSubscriptionAction(data: {
   durationKey?: string;
   durationMonths?: number;
   selectedPluginIds: string[];
+  actionType?: "RENEW" | "UPGRADE_TIER" | "ADD_PLUGIN_MID_CYCLE" | "DOWNGRADE";
 }) {
   const user = await requireOwner();
-  let { licenseTierId, selectedPluginIds } = data;
+  let { licenseTierId, selectedPluginIds, actionType } = data;
   const durationMonths = Number(data.durationMonths) || (data.billingCycle === "ANNUAL" ? 12 : 1);
   const durationKey = data.durationKey || (durationMonths >= 12 ? (durationMonths === 12 ? "1Y" : durationMonths === 24 ? "2Y" : "3Y") : durationMonths === 6 ? "6M" : durationMonths === 3 ? "3M" : "1M");
   const billingCycle: BillingCycle = durationMonths >= 12 ? "ANNUAL" : "MONTHLY";
@@ -151,14 +158,58 @@ export async function upgradeSubscriptionAction(data: {
 
   if (!targetTier) throw new Error("Lisensi tidak ditemukan.");
 
-  // Validasi Aturan Vertikal: Basic hanya boleh 1 vertikal
+  // Validasi Aturan Vertikal vs Add-on: Basic hanya boleh 1 vertikal bisnis utama
+  const VERTICAL_PLUGIN_CODES = ["barbershop", "cafe", "retail", "laundry"];
   const isBasicTier = targetTier.code.toLowerCase() === "basic";
-  if (isBasicTier && selectedPluginIds.length > 1) {
-    selectedPluginIds = [selectedPluginIds[0]];
+
+  if (isBasicTier && selectedPluginIds.length > 0) {
+    const selectedPluginsDb = await prisma.plugin.findMany({
+      where: { id: { in: selectedPluginIds } },
+    });
+    const selectedVerticals = selectedPluginsDb.filter((p: any) =>
+      VERTICAL_PLUGIN_CODES.includes(p.code.toLowerCase())
+    );
+    const selectedAddons = selectedPluginsDb.filter(
+      (p: any) => !VERTICAL_PLUGIN_CODES.includes(p.code.toLowerCase())
+    );
+
+    if (selectedVerticals.length > 1) {
+      // Pertahankan hanya vertikal pertama yang dipilih, pertahankan semua utility add-on
+      selectedPluginIds = [
+        selectedVerticals[0].id,
+        ...selectedAddons.map((p: any) => p.id),
+      ];
+    }
   }
 
+  // Cek langganan aktif saat ini untuk akumulasi hari & migrasi tema
+  const existingActiveSub = await prisma.tenantSubscription.findFirst({
+    where: { tenantId: user.tenantId, isActive: true },
+    include: { theme: true },
+  });
+
   const now = new Date();
-  const periodEnd = addMonths(now, durationMonths);
+  let periodEnd: Date;
+
+  if (
+    actionType === "ADD_PLUGIN_MID_CYCLE" &&
+    existingActiveSub &&
+    new Date(existingActiveSub.currentPeriodEnd) > now
+  ) {
+    // Skenario Co-Termed: Tenant hanya menambah modul plugin di tengah masa aktif tanpa memperpanjang durasi utama
+    periodEnd = new Date(existingActiveSub.currentPeriodEnd);
+  } else {
+    // Skenario Renewal atau Upgrade Tier
+    let baseEndDate = now;
+    if (
+      existingActiveSub &&
+      existingActiveSub.licenseTierId === licenseTierId &&
+      new Date(existingActiveSub.currentPeriodEnd) > now
+    ) {
+      baseEndDate = new Date(existingActiveSub.currentPeriodEnd);
+    }
+    periodEnd = addMonths(baseEndDate, durationMonths);
+  }
 
   await prisma.$transaction(async (tx: any) => {
     // 1. Nonaktifkan subscription lama
@@ -180,6 +231,17 @@ export async function upgradeSubscriptionAction(data: {
         isActive: true,
       },
     });
+
+    // 2b. Migrasikan tema aktif & customConfig dari subscription lama agar tidak hilang
+    if (existingActiveSub?.theme) {
+      await tx.tenantTheme.create({
+        data: {
+          subscriptionId: newSub.id,
+          themeId: existingActiveSub.theme.themeId,
+          customConfig: existingActiveSub.theme.customConfig,
+        },
+      });
+    }
 
     // 3. Tambahkan plugin-plugin yang dipilih
     for (const pId of selectedPluginIds) {
@@ -209,6 +271,27 @@ export async function upgradeSubscriptionAction(data: {
       }
     }
 
+    // 4b. Jika downgrade dan kasir aktif melebihi limit baru, nonaktifkan kasir berlebih
+    if (targetTier.kasirLimitPerOutlet !== null) {
+      const activeCashiers = await tx.user.findMany({
+        where: {
+          tenantId: user.tenantId,
+          role: "KASIR",
+          isActive: true,
+          hasPosAccess: true,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (activeCashiers.length > targetTier.kasirLimitPerOutlet) {
+        const excessIds = activeCashiers.slice(targetTier.kasirLimitPerOutlet).map((c: any) => c.id);
+        await tx.user.updateMany({
+          where: { id: { in: excessIds } },
+          data: { isActive: false },
+        });
+      }
+    }
+
     // 5. Ubah status Tenant menjadi ACTIVE
     await tx.tenant.update({
       where: { id: user.tenantId },
@@ -221,8 +304,11 @@ export async function upgradeSubscriptionAction(data: {
 
   revalidatePath("/dashboard/subscription");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/store");
   revalidatePath("/pos");
   revalidatePath("/admin/tenants");
+  revalidatePath("/admin");
 
   return { success: true };
 }

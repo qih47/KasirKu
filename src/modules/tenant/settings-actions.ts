@@ -22,6 +22,7 @@ import {
   laundryReceiptPreset,
   BusinessVertical,
 } from "@/types/receipt";
+import { ThemeShellConfig } from "./theme-actions";
 
 export type { ReceiptConfig, BusinessVertical };
 
@@ -109,6 +110,8 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
 
   const purchasedLayoutIds: string[] = savedConfig.purchasedLayoutIds || [];
   const purchasedThemeIds: string[] = savedConfig.purchasedThemeIds || [];
+  const purchasedUiThemeIds: string[] =
+    ((tenant.attributes as any)?.purchasedUiThemeIds as string[]) || [];
   const activeUiThemeId = activeSub?.theme?.themeId || null;
 
   // Saring hanya tema yang sudah dibeli / gratis / sedang aktif
@@ -119,7 +122,11 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
         (t.tokens as any)?.packageType !== "RECEIPT_PRESET" &&
         !t.code?.startsWith("pos-") &&
         !t.code?.startsWith("receipt-") &&
-        (Number(t.priceMonthly) === 0 || t.id === activeUiThemeId || isTrial)
+        (Number(t.priceMonthly) === 0 ||
+          t.id === activeUiThemeId ||
+          purchasedUiThemeIds.includes(t.id) ||
+          purchasedUiThemeIds.includes(t.code) ||
+          isTrial)
     )
     .map((t: any) => ({
       id: t.id,
@@ -168,7 +175,16 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       vertical: (t.tokens as any)?.vertical || "Umum",
     }));
 
-  const activePosLayout = savedConfig.posThemeCode || (savedConfig.posLayout !== "STANDARD" && savedConfig.posLayout !== "CAFE_QUICK_ORDER" && savedConfig.posLayout !== "BARBERSHOP_STATION" && savedConfig.posLayout !== "RETAIL_FAST_BARCODE" && savedConfig.posLayout !== "LAUNDRY_WEIGHING" ? savedConfig.posLayout : null) || "DEFAULT";
+  const activePosLayout =
+    savedConfig.posThemeCode ||
+    (savedConfig.posLayout !== "STANDARD" &&
+    savedConfig.posLayout !== "CAFE_QUICK_ORDER" &&
+    savedConfig.posLayout !== "BARBERSHOP_STATION" &&
+    savedConfig.posLayout !== "RETAIL_FAST_BARCODE" &&
+    savedConfig.posLayout !== "LAUNDRY_WEIGHING"
+      ? savedConfig.posLayout
+      : null) ||
+    "DEFAULT";
 
   const hasReceiptProPlugin =
     isTrial ||
@@ -185,6 +201,18 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
   const selectedOutlet = explicitOutletId
     ? outlets.find((o: any) => o.id === explicitOutletId) || outlets[0] || null
     : outlets[0] || null;
+
+  const themeShell: ThemeShellConfig = {
+    dashboardNavPosition: "TOP_NAV",
+    sidebarCollapsedDefault: false,
+    posCategoryPosition: "TOP_PILLS",
+    posCartDock: "RIGHT",
+    posGridColumns: 4,
+    posCardStyle: "GRID_CARD",
+    ...((activeSub?.theme?.theme?.tokens as any)?.shell || {}),
+    ...((activeSub?.theme?.customConfig as any)?.shell || {}),
+    ...((tenant.attributes as any)?.themeShell || {}),
+  };
 
   return JSON.parse(
     JSON.stringify({
@@ -210,6 +238,7 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       activeReceiptTemplate: mergedConfig.templateStyle || "DEFAULT",
       shiftMode: tenant.shiftMode || "FAST",
       verticalConfig: (tenant.attributes as any)?.verticalConfig || {},
+      themeShell,
     })
   );
 }
@@ -268,6 +297,7 @@ export async function updateTenantBrandingAction(data: {
   activeUiThemeId?: string;
   activePosLayout?: string;
   activeReceiptTemplate?: string;
+  themeShell?: Partial<ThemeShellConfig>;
 }) {
   const user = await requireOwner();
 
@@ -277,6 +307,7 @@ export async function updateTenantBrandingAction(data: {
     }),
     prisma.tenantSubscription.findFirst({
       where: { tenantId: user.tenantId, isActive: true },
+      include: { theme: true },
     }),
   ]);
 
@@ -292,6 +323,7 @@ export async function updateTenantBrandingAction(data: {
     activeUiThemeId,
     activePosLayout,
     activeReceiptTemplate,
+    themeShell,
   } = data;
 
   if (!businessName.trim()) {
@@ -316,13 +348,69 @@ export async function updateTenantBrandingAction(data: {
     posLayout: activePosLayout === "DEFAULT" ? "STANDARD" : (activePosLayout || existingConfig.posLayout),
   };
 
-  // Update tenant record
+  const currentAttrs = (tenant.attributes as any) || {};
+  let mergedShell = {
+    ...(currentAttrs.themeShell || {}),
+    ...(themeShell || {}),
+  };
+
+  // Jika activeUiThemeId diubah, perbarui subscription theme dan sinkronkan shell bawaan tema jika ada
+  if (activeUiThemeId && activeSub) {
+    const targetTheme = await prisma.theme.findUnique({
+      where: { id: activeUiThemeId },
+    });
+    if (targetTheme) {
+      const targetTokens = (targetTheme.tokens as any) || {};
+      if (targetTokens.shell && !themeShell) {
+        mergedShell = {
+          ...mergedShell,
+          ...targetTokens.shell,
+        };
+      }
+      await prisma.tenantTheme.upsert({
+        where: { subscriptionId: activeSub.id },
+        create: {
+          subscriptionId: activeSub.id,
+          themeId: targetTheme.id,
+          customConfig: {
+            ...targetTokens,
+            shell: mergedShell,
+          },
+        },
+        update: {
+          themeId: targetTheme.id,
+          customConfig: {
+            ...targetTokens,
+            shell: mergedShell,
+          },
+          activatedAt: new Date(),
+        },
+      });
+    }
+  } else if (themeShell && activeSub?.theme) {
+    const existingCustom = (activeSub.theme.customConfig as any) || {};
+    await prisma.tenantTheme.update({
+      where: { id: activeSub.theme.id },
+      data: {
+        customConfig: {
+          ...existingCustom,
+          shell: mergedShell,
+        },
+      },
+    });
+  }
+
+  // Update tenant record + attributes.themeShell
   await prisma.tenant.update({
     where: { id: user.tenantId },
     data: {
       businessName: businessName.trim(),
       logoUrl: logoUrl !== undefined ? logoUrl : tenant.logoUrl,
       receiptConfig: updatedConfig,
+      attributes: {
+        ...currentAttrs,
+        themeShell: mergedShell,
+      },
     },
   });
 
@@ -347,28 +435,6 @@ export async function updateTenantBrandingAction(data: {
         address: address.trim() || null,
       },
     });
-  }
-
-  // Jika activeUiThemeId diubah, perbarui subscription theme
-  if (activeUiThemeId && activeSub) {
-    const targetTheme = await prisma.theme.findUnique({
-      where: { id: activeUiThemeId },
-    });
-    if (targetTheme) {
-      await prisma.tenantTheme.upsert({
-        where: { subscriptionId: activeSub.id },
-        create: {
-          subscriptionId: activeSub.id,
-          themeId: targetTheme.id,
-          customConfig: targetTheme.tokens as any,
-        },
-        update: {
-          themeId: targetTheme.id,
-          customConfig: targetTheme.tokens as any,
-          activatedAt: new Date(),
-        },
-      });
-    }
   }
 
   revalidatePath("/dashboard/settings");

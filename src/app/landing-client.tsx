@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Palette,
   Monitor,
+  LayoutTemplate,
   ChevronDown,
   ChevronUp,
   Sun,
@@ -67,6 +68,8 @@ export function LandingClient({
     activeDurations.find((d) => d.key === selectedDurationKey) || activeDurations[0] || DEFAULT_DURATION_SETTINGS[0];
 
   const [activeVerticalTab, setActiveVerticalTab] = useState<"cafe" | "barbershop" | "retail" | "laundry">("cafe");
+  const [demoNavPosition, setDemoNavPosition] = useState<"TOP_NAV" | "SIDEBAR_LEFT">("TOP_NAV");
+  const [demoThemeStyle, setDemoThemeStyle] = useState<"MODERN" | "LUXE" | "WARM">("MODERN");
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<string | null>(null);
 
@@ -456,6 +459,83 @@ export function LandingClient({
           </div>
         </div>
 
+        {/* Dynamic Shell & Theme Interactive Controls */}
+        <div
+          className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 p-3 sm:p-4 rounded-2xl max-w-2xl mx-auto border text-xs shadow-sm"
+          style={{ backgroundColor: t.bgCard2, borderColor: t.borderSoft }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[11px] text-indigo-500 uppercase tracking-wider flex items-center gap-1">
+              <LayoutTemplate className="w-3.5 h-3.5" /> Tata Letak:
+            </span>
+            <div className="flex bg-slate-200/60 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-300/40 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setDemoNavPosition("TOP_NAV")}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  demoNavPosition === "TOP_NAV"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                Top Navigation
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoNavPosition("SIDEBAR_LEFT")}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  demoNavPosition === "SIDEBAR_LEFT"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                Sidebar Kiri
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[11px] text-indigo-500 uppercase tracking-wider flex items-center gap-1">
+              <Palette className="w-3.5 h-3.5" /> Tema:
+            </span>
+            <div className="flex bg-slate-200/60 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-300/40 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setDemoThemeStyle("MODERN")}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  demoThemeStyle === "MODERN"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                Modern
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoThemeStyle("LUXE")}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  demoThemeStyle === "LUXE"
+                    ? "bg-slate-900 text-amber-300 shadow border border-amber-400/30"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                Dark Luxe
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoThemeStyle("WARM")}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  demoThemeStyle === "WARM"
+                    ? "bg-amber-600 text-white shadow"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                Warm F&B
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Simulation Card */}
         <div
           className="grid grid-cols-1 lg:grid-cols-12 gap-6 rounded-[2.5rem] p-6 sm:p-9 shadow-2xl items-start border"
@@ -489,35 +569,137 @@ export function LandingClient({
               ))}
             </div>
 
-            {/* Mini POS Preview */}
-            <div
-              className="p-4 rounded-2xl space-y-3 font-mono text-xs border"
-              style={{ backgroundColor: t.miniPosBg, borderColor: t.borderSoft }}
-            >
-              <div
-                className="flex items-center justify-between pb-2 border-b text-[11px] font-sans"
-                style={{ borderColor: t.borderSoft, color: t.textMuted }}
-              >
-                <span className="font-bold flex items-center gap-1.5" style={{ color: t.text }}>
-                  <Monitor className="w-3.5 h-3.5 text-indigo-500" />
-                  Pratinjau Antarmuka Kasir
-                </span>
-                <span className="text-emerald-500 font-bold">● Live Active</span>
-              </div>
-              {currentVert.sampleProducts.map((p, idx) => (
+            {/* Mini POS Interactive Live Simulation */}
+            {(() => {
+              const isDemoLuxe = demoThemeStyle === "LUXE";
+              const isDemoWarm = demoThemeStyle === "WARM";
+              const posBgColor = isDemoLuxe ? "#0B0F19" : isDemoWarm ? "#FAF6EE" : t.miniPosBg;
+              const posCardColor = isDemoLuxe ? "#131C2E" : isDemoWarm ? "#FFFDF9" : t.miniPosItem;
+              const posBorderColor = isDemoLuxe ? "rgba(245,158,11,0.2)" : isDemoWarm ? "#E8DCB8" : t.borderSoft;
+              const posTextColor = isDemoLuxe ? "#F8FAFC" : isDemoWarm ? "#29180E" : t.text;
+              const posAccentColor = isDemoLuxe ? "#F59E0B" : isDemoWarm ? "#D97706" : "#4F46E5";
+
+              return (
                 <div
-                  key={idx}
-                  className="p-2.5 rounded-xl flex items-center justify-between gap-2 border"
-                  style={{ backgroundColor: t.miniPosItem, borderColor: t.borderSoft }}
+                  className="p-4 rounded-3xl space-y-3 font-mono text-xs border shadow-xl transition-all duration-300"
+                  style={{ backgroundColor: posBgColor, borderColor: posBorderColor }}
                 >
-                  <div>
-                    <span className="font-bold text-xs" style={{ color: t.text }}>{p.name}</span>
-                    <span className="block text-[10px] italic text-indigo-500">{p.note}</span>
+                  {/* Top Bar or Horizontal Pills if TOP_NAV */}
+                  <div
+                    className="flex items-center justify-between pb-2.5 border-b text-[11px] font-sans"
+                    style={{ borderColor: posBorderColor, color: t.textMuted }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold flex items-center gap-1.5" style={{ color: posTextColor }}>
+                        <Monitor className="w-3.5 h-3.5" style={{ color: posAccentColor }} />
+                        <span>POS Station: {currentVert.name}</span>
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                        style={{
+                          backgroundColor: `${posAccentColor}20`,
+                          color: posAccentColor,
+                          border: `1px solid ${posAccentColor}40`,
+                        }}
+                      >
+                        {demoNavPosition === "TOP_NAV" ? "Top Navbar" : "Sidebar Kiri"} &bull; {demoThemeStyle}
+                      </span>
+                    </div>
+                    <span className="text-emerald-500 font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Ready
+                    </span>
                   </div>
-                  <span className="font-bold text-xs text-emerald-500">{p.price}</span>
+
+                  {/* Horizontal Tabs if TOP_NAV */}
+                  {demoNavPosition === "TOP_NAV" && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-sans">
+                      <span
+                        className="px-2.5 py-1 rounded-lg font-bold text-white shadow-sm"
+                        style={{ backgroundColor: posAccentColor }}
+                      >
+                        Semua Menu
+                      </span>
+                      <span
+                        className="px-2 py-1 rounded-lg font-medium border"
+                        style={{ backgroundColor: posCardColor, borderColor: posBorderColor, color: posTextColor }}
+                      >
+                        Favorit
+                      </span>
+                      <span
+                        className="px-2 py-1 rounded-lg font-medium border"
+                        style={{ backgroundColor: posCardColor, borderColor: posBorderColor, color: posTextColor }}
+                      >
+                        Paket Hemat
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Body: Left Sidebar (if SIDEBAR_LEFT) + Product Grid */}
+                  <div className="flex gap-2.5 items-stretch">
+                    {demoNavPosition === "SIDEBAR_LEFT" && (
+                      <div
+                        className="w-16 p-1.5 rounded-2xl border flex flex-col items-center justify-between gap-2 text-[9px] font-sans"
+                        style={{ backgroundColor: posCardColor, borderColor: posBorderColor }}
+                      >
+                        <div className="space-y-2 w-full text-center">
+                          <div
+                            className="p-1.5 rounded-xl font-black text-white text-[9px]"
+                            style={{ backgroundColor: posAccentColor }}
+                          >
+                            POS
+                          </div>
+                          <div className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 opacity-70">
+                            Meja
+                          </div>
+                          <div className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 opacity-70">
+                            Shift
+                          </div>
+                        </div>
+                        <div className="text-[8px] font-mono opacity-50 pb-1">
+                          v2.0
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {currentVert.sampleProducts.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 rounded-2xl flex flex-col justify-between border transition-all hover:scale-[1.02]"
+                          style={{ backgroundColor: posCardColor, borderColor: posBorderColor }}
+                        >
+                          <div>
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="font-bold text-xs" style={{ color: posTextColor }}>
+                                {p.name}
+                              </span>
+                              <span
+                                className="font-black text-xs"
+                                style={{ color: posAccentColor }}
+                              >
+                                {p.price}
+                              </span>
+                            </div>
+                            <span className="block text-[10px] italic opacity-70 mt-0.5" style={{ color: posTextColor }}>
+                              {p.note}
+                            </span>
+                          </div>
+                          <div className="pt-2 flex justify-end">
+                            <span
+                              className="px-2 py-0.5 rounded-lg text-[9px] font-black text-white"
+                              style={{ backgroundColor: posAccentColor }}
+                            >
+                              + Tambah
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             <Link
               href={`/register?vertical=${currentVert.id}`}
@@ -1065,8 +1247,12 @@ export function LandingClient({
         </div>
 
         {(() => {
-          const starterCalc = calculateDurationPrice(150000, activeDuration);
-          const proCalc = calculateDurationPrice(500000, activeDuration);
+          const basicTier = tiers.find((tier: any) => tier.code?.toLowerCase() === "basic");
+          const proTier = tiers.find((tier: any) => tier.code?.toLowerCase() === "pro");
+          const basicMonthlyPrice = Number(basicTier?.priceMonthly ?? 150000);
+          const proMonthlyPrice = Number(proTier?.priceMonthly ?? 500000);
+          const starterCalc = calculateDurationPrice(basicMonthlyPrice, activeDuration);
+          const proCalc = calculateDurationPrice(proMonthlyPrice, activeDuration);
 
           return (
             <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${expandedFaqIndex === null ? 'items-stretch' : 'items-start'}`}>

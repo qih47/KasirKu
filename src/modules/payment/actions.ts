@@ -11,6 +11,8 @@ import {
 } from "@/lib/midtrans";
 import QRCode from "qrcode";
 import { revalidatePath } from "next/cache";
+import { savePaymentIntent, getPaymentIntent, markPaymentIntentPaid } from "@/lib/payment-intent-store";
+import { upgradeSubscriptionAction } from "@/modules/subscription/actions";
 
 export type PaymentMethod = "CASH" | "QRIS" | "TRANSFER" | "CARD";
 
@@ -36,6 +38,7 @@ export async function generatePosDynamicQrisAction(data: {
     throw new Error("Akses ditolak: Anda harus login.");
   }
 
+  const user = session.user as any;
   const { orderId, amount, customerName, customerPhone, items } = data;
 
   if (!amount || amount <= 0) {
@@ -74,6 +77,15 @@ export async function generatePosDynamicQrisAction(data: {
     });
   }
 
+  savePaymentIntent({
+    orderId: result.orderId,
+    type: "POS",
+    tenantId: user.tenantId,
+    outletId: data.outletId,
+    totalAmount: amount,
+    status: "PENDING",
+  });
+
   return {
     success: true,
     orderId: result.orderId,
@@ -92,6 +104,18 @@ export async function generatePosDynamicQrisAction(data: {
 export async function checkPosPaymentStatusAction(orderId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("Akses ditolak.");
+
+  // 0. Cek di Memory PaymentIntent Store
+  const intent = getPaymentIntent(orderId);
+  if (intent && intent.status === "PAID") {
+    return {
+      isPaid: true,
+      status: "PAID",
+      source: "PAYMENT_INTENT_SETTLED",
+      orderId,
+      totalAmount: intent.totalAmount,
+    };
+  }
 
   // 1. Cek di Database Lokal apakah sudah PAID melalui Webhook
   const transaction = await prisma.transaction.findFirst({
@@ -166,6 +190,8 @@ export async function createSaaSSnapInvoiceAction(data: {
   durationMonths: number;
   totalAmount: number;
   tierName: string;
+  selectedPluginIds?: string[];
+  actionType?: "RENEW" | "UPGRADE_TIER" | "ADD_PLUGIN_MID_CYCLE" | "DOWNGRADE";
 }) {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
@@ -173,9 +199,22 @@ export async function createSaaSSnapInvoiceAction(data: {
   }
 
   const user = session.user as any;
-  const { tierCode, durationMonths, totalAmount, tierName } = data;
+  const { tierCode, durationMonths, totalAmount, tierName, selectedPluginIds, actionType } = data;
 
-  const orderId = `SUB-${user.tenantId}-${tierCode.toUpperCase()}-${durationMonths}-${Date.now()}`;
+  const tenantHex = user.tenantId.replace(/-/g, "");
+  const orderId = `SUB_${tenantHex}_${tierCode.slice(0, 3).toUpperCase()}_${durationMonths}M_${Date.now().toString().slice(-4)}`;
+
+  savePaymentIntent({
+    orderId,
+    type: "SAAS",
+    tenantId: user.tenantId,
+    tierCode,
+    durationMonths,
+    selectedPluginIds: selectedPluginIds || [],
+    totalAmount,
+    status: "PENDING",
+    metadata: { actionType },
+  });
 
   const snapResult = await createMidtransSnapTransaction({
     orderId,
@@ -216,6 +255,8 @@ export async function generateSaaSDynamicQrisAction(data: {
   totalAmount: number;
   tierName: string;
   pluginNames?: string[];
+  selectedPluginIds?: string[];
+  actionType?: "RENEW" | "UPGRADE_TIER" | "ADD_PLUGIN_MID_CYCLE" | "DOWNGRADE";
 }) {
   const session = await getServerSession(authOptions);
   if (!session || !(session.user as any)?.tenantId) {
@@ -223,13 +264,26 @@ export async function generateSaaSDynamicQrisAction(data: {
   }
 
   const user = session.user as any;
-  const { tierCode, durationMonths, totalAmount, tierName, pluginNames } = data;
+  const { tierCode, durationMonths, totalAmount, tierName, pluginNames, selectedPluginIds, actionType } = data;
 
   if (!totalAmount || totalAmount <= 0) {
     throw new Error("Nominal invoice langganan tidak valid.");
   }
 
-  const orderId = `SUB-${user.tenantId.substring(0, 8)}-${tierCode.toUpperCase()}-${durationMonths}M-${Date.now().toString().slice(-6)}`;
+  const tenantHex = user.tenantId.replace(/-/g, "");
+  const orderId = `SUB_${tenantHex}_${tierCode.slice(0, 3).toUpperCase()}_${durationMonths}M_${Date.now().toString().slice(-4)}`;
+
+  savePaymentIntent({
+    orderId,
+    type: "SAAS",
+    tenantId: user.tenantId,
+    tierCode,
+    durationMonths,
+    selectedPluginIds: selectedPluginIds || [],
+    totalAmount,
+    status: "PENDING",
+    metadata: { actionType },
+  });
 
   const result = await chargeMidtransDynamicQris({
     orderId,
@@ -288,6 +342,14 @@ export async function checkSaaSPaymentStatusAction(orderId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("Akses ditolak.");
 
+  const intent = getPaymentIntent(orderId);
+  if (intent && intent.status === "PAID") {
+    return {
+      isPaid: true,
+      status: "settlement",
+    };
+  }
+
   try {
     const midtransStatus = await getMidtransTransactionStatus(orderId);
     const trxStatus = midtransStatus?.transaction_status;
@@ -313,6 +375,10 @@ export async function simulatePaymentWebhookAction(orderId: string) {
   const session = await getServerSession(authOptions);
   if (!session) throw new Error("Akses ditolak.");
 
+  // 1. Simpan di PaymentIntent store
+  const intent = markPaymentIntentPaid(orderId);
+
+  // 2. Jika ada transaksi POS di DB, update status
   const transaction = await prisma.transaction.findFirst({
     where: {
       OR: [{ transactionNumber: orderId }, { id: orderId }],
@@ -329,10 +395,32 @@ export async function simulatePaymentWebhookAction(orderId: string) {
       where: { transactionId: transaction.id },
       data: { status: "SUCCESS", gatewayRef: `MOCK-PAID-${Date.now()}` },
     });
-
-    revalidatePath("/dashboard");
-    revalidatePath("/pos");
   }
+
+  // 3. Jika order adalah Langganan SaaS, sinkronisasi aktivasi
+  if (intent && intent.type === "SAAS" && intent.tierCode && intent.tenantId) {
+    const tier = await prisma.licenseTier.findFirst({
+      where: {
+        OR: [
+          { code: intent.tierCode.toLowerCase() },
+          { code: { startsWith: intent.tierCode.toLowerCase().slice(0, 3) } },
+        ],
+      },
+    });
+
+    if (tier) {
+      await upgradeSubscriptionAction({
+        licenseTierId: tier.id,
+        durationMonths: intent.durationMonths || 1,
+        selectedPluginIds: intent.selectedPluginIds || [],
+        actionType: intent.metadata?.actionType || "RENEW",
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/subscription");
+  revalidatePath("/pos");
 
   return {
     success: true,

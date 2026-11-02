@@ -105,6 +105,8 @@ import {
   Zap,
   Copy,
   ExternalLink,
+  PanelLeft,
+  PanelTop,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { PosLayoutType } from "@/types/pos-layout";
@@ -114,8 +116,10 @@ import {
   BUILTIN_RECEIPT_PRESETS,
   TransactionReceiptData,
 } from "@/components/receipt/dynamic-receipt-renderer";
-
-
+import {
+  updateThemeShellConfigAction,
+  ThemeShellConfig,
+} from "@/modules/tenant/theme-actions";
 
 interface PosClientProps {
   initialShiftData: {
@@ -133,6 +137,8 @@ interface PosClientProps {
   cafeTables?: any[];
   staffList?: any[];
   appliedTheme?: any;
+  initialShellConfig?: ThemeShellConfig;
+  initialVertical?: string;
   hasSelfOrderPlugin?: boolean;
   hasBarbershopPlugin?: boolean;
   hasCafePlugin?: boolean;
@@ -155,6 +161,8 @@ export function PosClient({
   cafeTables = [],
   staffList = [],
   appliedTheme,
+  initialShellConfig,
+  initialVertical,
   hasSelfOrderPlugin = false,
   hasBarbershopPlugin = false,
   hasCafePlugin = false,
@@ -175,13 +183,59 @@ export function PosClient({
   // Dynamic Theming & Layout Engine from Context & DB
   const { themeTokens, posLayout: dynamicPosLayout } = useDynamicTheme();
 
-  // Dynamic Tokens & Styles (Priority: Tenant's Active Applied Theme from Database)
+  // Dynamic POS Shell State (Configurable Live in POS or Dashboard)
+  const [posShell, setPosShell] = useState<ThemeShellConfig>({
+    dashboardNavPosition: initialShellConfig?.dashboardNavPosition || "TOP_NAV",
+    sidebarCollapsed: initialShellConfig?.sidebarCollapsed || false,
+    posCategoryPosition:
+      initialShellConfig?.posCategoryPosition ||
+      (dynamicPosLayout?.showCategoriesAs === "sidebar_left" ? "SIDEBAR_LEFT" : "TOP_PILLS"),
+    posCartDock:
+      initialShellConfig?.posCartDock ||
+      (dynamicPosLayout?.cartDock === "left" ? "LEFT" : "RIGHT"),
+    posGridColumns:
+      initialShellConfig?.posGridColumns ||
+      (dynamicPosLayout?.productGridColumns === 3 ? 3 : dynamicPosLayout?.productGridColumns === 6 ? 5 : 4),
+    posCardStyle:
+      initialShellConfig?.posCardStyle ||
+      (dynamicPosLayout?.productCardStyle === "large_photo"
+        ? "LARGE_PHOTO"
+        : dynamicPosLayout?.productCardStyle === "compact_row"
+        ? "COMPACT_ROW"
+        : "GRID_CARD"),
+    mode: initialShellConfig?.mode,
+    primaryColor: initialShellConfig?.primaryColor,
+    accentColor: initialShellConfig?.accentColor,
+    radius: initialShellConfig?.radius,
+  });
+  const [showPosLayoutPopover, setShowPosLayoutPopover] = useState<boolean>(false);
+  const [savingPosShell, setSavingPosShell] = useState<boolean>(false);
+
+  const handleUpdatePosShell = async (partial: Partial<ThemeShellConfig>) => {
+    const nextShell = { ...posShell, ...partial };
+    setPosShell(nextShell);
+    setSavingPosShell(true);
+    try {
+      await updateThemeShellConfigAction(partial);
+    } catch (_) {
+      // silent fallback for cashier role
+    } finally {
+      setSavingPosShell(false);
+    }
+  };
+
+  // Dynamic Tokens & Styles (Priority: posShell overrides -> Tenant's Active Applied Theme -> Context)
   const dbTokens = (appliedTheme?.tokens as any) || {};
-  const primaryColor = dbTokens.primaryColor || dbTokens.colors?.primary || themeTokens.colors.primary || "#4f46e5";
-  const accentColor = dbTokens.accentColor || dbTokens.colors?.accent || themeTokens.colors.accent || "#06b6d4";
-  const isDark = dbTokens.mode === "dark" || dbTokens.layoutStyle === "LUXE" || themeTokens.mode === "dark";
+  const primaryColor = posShell.primaryColor || dbTokens.primaryColor || dbTokens.colors?.primary || themeTokens.colors.primary || "#4f46e5";
+  const accentColor = posShell.accentColor || dbTokens.accentColor || dbTokens.colors?.accent || themeTokens.colors.accent || "#06b6d4";
+  const isDark =
+    posShell.mode === "dark"
+      ? true
+      : posShell.mode === "light"
+      ? false
+      : dbTokens.mode === "dark" || dbTokens.layoutStyle === "LUXE" || themeTokens.mode === "dark";
   const fontFamily = dbTokens.fontFamily || dbTokens.typography?.fontFamily || themeTokens.typography.fontFamily || "inherit";
-  const radius = dbTokens.radius || dbTokens.effects?.borderRadius || themeTokens.effects.borderRadius || "1rem";
+  const radius = posShell.radius || dbTokens.radius || dbTokens.effects?.borderRadius || themeTokens.effects.borderRadius || "1rem";
 
   const rawBg = dbTokens.colors?.background || dbTokens.bgStyle || themeTokens.colors.background;
   const bgStyle = isDark
@@ -456,17 +510,74 @@ export function PosClient({
     ? "LAUNDRY"
     : "RETAIL";
 
+  const resolvedInitialVert = initialVertical?.toUpperCase();
   const [activeVerticalPos, setActiveVerticalPos] = useState<"CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL">(
-    (receiptConfig.posLayout === "CAFE_RESTO" && hasCafePlugin)
+    resolvedInitialVert === "CAFE" && hasCafePlugin
       ? "CAFE"
-      : (receiptConfig.posLayout === "BARBERSHOP_STATION" && hasBarbershopPlugin)
+      : resolvedInitialVert === "BARBERSHOP" && hasBarbershopPlugin
       ? "BARBERSHOP"
-      : (receiptConfig.posLayout === "LAUNDRY_WEIGHING" && hasLaundryPlugin)
+      : resolvedInitialVert === "LAUNDRY" && hasLaundryPlugin
+      ? "LAUNDRY"
+      : resolvedInitialVert === "RETAIL" && hasRetailPlugin
+      ? "RETAIL"
+      : receiptConfig.posLayout === "CAFE_RESTO" && hasCafePlugin
+      ? "CAFE"
+      : receiptConfig.posLayout === "BARBERSHOP_STATION" && hasBarbershopPlugin
+      ? "BARBERSHOP"
+      : receiptConfig.posLayout === "LAUNDRY_WEIGHING" && hasLaundryPlugin
       ? "LAUNDRY"
       : defaultVertical
   );
 
   const [showStationSelectorModal, setShowStationSelectorModal] = useState<boolean>(false);
+
+  const handleSafeSwitchVerticalPos = async (targetVertical: "CAFE" | "BARBERSHOP" | "LAUNDRY" | "RETAIL") => {
+    if (targetVertical === activeVerticalPos) {
+      setShowStationSelectorModal(false);
+      return;
+    }
+
+    if (cart.length > 0 && !filterAllVerticalsInPos) {
+      const shouldHoldAndClear = await swalConfirm(
+        "Simpan Sementara Keranjang Saat Ini?",
+        `Terdapat ${cart.length} item di keranjang stasiun saat ini. Pilih "Simpan (Tunda)" agar keranjang stasiun baru bersih dan tidak tercampur, atau pilih "Batal" untuk menggabung item lintas vertikal.`,
+        {
+          confirmText: "Ya, Tunda & Kosongkan Keranjang",
+          cancelText: "Gabung Item (Cross-Sell)",
+        }
+      );
+
+      if (shouldHoldAndClear) {
+        const newHold = {
+          id: `HOLD-${Date.now()}`,
+          label: `Stasiun ${activeVerticalPos} (${selectedCustomer?.name || "Tamu"})`,
+          cart: [...cart],
+          selectedCustomer,
+          discountType,
+          discountPercent,
+          discountFixed,
+          appliedVoucher,
+          isDineIn: true,
+          selectedTable: "NO_TABLE",
+          timestamp: Date.now(),
+          totalAmount: cart.reduce((s, it) => s + it.price * it.qty, 0),
+        };
+        setHeldCarts((prev) => [newHold, ...prev]);
+        setCart([]);
+        setSelectedCustomer(null);
+        setAppliedVoucher(null);
+      }
+    }
+
+    setSelectedCategory("ALL");
+    setActiveVerticalPos(targetVertical);
+    setShowStationSelectorModal(false);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("vertical", targetVertical);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   // Check URL search parameters on mount (e.g. /pos?vertical=CAFE&outletId=...)
   useEffect(() => {
@@ -848,6 +959,7 @@ export function PosClient({
     }
 
     const interval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
         const res = await checkPosPaymentStatusAction(activeQrisOrderId);
         if (res.isPaid) {
@@ -1114,6 +1226,7 @@ export function PosClient({
     if (!hasSelfOrderPlugin) return;
     loadLiveOrders();
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       loadLiveOrders();
     }, 15000);
     return () => clearInterval(interval);
@@ -1219,7 +1332,7 @@ export function PosClient({
       product.name?.toLowerCase().includes("tea") ||
       product.name?.toLowerCase().includes("espresso");
 
-    if ((posLayout === "CAFE_RESTO" || localCafeTables.length > 0) && isDrink) {
+    if (posLayout === "CAFE_RESTO" && isDrink) {
       setModifierProduct(product);
       return;
     }
@@ -1274,6 +1387,7 @@ export function PosClient({
         ];
       }
     });
+    playPosBeep("scan");
   };
 
   const updateCartQty = async (productId: string, delta: number) => {
@@ -1371,6 +1485,44 @@ export function PosClient({
     }
   };
 
+  // Web Audio Synthesizer Beep Feedback for Hardware POS
+  const playPosBeep = (type: "scan" | "success" | "error" = "scan") => {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === "scan") {
+        osc.frequency.setValueAtTime(1800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+      } else if (type === "success") {
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.2);
+      } else if (type === "error") {
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(240, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.22);
+      }
+    } catch (e) {
+      // Audio not permitted / muted
+    }
+  };
+
   // Handle Quick Barcode Scan in Cart
   const handleBarcodeScanSubmit = (query: string) => {
     const clean = query.trim();
@@ -1382,11 +1534,13 @@ export function PosClient({
         p.name.toLowerCase() === clean.toLowerCase()
     );
     if (found) {
+      playPosBeep("scan");
       addToCart(found);
       setCartBarcodeQuery("");
       setSuccessMsg(`✓ ${found.name} ditambahkan`);
       setTimeout(() => setSuccessMsg(null), 1500);
     } else {
+      playPosBeep("error");
       setError(`Produk dengan barcode/SKU "${clean}" tidak ditemukan.`);
       setTimeout(() => setError(null), 2500);
     }
@@ -1474,6 +1628,7 @@ export function PosClient({
       });
 
       if (res.success) {
+        playPosBeep("success");
         if (selectedTblObj) {
           setLocalCafeTables((prev) =>
             prev.map((t) => (t.id === selectedTblObj.id ? { ...t, status: "OCCUPIED" } : t))
@@ -2016,6 +2171,178 @@ export function PosClient({
                 </span>
               </button>
 
+              {/* Quick POS Layout & Shell Customizer Button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowPosLayoutPopover((prev) => !prev)}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-xs cursor-pointer hover:border-indigo-400"
+                  style={{
+                    backgroundColor: showPosLayoutPopover ? `${primaryColor}18` : innerBoxBg,
+                    borderColor: showPosLayoutPopover ? primaryColor : cardBorder,
+                    color: showPosLayoutPopover ? primaryColor : textPrimary,
+                  }}
+                  title="Kustomisasi Tata Letak POS (Navigasi Atas vs Sidebar Kiri, Posisi Keranjang, & Gaya Kartu)"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="hidden lg:inline">Layout</span>
+                </button>
+
+                {showPosLayoutPopover && (
+                  <div
+                    className="absolute right-0 mt-2 w-80 rounded-2xl border shadow-2xl p-4 z-50 space-y-3.5 text-left animate-fadeIn"
+                    style={{
+                      backgroundColor: cardBg,
+                      borderColor: cardBorder,
+                      color: textPrimary,
+                    }}
+                  >
+                    <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: cardBorder }}>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block">
+                          Dynamic POS Shell
+                        </span>
+                        <h4 className="text-xs font-black">Kustomisasi Layar Kasir</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPosLayoutPopover(false)}
+                        className="p-1 rounded-lg hover:bg-slate-500/10"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* 1. Posisi Navigasi Kategori & Stasiun */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold opacity-80 block">
+                        Navigasi Kategori &amp; Stasiun POS
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePosShell({ posCategoryPosition: "TOP_PILLS" })}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            posShell.posCategoryPosition !== "SIDEBAR_LEFT"
+                              ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                              : "opacity-70 hover:opacity-100"
+                          }`}
+                          style={posShell.posCategoryPosition === "SIDEBAR_LEFT" ? { borderColor: cardBorder } : {}}
+                        >
+                          <PanelTop className="w-3.5 h-3.5" />
+                          <span>Tab Atas</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePosShell({ posCategoryPosition: "SIDEBAR_LEFT" })}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            posShell.posCategoryPosition === "SIDEBAR_LEFT"
+                              ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                              : "opacity-70 hover:opacity-100"
+                          }`}
+                          style={posShell.posCategoryPosition !== "SIDEBAR_LEFT" ? { borderColor: cardBorder } : {}}
+                        >
+                          <PanelLeft className="w-3.5 h-3.5" />
+                          <span>Sidebar Kiri</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Posisi Panel Keranjang */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold opacity-80 block">
+                        Posisi Panel Keranjang
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePosShell({ posCartDock: "RIGHT" })}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold transition cursor-pointer ${
+                            posShell.posCartDock !== "LEFT"
+                              ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                              : "opacity-70 hover:opacity-100"
+                          }`}
+                          style={posShell.posCartDock === "LEFT" ? { borderColor: cardBorder } : {}}
+                        >
+                          Keranjang Kanan ▐
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePosShell({ posCartDock: "LEFT" })}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold transition cursor-pointer ${
+                            posShell.posCartDock === "LEFT"
+                              ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                              : "opacity-70 hover:opacity-100"
+                          }`}
+                          style={posShell.posCartDock !== "LEFT" ? { borderColor: cardBorder } : {}}
+                        >
+                          ▌ Keranjang Kiri
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3. Gaya Kartu Produk */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold opacity-80 block">
+                        Gaya Tampilan Produk
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { id: "GRID_CARD", label: "Grid" },
+                          { id: "LARGE_PHOTO", label: "Foto Besar" },
+                          { id: "COMPACT_ROW", label: "List Cepat" },
+                        ].map((st) => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => handleUpdatePosShell({ posCardStyle: st.id as any })}
+                            className={`px-2 py-1.5 rounded-lg border text-[10px] font-bold transition cursor-pointer ${
+                              posShell.posCardStyle === st.id
+                                ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                            style={posShell.posCardStyle !== st.id ? { borderColor: cardBorder } : {}}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 4. Kepadatan Kolom Grid */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold opacity-80 block">
+                        Kepadatan Kolom Grid
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[3, 4, 5].map((cols) => (
+                          <button
+                            key={cols}
+                            type="button"
+                            onClick={() => handleUpdatePosShell({ posGridColumns: cols as 3 | 4 | 5 })}
+                            className={`px-2 py-1.5 rounded-lg border text-[10px] font-bold transition cursor-pointer ${
+                              posShell.posGridColumns === cols
+                                ? "border-indigo-500 bg-indigo-500/15 text-indigo-500"
+                                : "opacity-70 hover:opacity-100"
+                            }`}
+                            style={posShell.posGridColumns !== cols ? { borderColor: cardBorder } : {}}
+                          >
+                            {cols} Kolom
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {savingPosShell && (
+                      <div className="text-[10px] text-indigo-500 font-bold flex items-center gap-1 pt-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Menyimpan preferensi layout...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setShowCloseShiftModal(true)}
@@ -2084,7 +2411,179 @@ export function PosClient({
         </div>
       ) : (
         /* Main POS Active Interface - Dynamic Theme Layout */
-        <div className={`flex-1 flex overflow-hidden ${dynamicPosLayout?.cartDock === "left" ? "flex-row-reverse" : "flex-row"}`}>
+        <div className={`flex-1 flex overflow-hidden ${posShell.posCartDock === "LEFT" ? "flex-row-reverse" : "flex-row"}`}>
+          {/* Optional Left Vertical Navigation Sidebar (When posCategoryPosition === "SIDEBAR_LEFT") */}
+          {posShell.posCategoryPosition === "SIDEBAR_LEFT" && (
+            <aside
+              className="w-52 lg:w-60 flex-shrink-0 border-r flex flex-col overflow-hidden transition-all"
+              style={{
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
+              }}
+            >
+              {/* Multi-Vertical Station Switcher in Sidebar */}
+              {hasMultipleVerticals && (
+                <div className="p-3 border-b space-y-1.5" style={{ borderColor: cardBorder, backgroundColor: innerBoxBg }}>
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider opacity-60">
+                      Stasiun Vertikal
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePosShell({ posCategoryPosition: "TOP_PILLS" })}
+                      className="text-[10px] font-bold text-indigo-500 hover:underline cursor-pointer"
+                      title="Pindah ke Tab Atas"
+                    >
+                      Ke Atas ▴
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {hasCafePlugin && (
+                      <button
+                        type="button"
+                        onClick={() => handleSafeSwitchVerticalPos("CAFE")}
+                        className={`px-2 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                          activeVerticalPos === "CAFE"
+                            ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                            : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={activeVerticalPos !== "CAFE" ? { backgroundColor: cardBg, borderColor: cardBorder } : {}}
+                      >
+                        <Coffee className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Kafe</span>
+                      </button>
+                    )}
+                    {hasBarbershopPlugin && (
+                      <button
+                        type="button"
+                        onClick={() => handleSafeSwitchVerticalPos("BARBERSHOP")}
+                        className={`px-2 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                          activeVerticalPos === "BARBERSHOP"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={activeVerticalPos !== "BARBERSHOP" ? { backgroundColor: cardBg, borderColor: cardBorder } : {}}
+                      >
+                        <Scissors className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Barber</span>
+                      </button>
+                    )}
+                    {hasLaundryPlugin && (
+                      <button
+                        type="button"
+                        onClick={() => handleSafeSwitchVerticalPos("LAUNDRY")}
+                        className={`px-2 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                          activeVerticalPos === "LAUNDRY"
+                            ? "bg-cyan-600 text-white border-cyan-600 shadow-xs"
+                            : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={activeVerticalPos !== "LAUNDRY" ? { backgroundColor: cardBg, borderColor: cardBorder } : {}}
+                      >
+                        <Shirt className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Laundry</span>
+                      </button>
+                    )}
+                    {hasRetailPlugin && (
+                      <button
+                        type="button"
+                        onClick={() => handleSafeSwitchVerticalPos("RETAIL")}
+                        className={`px-2 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition cursor-pointer ${
+                          activeVerticalPos === "RETAIL"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                            : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={activeVerticalPos !== "RETAIL" ? { backgroundColor: cardBg, borderColor: cardBorder } : {}}
+                      >
+                        <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Retail</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Vertical Category Navigation List */}
+              <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
+                <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider opacity-50">
+                  Kategori Menu ({visibleCategories.length})
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory("ALL")}
+                  style={
+                    selectedCategory === "ALL"
+                      ? {
+                          backgroundColor: primaryColor,
+                          color: "#ffffff",
+                          boxShadow: `0 2px 10px ${primaryColor}35`,
+                        }
+                      : {
+                          backgroundColor: "transparent",
+                          color: textSecondary,
+                        }
+                  }
+                  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer hover:bg-slate-500/10"
+                >
+                  <span>Semua Kategori</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/15 font-extrabold">
+                    {products.filter((p) => p.isActive && (filterAllVerticalsInPos || checkProductMatchesVertical(p, activeVerticalPos))).length}
+                  </span>
+                </button>
+
+                {visibleCategories.map((cat) => {
+                  const catCount = products.filter(
+                    (p) =>
+                      p.isActive &&
+                      p.category === cat &&
+                      (filterAllVerticalsInPos || checkProductMatchesVertical(p, activeVerticalPos))
+                  ).length;
+
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      style={
+                        selectedCategory === cat
+                          ? {
+                              backgroundColor: primaryColor,
+                              color: "#ffffff",
+                              boxShadow: `0 2px 10px ${primaryColor}35`,
+                            }
+                          : {
+                              backgroundColor: "transparent",
+                              color: textSecondary,
+                            }
+                      }
+                      className="w-full px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-500/10 text-left"
+                    >
+                      <span className="truncate">{cat}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/15 font-extrabold shrink-0">
+                        {catCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Cross-Sell Toggle Footer in Sidebar */}
+              <div className="p-2.5 border-t" style={{ borderColor: cardBorder }}>
+                <button
+                  type="button"
+                  onClick={() => setFilterAllVerticalsInPos((prev) => !prev)}
+                  className={`w-full px-3 py-2 rounded-xl text-[11px] font-bold transition border flex items-center justify-center gap-1.5 cursor-pointer ${
+                    filterAllVerticalsInPos
+                      ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                      : "opacity-80 hover:opacity-100"
+                  }`}
+                  style={!filterAllVerticalsInPos ? { backgroundColor: innerBoxBg, borderColor: cardBorder, color: textSecondary } : {}}
+                >
+                  <span>{filterAllVerticalsInPos ? "🌟 Mode Cross-Sell Aktif" : "🎯 Isolasi Vertikal Aktif"}</span>
+                </button>
+              </div>
+            </aside>
+          )}
+
           {/* Left/Main Column: Product Catalog Grid */}
           <div
             className="flex-1 flex flex-col overflow-hidden border-r transition-all"
@@ -2142,7 +2641,8 @@ export function PosClient({
                         <option value="">👤 Semua Stylist</option>
                       )}
                     </select>
-                  </div>            </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -2265,46 +2765,26 @@ export function PosClient({
                 <ScanLine className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
               </div>
 
-              {/* Category Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                <button
-                  type="button"
-                  onClick={() => setFilterAllVerticalsInPos((prev) => !prev)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border flex items-center gap-1 cursor-pointer ${
-                    filterAllVerticalsInPos
-                      ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                  }`}
-                  title="Tampilkan semua produk lintas modul untuk cross-selling"
-                >
-                  <span>{filterAllVerticalsInPos ? "🌟 Semua Modul (Cross-Sell)" : "🎯 Filter Vertikal"}</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedCategory("ALL")}
-                  style={
-                    selectedCategory === "ALL"
-                      ? {
-                        backgroundColor: primaryColor,
-                        color: "#ffffff",
-                        boxShadow: `0 2px 10px ${primaryColor}40`,
-                      }
-                      : {
-                        backgroundColor: innerBoxBg,
-                        borderColor: cardBorder,
-                        color: textSecondary,
-                      }
-                  }
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border cursor-pointer"
-                >
-                  Semua Kategori
-                </button>
-                {visibleCategories.map((cat) => (
+              {/* Horizontal Category Pills (Shown when posCategoryPosition !== "SIDEBAR_LEFT") */}
+              {posShell.posCategoryPosition !== "SIDEBAR_LEFT" && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                   <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
+                    type="button"
+                    onClick={() => setFilterAllVerticalsInPos((prev) => !prev)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border flex items-center gap-1 cursor-pointer ${
+                      filterAllVerticalsInPos
+                        ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                    }`}
+                    title="Tampilkan semua produk lintas modul untuk cross-selling"
+                  >
+                    <span>{filterAllVerticalsInPos ? "🌟 Semua Modul (Cross-Sell)" : "🎯 Filter Vertikal"}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedCategory("ALL")}
                     style={
-                      selectedCategory === cat
+                      selectedCategory === "ALL"
                         ? {
                           backgroundColor: primaryColor,
                           color: "#ffffff",
@@ -2316,27 +2796,108 @@ export function PosClient({
                           color: textSecondary,
                         }
                     }
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border"
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border cursor-pointer"
                   >
-                    {cat}
+                    Semua Kategori
                   </button>
-                ))}
-              </div>
+                  {visibleCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      style={
+                        selectedCategory === cat
+                          ? {
+                            backgroundColor: primaryColor,
+                            color: "#ffffff",
+                            boxShadow: `0 2px 10px ${primaryColor}40`,
+                          }
+                          : {
+                            backgroundColor: innerBoxBg,
+                            borderColor: cardBorder,
+                            color: textSecondary,
+                          }
+                      }
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 transition border"
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Product Cards Grid - Modern Responsive Density */}
+            {/* Product Cards Grid - Dynamic Columns & Card Styles */}
             <div
-              className={`flex-1 p-3 overflow-y-auto grid ${dynamicPosLayout?.productGridColumns === 3
+              className={`flex-1 p-3 overflow-y-auto grid ${
+                posShell.posCardStyle === "COMPACT_ROW"
+                  ? "grid-cols-1 md:grid-cols-2 gap-2"
+                  : posShell.posGridColumns === 3
                   ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-3 gap-3"
-                  : dynamicPosLayout?.productGridColumns === 6
-                    ? "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2"
-                    : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3"
-                } content-start`}
+                  : posShell.posGridColumns === 5
+                  ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5"
+                  : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3"
+              } content-start`}
             >
               {filteredProducts.map((p) => {
                 const inCart = cart.find((c) => c.productId === p.id);
                 const isOutOfStock =
                   p.type === "BARANG" && (p.stockQty ?? 0) <= 0;
+
+                if (posShell.posCardStyle === "COMPACT_ROW") {
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => addToCart(p)}
+                      disabled={isOutOfStock}
+                      style={{
+                        backgroundColor: inCart ? (isDark ? `${primaryColor}25` : `${primaryColor}12`) : cardBg,
+                        borderColor: inCart ? primaryColor : cardBorder,
+                        borderRadius: `calc(${radius} * 0.75)`,
+                      }}
+                      className={`px-3 py-2.5 border text-left flex items-center justify-between gap-3 transition-all relative group cursor-pointer ${
+                        isOutOfStock ? "opacity-40 cursor-not-allowed" : "hover:border-indigo-400 hover:shadow-sm active:scale-[0.99]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                          {p.imageUrl ? (
+                            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Package className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 block truncate" style={{ color: textSecondary }}>
+                            {p.category} {p.barcode ? `• ${p.barcode}` : ""}
+                          </span>
+                          <h4 className="text-xs font-bold truncate" style={{ color: textPrimary }}>
+                            {p.name}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="text-right">
+                          <span className="text-xs font-black font-mono block" style={{ color: primaryColor }}>
+                            Rp {Number(p.price).toLocaleString("id-ID")}
+                          </span>
+                          <span className="text-[9.5px] text-slate-400">
+                            {p.type === "BARANG" ? `Stok: ${p.stockQty ?? 0}` : "Jasa"}
+                          </span>
+                        </div>
+                        {inCart && (
+                          <span
+                            className="w-6 h-6 rounded-full text-white text-[10px] font-black flex items-center justify-center shadow-sm"
+                            style={{ backgroundColor: primaryColor }}
+                          >
+                            {inCart.qty}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                }
+
+                const thumbHeightClass = posShell.posCardStyle === "LARGE_PHOTO" ? "h-32 sm:h-36" : "h-24 sm:h-28";
 
                 return (
                   <button
@@ -2362,7 +2923,7 @@ export function PosClient({
                     )}
 
                     {/* Product Thumbnail in Grid */}
-                    <div className="w-full h-24 sm:h-28 mb-2 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 border border-black/5 dark:border-white/5 flex-shrink-0 flex items-center justify-center relative">
+                    <div className={`w-full ${thumbHeightClass} mb-2 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 border border-black/5 dark:border-white/5 flex-shrink-0 flex items-center justify-center relative`}>
                       {p.imageUrl ? (
                         <img
                           src={p.imageUrl}
@@ -3980,6 +4541,7 @@ export function PosClient({
                       loading ||
                       cart.length === 0 ||
                       !activeShift ||
+                      (selectedPaymentMethod === "QRIS" && !isQrisVerified) ||
                       (isSplitPayment
                         ? splitPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0) < grandTotalWithTip
                         : selectedPaymentMethod === "CASH" && (Number(amountPaid) || 0) < grandTotalWithTip)
@@ -3988,11 +4550,12 @@ export function PosClient({
                       backgroundColor:
                         cart.length === 0 ||
                         !activeShift ||
+                        (selectedPaymentMethod === "QRIS" && !isQrisVerified) ||
                         (isSplitPayment
                           ? splitPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0) < grandTotalWithTip
                           : selectedPaymentMethod === "CASH" && (Number(amountPaid) || 0) < grandTotalWithTip)
                           ? "#94a3b8"
-                          : qrisDynamicPaid
+                          : (qrisDynamicPaid || isQrisVerified)
                             ? "#059669"
                             : primaryColor,
                       borderRadius: radius,
@@ -4014,7 +4577,7 @@ export function PosClient({
                             : selectedPaymentMethod === "CASH"
                               ? "Bayar Tunai & Cetak Struk"
                               : selectedPaymentMethod === "QRIS"
-                                ? "Konfirmasi Lunas QRIS & Cetak Struk"
+                                ? (isQrisVerified ? "Konfirmasi Lunas QRIS & Cetak Struk" : "Menunggu Pembayaran QRIS Pelanggan...")
                                 : selectedPaymentMethod === "TRANSFER"
                                   ? "Konfirmasi Transfer & Cetak Struk"
                                   : "Konfirmasi Kartu EDC & Cetak Struk"}
@@ -5216,8 +5779,9 @@ export function PosClient({
                           key={o.id}
                           type="button"
                           onClick={() => {
-                            setShiftData((prev: any) => ({ ...prev, currentOutletId: o.id }));
-                            toastSuccess(`Cabang kasir dialihkan ke "${o.name}"`);
+                            if (o.id !== shiftData.currentOutletId) {
+                              window.location.href = `/pos?outletId=${o.id}&vertical=${activeVerticalPos}`;
+                            }
                           }}
                           className={`p-3 rounded-2xl border text-left font-bold text-xs transition flex items-center justify-between cursor-pointer ${
                             isSelected
@@ -5248,8 +5812,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveVerticalPos("CAFE");
-                        setShowStationSelectorModal(false);
+                        handleSafeSwitchVerticalPos("CAFE");
                         toastSuccess("✓ Beralih ke Stasiun Kasir Kafe & Resto");
                       }}
                       className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
@@ -5282,8 +5845,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveVerticalPos("BARBERSHOP");
-                        setShowStationSelectorModal(false);
+                        handleSafeSwitchVerticalPos("BARBERSHOP");
                         toastSuccess("✓ Beralih ke Stasiun Kasir Barbershop");
                       }}
                       className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
@@ -5316,8 +5878,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveVerticalPos("LAUNDRY");
-                        setShowStationSelectorModal(false);
+                        handleSafeSwitchVerticalPos("LAUNDRY");
                         toastSuccess("✓ Beralih ke Stasiun Kasir Laundry");
                       }}
                       className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${
@@ -5350,8 +5911,7 @@ export function PosClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveVerticalPos("RETAIL");
-                        setShowStationSelectorModal(false);
+                        handleSafeSwitchVerticalPos("RETAIL");
                         toastSuccess("✓ Beralih ke Stasiun Kasir Retail");
                       }}
                       className={`p-4 rounded-2xl border text-left transition space-y-1.5 cursor-pointer ${

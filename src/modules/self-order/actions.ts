@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { calculateItemCommission } from "@/modules/commission/commission-engine";
+import { deductRecipeIngredients } from "@/modules/product/recipe-actions";
 
 export type LiveOrderStatus = "PENDING" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
 export type LiveOrderPaymentStatus = "UNPAID_CASH" | "PAID_ONLINE";
@@ -322,8 +323,30 @@ export async function checkoutLiveOrderAction(data: {
   const items = (order.items as any[]) || [];
   const totalAmount = Number(order.totalAmount);
 
-  if (amountPaid < totalAmount) {
-    throw new Error(`Uang pembayaran kurang dari total tagihan (Rp ${totalAmount.toLocaleString("id-ID")}).`);
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { receiptConfig: true },
+  });
+  const rc = (tenant?.receiptConfig as any) || {};
+
+  const subtotalAmount = items.reduce((sum, it) => sum + (Number(it.price) * Number(it.qty)), 0) || totalAmount;
+  let taxAmount = 0;
+  let serviceChargeAmount = 0;
+
+  if (rc.taxPb1Active && rc.taxPb1Percent) {
+    taxAmount += Math.round((subtotalAmount * Number(rc.taxPb1Percent)) / 100);
+  }
+  if (rc.taxPpnActive && rc.taxPpnPercent) {
+    taxAmount += Math.round((subtotalAmount * Number(rc.taxPpnPercent)) / 100);
+  }
+  if (rc.serviceChargeActive && rc.serviceChargePercent) {
+    serviceChargeAmount += Math.round((subtotalAmount * Number(rc.serviceChargePercent)) / 100);
+  }
+
+  const finalTotal = subtotalAmount + taxAmount + serviceChargeAmount;
+
+  if (amountPaid < finalTotal) {
+    throw new Error(`Uang pembayaran kurang dari total tagihan (Rp ${finalTotal.toLocaleString("id-ID")}).`);
   }
 
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -339,9 +362,11 @@ export async function checkoutLiveOrderAction(data: {
         shiftId,
         customerId: order.customerId || null,
         transactionNumber,
-        subtotalAmount: totalAmount,
+        subtotalAmount,
+        taxAmount,
+        serviceCharge: serviceChargeAmount,
         discountAmount: 0,
-        totalAmount,
+        totalAmount: finalTotal,
         status: "PAID",
       },
     });
@@ -464,23 +489,36 @@ export async function checkoutLiveOrderAction(data: {
       }
     }
 
+    // 2b. Kurangi Bahan Baku Resep / BOM (Bill of Materials) jika produk Cafe memiliki resep
+    await deductRecipeIngredients(
+      tx,
+      items.map((i: any) => ({
+        productId: i.productId,
+        qty: i.qty,
+      })),
+      order.outletId,
+      transaction.id
+    );
+
     // 3. Catat Pembayaran
     await tx.payment.create({
       data: {
         transactionId: transaction.id,
         method: paymentMethod,
-        amount: totalAmount,
+        amount: finalTotal,
         status: "SUCCESS",
       },
     });
 
-    // 4. Update status Customer (LTV) jika ada
+    // 4. Update status Customer (LTV & Loyalty Points: 1 poin per Rp 10.000) jika ada
     if (order.customerId) {
+      const pointsEarned = Math.floor(finalTotal / 10000);
       await (tx as any).customer.update({
         where: { id: order.customerId },
         data: {
           visits: { increment: 1 },
-          totalSpent: { increment: totalAmount },
+          totalSpent: { increment: finalTotal },
+          points: { increment: pointsEarned },
           lastVisitAt: new Date(),
         },
       });
@@ -512,7 +550,7 @@ export async function checkoutLiveOrderAction(data: {
 
     return {
       transaction,
-      change: amountPaid - totalAmount,
+      change: amountPaid - finalTotal,
       amountPaid,
     };
   });
@@ -524,6 +562,7 @@ export async function checkoutLiveOrderAction(data: {
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard/cafe/tables");
   revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/accounting");
 
   return { success: true, ...result };
 }

@@ -6,15 +6,20 @@ import { getCurrentShiftData } from "@/modules/transaction/shift-actions";
 import { getProductsData } from "@/modules/product/actions";
 import { PosClient } from "./pos-client";
 
-export default async function PosPage() {
+export default async function PosPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ outletId?: string; vertical?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session) {
     redirect("/login");
   }
 
+  const resolvedParams = searchParams ? await searchParams : undefined;
   const user = session.user as any;
-  const shiftData = await getCurrentShiftData();
-  const targetOutletId = user.outletId || shiftData?.currentOutletId || shiftData?.outlets?.[0]?.id;
+  const shiftData = await getCurrentShiftData(resolvedParams?.outletId);
+  const targetOutletId = resolvedParams?.outletId || user.outletId || shiftData?.currentOutletId || shiftData?.outlets?.[0]?.id;
 
   const [productsData, tenant, cafeTables, staffList, rawVouchers] = await Promise.all([
     getProductsData(targetOutletId),
@@ -161,14 +166,38 @@ export default async function PosPage() {
     }
   }
 
+  const posThemeTokens = (appliedPosTheme?.tokens as any) || {};
+  const posLayoutDef = posThemeTokens?.layouts?.pos || {};
+  const customConfig = (activeSub?.theme?.customConfig as any) || {};
+  const tenantAttrs = (tenant?.attributes as any) || {};
+
+  const shellConfig = {
+    dashboardNavPosition: "TOP_NAV",
+    sidebarCollapsedDefault: false,
+    posCategoryPosition: posLayoutDef.showCategoriesAs === "sidebar_left" ? "SIDEBAR_LEFT" : "TOP_PILLS",
+    posCartDock: posLayoutDef.cartDock === "left" ? "LEFT" : "RIGHT",
+    posGridColumns: posLayoutDef.productGridColumns || 4,
+    posCardStyle:
+      posLayoutDef.productCardStyle === "large_photo"
+        ? "LARGE_PHOTO"
+        : posLayoutDef.productCardStyle === "compact_row"
+        ? "COMPACT_ROW"
+        : "GRID_CARD",
+    ...(posThemeTokens.shell || {}),
+    ...(customConfig.shell || {}),
+    ...(tenantAttrs.themeShell || {}),
+  };
+
   return (
     <PosClient
-      initialShiftData={shiftData}
+      initialShiftData={shiftData ? JSON.parse(JSON.stringify(shiftData)) : null}
       initialProducts={productsData.products}
       categories={productsData.categories}
-      cafeTables={cafeTables}
+      cafeTables={cafeTables ? JSON.parse(JSON.stringify(cafeTables)) : []}
       staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
+      initialShellConfig={JSON.parse(JSON.stringify(shellConfig))}
+      initialVertical={resolvedParams?.vertical}
       hasSelfOrderPlugin={isSelfOrderActive}
       hasBarbershopPlugin={isBarbershopActive}
       hasCafePlugin={isCafeActive}

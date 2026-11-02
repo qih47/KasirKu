@@ -142,7 +142,6 @@ export async function getStoreData() {
       };
     });
 
-
   const dynamicPosLayouts = (allThemes as any[])
     .filter(
       (t: any) =>
@@ -160,14 +159,28 @@ export async function getStoreData() {
         verticalLabel: tokens.vertical || "Umum",
         layoutType: (t.code as PosLayoutType) || "STANDARD",
         priceMonthly: Number(t.priceMonthly),
-        description: tokens.description || `Tata letak kasir dock ${pos.cartDock || "right"} ${pos.productGridColumns || 4} kolom`,
+        description:
+          tokens.description ||
+          `Tata letak kasir dock ${pos.cartDock || "right"} ${pos.productGridColumns || pos.gridColumns || 4} kolom`,
         badge: Number(t.priceMonthly) === 0 ? "GRATIS" : "PREMIUM",
         previewImage: tokens.previewImages?.[0] || null,
-        features: [`Dock: ${pos.cartDock || "right"}`, `Grid: ${pos.productGridColumns || 4} Kolom`],
+        features: [
+          `Dock: ${pos.cartDock || "right"}`,
+          `Grid: ${pos.productGridColumns || pos.gridColumns || 4} Kolom`,
+        ],
       };
     });
 
-  const activePosThemeCode = (currentReceiptConfig as any).posThemeCode || (currentReceiptConfig.posLayout !== "STANDARD" && currentReceiptConfig.posLayout !== "CAFE_QUICK_ORDER" && currentReceiptConfig.posLayout !== "BARBERSHOP_STATION" && currentReceiptConfig.posLayout !== "RETAIL_FAST_BARCODE" && currentReceiptConfig.posLayout !== "LAUNDRY_WEIGHING" ? currentReceiptConfig.posLayout : null) || "DEFAULT";
+  const activePosThemeCode =
+    (currentReceiptConfig as any).posThemeCode ||
+    (currentReceiptConfig.posLayout !== "STANDARD" &&
+    currentReceiptConfig.posLayout !== "CAFE_QUICK_ORDER" &&
+    currentReceiptConfig.posLayout !== "BARBERSHOP_STATION" &&
+    currentReceiptConfig.posLayout !== "RETAIL_FAST_BARCODE" &&
+    currentReceiptConfig.posLayout !== "LAUNDRY_WEIGHING"
+      ? currentReceiptConfig.posLayout
+      : null) ||
+    "DEFAULT";
 
   return JSON.parse(
     JSON.stringify({
@@ -181,6 +194,7 @@ export async function getStoreData() {
       plugins: allPlugins,
       uiThemes: dynamicUiThemes,
       activeUiThemeId,
+      purchasedUiThemeIds: (tenant.attributes as any)?.purchasedUiThemeIds || [],
       activeUiThemeCode: activeSub?.theme?.theme?.code || "default",
       activeUiThemeName: activeSub?.theme?.theme?.name || "Qassa Default Modern",
       receiptThemes: dynamicReceiptThemes,
@@ -194,7 +208,6 @@ export async function getStoreData() {
     })
   );
 }
-
 
 export async function purchaseReceiptThemeAction(themeId: string) {
   const user = await requireOwner();
@@ -276,10 +289,32 @@ export async function purchasePosLayoutAction(layoutId: string) {
     posLayout: layoutId === "DEFAULT" ? "STANDARD" : layoutId,
   };
 
+  const layoutTokens = (layoutRecord?.tokens as any)?.layouts?.pos || {};
+  const tenantAttrs = (tenant.attributes as any) || {};
+  const existingShell = tenantAttrs.themeShell || {};
+  const updatedShell = {
+    ...existingShell,
+    ...(layoutTokens.cartDock ? { posCartDock: String(layoutTokens.cartDock).toUpperCase() } : {}),
+    ...(layoutTokens.gridColumns || layoutTokens.productGridColumns
+      ? { posGridColumns: Number(layoutTokens.gridColumns || layoutTokens.productGridColumns) }
+      : {}),
+    ...(layoutTokens.showCategoriesAs === "sidebar_left" ? { posCategoryPosition: "SIDEBAR_LEFT" } : {}),
+    ...(layoutId === "pos-retail-barcode"
+      ? { posCardStyle: "COMPACT_ROW", posCartDock: "LEFT", posGridColumns: 3 }
+      : {}),
+    ...(layoutId === "pos-cafe-table"
+      ? { posCardStyle: "LARGE_PHOTO", posCartDock: "RIGHT", posGridColumns: 4 }
+      : {}),
+  };
+
   await prisma.tenant.update({
     where: { id: user.tenantId },
     data: {
       receiptConfig: updatedConfig,
+      attributes: {
+        ...tenantAttrs,
+        themeShell: updatedShell,
+      } as any,
     },
   });
 
@@ -287,11 +322,15 @@ export async function purchasePosLayoutAction(layoutId: string) {
   revalidatePath("/dashboard/settings");
   revalidatePath("/pos");
 
-  return { success: true, appliedLayout: layoutRecord || { id: layoutId, name: layoutId === "DEFAULT" ? "Bawaan Tema UI" : layoutId } };
+  return {
+    success: true,
+    appliedLayout: layoutRecord || {
+      id: layoutId,
+      name: layoutId === "DEFAULT" ? "Bawaan Tema UI" : layoutId,
+    },
+  };
 }
-
 
 export async function applyUiThemeAction(themeId: string) {
   return await baseApplyThemeAction(themeId);
 }
-

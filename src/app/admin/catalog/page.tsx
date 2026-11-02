@@ -1,4 +1,4 @@
-import { getCatalogPricingData } from "@/modules/superadmin/actions";
+import { getCatalogPricingData, requireSuperAdminOrRedirect } from "@/modules/superadmin/actions";
 import { getSubscriptionDurationSettingsAction } from "@/modules/superadmin/duration-actions";
 import { getTrialConfigurationAction } from "@/modules/superadmin/trial-actions";
 import { getFeatureEntitlementsMatrix } from "@/modules/features/feature-actions";
@@ -6,6 +6,7 @@ import { CatalogClient } from "./catalog-client";
 import { Tags } from "lucide-react";
 
 export default async function AdminCatalogPage() {
+  await requireSuperAdminOrRedirect();
   const [{ licenseTiers, plugins, themes }, durationSettings, trialConfig, featureEntitlements] = await Promise.all([
     getCatalogPricingData(),
     getSubscriptionDurationSettingsAction(),

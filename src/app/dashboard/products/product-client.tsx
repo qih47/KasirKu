@@ -132,6 +132,8 @@ export function ProductClient({
     const activeV =
       typeof verticalOverride === "string"
         ? (verticalOverride as "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL")
+        : filterVerticalTab !== "ALL"
+        ? (filterVerticalTab as "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL")
         : selectedFormVertical || defaultVertical;
     setSelectedFormVertical(activeV);
     setEditItem(null);
@@ -331,6 +333,30 @@ export function ProductClient({
     }
   };
 
+  const resolveProductVertical = (p: any): "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" => {
+    if (p.attributes?.verticalType === "BARBERSHOP") return "BARBERSHOP";
+    if (p.attributes?.verticalType === "CAFE") return "CAFE";
+    if (p.attributes?.verticalType === "LAUNDRY") return "LAUNDRY";
+    if (p.attributes?.verticalType === "RETAIL") return "RETAIL";
+    if (p.attributes?.durationMinutes) return "BARBERSHOP";
+    if (p.attributes?.serviceUnit || p.attributes?.estimateTime) return "LAUNDRY";
+    if (p.attributes?.unit === "Porsi" || p.attributes?.unit === "Cup" || p.attributes?.unit === "Plate") return "CAFE";
+    if (p.type === "JASA") return "BARBERSHOP";
+    return "RETAIL";
+  };
+
+  const verticalCategories =
+    filterVerticalTab === "ALL"
+      ? data.categories
+      : Array.from(
+          new Set(
+            data.products
+              .filter((p) => resolveProductVertical(p) === filterVerticalTab)
+              .map((p) => p.category)
+              .filter(Boolean)
+          )
+        );
+
   const filteredProducts = data.products.filter((p) => {
     const matchType = filterType === "ALL" || p.type === filterType;
     const matchCat =
@@ -338,19 +364,10 @@ export function ProductClient({
     const matchLowStock =
       !filterLowStockOnly ||
       (p.type === "BARANG" && (p.stockQty ?? 0) <= (p.minStockAlert ?? 5));
-    
+
     let matchVertical = true;
     if (filterVerticalTab !== "ALL") {
-      const pV =
-        p.attributes?.verticalType ||
-        (p.attributes?.durationMinutes
-          ? "BARBERSHOP"
-          : p.attributes?.serviceUnit || p.attributes?.estimateTime
-          ? "LAUNDRY"
-          : p.type === "JASA"
-          ? "BARBERSHOP"
-          : "RETAIL");
-      matchVertical = pV === filterVerticalTab;
+      matchVertical = resolveProductVertical(p) === filterVerticalTab;
     }
 
     const query = searchQuery.toLowerCase();
@@ -519,60 +536,75 @@ export function ProductClient({
                 {/* Vertical Filter Tabs */}
                 <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 w-fit">
                   <button
-                    onClick={() => setFilterVerticalTab("ALL")}
+                    onClick={() => {
+                      setFilterVerticalTab("ALL");
+                      setSelectedCategory("ALL");
+                    }}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${filterVerticalTab === "ALL"
                         ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
                         : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                       }`}
                   >
-                    Semua Modul
+                    Semua Modul ({data.products.length})
                   </button>
                   {hasCafeFlag && (
                     <button
-                      onClick={() => setFilterVerticalTab("CAFE")}
+                      onClick={() => {
+                        setFilterVerticalTab("CAFE");
+                        setSelectedCategory("ALL");
+                      }}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "CAFE"
                           ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
                           : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                         }`}
                     >
                       <Coffee className="w-3 h-3" />
-                      <span>Kafe</span>
+                      <span>Kafe ({data.products.filter((p) => resolveProductVertical(p) === "CAFE").length})</span>
                     </button>
                   )}
                   {hasBarbershopFlag && (
                     <button
-                      onClick={() => setFilterVerticalTab("BARBERSHOP")}
+                      onClick={() => {
+                        setFilterVerticalTab("BARBERSHOP");
+                        setSelectedCategory("ALL");
+                      }}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "BARBERSHOP"
-                          ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs"
+                          ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
                           : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                         }`}
                     >
                       <Scissors className="w-3 h-3" />
-                      <span>Barber</span>
+                      <span>Barber ({data.products.filter((p) => resolveProductVertical(p) === "BARBERSHOP").length})</span>
                     </button>
                   )}
                   {hasLaundryFlag && (
                     <button
-                      onClick={() => setFilterVerticalTab("LAUNDRY")}
+                      onClick={() => {
+                        setFilterVerticalTab("LAUNDRY");
+                        setSelectedCategory("ALL");
+                      }}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "LAUNDRY"
                           ? "bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-xs"
                           : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                         }`}
                     >
                       <Shirt className="w-3 h-3" />
-                      <span>Laundry</span>
+                      <span>Laundry ({data.products.filter((p) => resolveProductVertical(p) === "LAUNDRY").length})</span>
                     </button>
                   )}
                   {hasRetailFlag && (
                     <button
-                      onClick={() => setFilterVerticalTab("RETAIL")}
+                      onClick={() => {
+                        setFilterVerticalTab("RETAIL");
+                        setSelectedCategory("ALL");
+                      }}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${filterVerticalTab === "RETAIL"
                           ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
                           : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                         }`}
                     >
                       <Package className="w-3 h-3" />
-                      <span>Retail</span>
+                      <span>Retail ({data.products.filter((p) => resolveProductVertical(p) === "RETAIL").length})</span>
                     </button>
                   )}
                 </div>
@@ -589,8 +621,8 @@ export function ProductClient({
                 </button>
 
                 <button
-                  onClick={openAddModal}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5"
+                  onClick={() => openAddModal()}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>{tr("Tambah Produk Baru")}</span>
@@ -612,14 +644,14 @@ export function ProductClient({
               </div>
 
               {/* Category Dropdown */}
-              {data.categories.length > 0 && (
+              {verticalCategories.length > 0 && (
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="w-full sm:w-48 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
                   <option value="ALL">{tr("Semua Kategori")}</option>
-                  {data.categories.map((c) => (
+                  {verticalCategories.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -650,6 +682,7 @@ export function ProductClient({
                     const minAlert = p.minStockAlert ?? 5;
                     const isOutOfStock = p.type === "BARANG" && (p.stockQty ?? 0) <= 0;
                     const isLowStock = p.type === "BARANG" && !isOutOfStock && (p.stockQty ?? 0) <= minAlert;
+                    const pVertical = resolveProductVertical(p);
 
                     return (
                       <tr
@@ -681,7 +714,26 @@ export function ProductClient({
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                pVertical === "CAFE"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : pVertical === "BARBERSHOP"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : pVertical === "LAUNDRY"
+                                  ? "bg-cyan-50 text-cyan-700 border-cyan-200"
+                                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              }`}
+                            >
+                              {pVertical === "CAFE"
+                                ? "☕ Kafe"
+                                : pVertical === "BARBERSHOP"
+                                ? "💈 Barber"
+                                : pVertical === "LAUNDRY"
+                                ? "🧺 Laundry"
+                                : "🛒 Retail"}
+                            </span>
                             {p.type === "BARANG" ? (
                               <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[10px] font-semibold">
                                 {tr("BARANG")}

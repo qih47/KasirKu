@@ -96,6 +96,15 @@ export default async function CustomerMenuPage({
         }),
   ]);
 
+  // Saring produk agar tidak menampilkan bahan baku mentah dapur
+  const displayProducts = (products as any[]).filter((p: any) => {
+    const isIngredient = (p.attributes as any)?.isIngredient === true;
+    const isRaw =
+      (p.category || "").toLowerCase().includes("bahan baku") ||
+      (p.category || "").toLowerCase().includes("ingredient");
+    return !isIngredient && !isRaw;
+  });
+
   return (
     <CustomerMenuClient
       tenant={{
@@ -104,6 +113,7 @@ export default async function CustomerMenuPage({
         logoUrl: tenant.logoUrl,
         outletId: targetOutlet?.id || "",
         outletName: targetOutlet?.name || "Outlet Utama",
+        receiptConfig: (tenant.receiptConfig as any) || {},
       }}
       tables={(tables as any[]).map((t: any) => ({
         id: t.id,
@@ -111,7 +121,7 @@ export default async function CustomerMenuPage({
         status: t.status,
       }))}
       initialTableQuery={resolvedSearchParams?.table}
-      products={(products as any[]).map((p: any) => ({
+      products={displayProducts.map((p: any) => ({
         id: p.id,
         name: p.name,
         price: Number(p.price),

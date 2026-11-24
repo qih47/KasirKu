@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toastError, swalWarning } from "@/lib/swal";
 import {
   getSalesReportData,
   ReportPeriod,
 } from "@/modules/transaction/report-actions";
+import {
+  getTenantAccountingSummaryAction,
+  AccountingSummaryResult,
+} from "@/modules/accounting/journal-actions";
 import { CafeReportView } from "@/modules/cafe/components/cafe-report-view";
 import { BarberReportView } from "@/modules/barbershop/components/barber-report-view";
 import { LaundryReportView } from "@/modules/laundry/components/laundry-report-view";
@@ -33,6 +37,9 @@ import {
   Shirt,
   ShoppingBag,
   Lock,
+  Clock,
+  BookOpen,
+  Scale,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/language-context";
 
@@ -79,6 +86,43 @@ export function ReportsClient({
 
   const canExportExcel = isFeatureAllowed("REPORT_EXPORT_EXCEL");
   const canViewProfitLoss = isFeatureAllowed("REPORT_PROFIT_LOSS");
+
+  const [accountingData, setAccountingData] = useState<AccountingSummaryResult | null>(null);
+  const [accountingLoading, setAccountingLoading] = useState(false);
+  const [accountingError, setAccountingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeReportTab !== "ACCOUNTING" || !canViewProfitLoss) return;
+    let cancelled = false;
+
+    const loadAccounting = async () => {
+      setAccountingLoading(true);
+      setAccountingError(null);
+      try {
+        const res = await getTenantAccountingSummaryAction({
+          startDate: data.dateRange?.from,
+          endDate: data.dateRange?.to,
+          outletId: selectedOutletId,
+        });
+        if (!cancelled) {
+          setAccountingData(res);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setAccountingError(err.message || "Gagal memuat Laba Rugi & Jurnal Umum.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAccountingLoading(false);
+        }
+      }
+    };
+
+    loadAccounting();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeReportTab, canViewProfitLoss, data.dateRange?.from, data.dateRange?.to, selectedOutletId]);
 
   const fetchReports = async (newPeriod: ReportPeriod, outletId: string) => {
     setLoading(true);
@@ -403,6 +447,20 @@ export function ReportsClient({
             <DollarSign className="w-4 h-4 text-emerald-500" />
             <span>💼 Biaya SDM &amp; Gaji</span>
           </button>
+
+          {/* Tab Laba Rugi & Jurnal Umum (PRO / ENTERPRISE) */}
+          <button
+            onClick={() => setActiveReportTab("ACCOUNTING")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition flex-shrink-0 ${
+              activeReportTab === "ACCOUNTING"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-slate-800"
+            }`}
+          >
+            <BookOpen className={`w-4 h-4 ${activeReportTab === "ACCOUNTING" ? "text-white" : "text-indigo-500"}`} />
+            <span>📒 Laba Rugi &amp; Jurnal Umum</span>
+            {!canViewProfitLoss && <Lock className="w-3 h-3 ml-0.5 text-amber-500" />}
+          </button>
         </div>
 
         {/* Conditional Tab Rendering with Real Multi-Vertical Data */}
@@ -528,6 +586,223 @@ export function ReportsClient({
             </div>
           );
         })()}
+
+        {/* Tab 4b: Laba Rugi & Jurnal Umum (Double-Entry Accounting) */}
+        {activeReportTab === "ACCOUNTING" && (
+          <div className="space-y-6 animate-fadeIn">
+            {!canViewProfitLoss ? (
+              <ReportPaywallCard
+                title="Laporan Laba Rugi & Jurnal Umum"
+                description="Analisa laba kotor, HPP produk/jasa, pemecahan pajak PB1/PPN, service charge, biaya kas operasional, komisi staf, serta buku jurnal double-entry otomatis tersedia mulai paket Pro."
+                requiredTier="PRO"
+              />
+            ) : accountingLoading ? (
+              <div className="p-10 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+                <div className="w-8 h-8 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin mx-auto" />
+                <p className="text-xs font-bold text-slate-500">
+                  Menghitung jurnal double-entry &amp; Laba Rugi periode {data.dateRange?.fromFormatted} &mdash; {data.dateRange?.toFormatted}...
+                </p>
+              </div>
+            ) : accountingError ? (
+              <div className="p-6 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold">
+                ⚠️ {accountingError}
+              </div>
+            ) : accountingData ? (
+              <>
+                {/* Banner Audit Keseimbangan Double-Entry */}
+                <div
+                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    accountingData.auditTotals.isBalanced
+                      ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+                      : "bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Scale className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-black">
+                        {accountingData.auditTotals.isBalanced
+                          ? "✅ Buku Jurnal Double-Entry Seimbang (Balanced)"
+                          : "⚠️ Ditemukan Selisih Keseimbangan Jurnal"}
+                      </p>
+                      <p className="text-[11px] opacity-80">
+                        Total {accountingData.auditTotals.totalEntriesCount} baris jurnal pada periode aktif
+                        {accountingData.auditTotals.totalEntriesCount > 100
+                          ? " (menampilkan 100 baris terbaru)"
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
+                    <span>
+                      Total Debit: Rp {accountingData.auditTotals.totalDebit.toLocaleString("id-ID")}
+                    </span>
+                    <span>
+                      Total Kredit: Rp {accountingData.auditTotals.totalCredit.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4 KPI Utama Laba Rugi */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                    <span className="text-xs font-semibold uppercase text-slate-500">
+                      Penjualan Bersih (Net Sales)
+                    </span>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">
+                      Rp {accountingData.financials.netSales.toLocaleString("id-ID")}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Kotor Rp {accountingData.financials.grossSales.toLocaleString("id-ID")} &minus; Diskon Rp{" "}
+                      {accountingData.financials.discounts.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                    <span className="text-xs font-semibold uppercase text-slate-500">
+                      Estimasi HPP (COGS)
+                    </span>
+                    <p className="text-2xl font-black text-amber-600">
+                      Rp {Math.round(accountingData.financials.estimatedCogs).toLocaleString("id-ID")}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Berdasarkan modal produk (costPrice) / estimasi standar
+                    </p>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                    <span className="text-xs font-semibold uppercase text-slate-500">
+                      Laba Kotor (Gross Profit)
+                    </span>
+                    <p className="text-2xl font-black text-indigo-600">
+                      Rp {Math.round(accountingData.financials.grossProfit).toLocaleString("id-ID")}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Net Sales + Biaya Admin &minus; HPP
+                    </p>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                    <span className="text-xs font-semibold uppercase text-slate-500">
+                      Laba Bersih (Net Profit)
+                    </span>
+                    <p
+                      className={`text-2xl font-black ${
+                        accountingData.financials.netProfit >= 0
+                          ? "text-emerald-600"
+                          : "text-rose-600"
+                      }`}
+                    >
+                      Rp {Math.round(accountingData.financials.netProfit).toLocaleString("id-ID")}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Setelah Beban Operasional &amp; Komisi Staf
+                    </p>
+                  </div>
+                </div>
+
+                {/* Rincian Pajak, Service, & Beban */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Pajak PB1</p>
+                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                      Rp {accountingData.financials.taxPb1.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Pajak PPN</p>
+                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                      Rp {accountingData.financials.taxPpn.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Service Charge</p>
+                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                      Rp {accountingData.financials.serviceCharge.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Biaya Admin</p>
+                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                      Rp {accountingData.financials.adminFees.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Beban Kas Operasional</p>
+                    <p className="text-sm font-black text-rose-600">
+                      Rp {accountingData.financials.operationalExpenses.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <p className="text-[11px] font-semibold text-slate-500">Komisi Staf</p>
+                    <p className="text-sm font-black text-rose-600">
+                      Rp {accountingData.financials.staffCommissions.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tabel Jurnal Umum */}
+                <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
+                        📒 Jurnal Umum Otomatis (Double-Entry)
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Mencakup pembayaran tunai/QRIS/split, pemecahan pajak PB1/PPN, service charge, tip, mutasi kas masuk/keluar, dan akrual komisi.
+                      </p>
+                    </div>
+                  </div>
+
+                  {accountingData.journalEntries.length === 0 ? (
+                    <div className="py-10 text-center text-xs text-slate-400">
+                      Belum ada transaksi atau mutasi kas tercatat pada periode ini.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 uppercase text-[11px]">
+                            <th className="py-3 pr-3 font-bold">Tanggal</th>
+                            <th className="py-3 px-3 font-bold">Referensi</th>
+                            <th className="py-3 px-3 font-bold">Akun</th>
+                            <th className="py-3 px-3 font-bold">Keterangan</th>
+                            <th className="py-3 px-3 font-bold text-right">Debit</th>
+                            <th className="py-3 pl-3 font-bold text-right">Kredit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                          {accountingData.journalEntries.map((entry) => (
+                            <tr key={entry.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                              <td className="py-2.5 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-400 font-mono">
+                                {entry.date}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                                {entry.referenceNo}
+                              </td>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                                {entry.accountName}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                                {entry.description}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap text-right font-bold text-emerald-600">
+                                {entry.debit > 0 ? `Rp ${entry.debit.toLocaleString("id-ID")}` : "—"}
+                              </td>
+                              <td className="py-2.5 pl-3 whitespace-nowrap text-right font-bold text-slate-700 dark:text-slate-300">
+                                {entry.credit > 0 ? `Rp ${entry.credit.toLocaleString("id-ID")}` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
 
         {/* Tab 5: Stock Ledger Audit Trail */}
         {activeReportTab === "STOCK_LEDGER" && (
@@ -1038,6 +1313,100 @@ export function ReportsClient({
                       className="py-8 text-center text-slate-500 text-xs"
                     >
                       Belum ada transaksi kasir.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Audit Rekonsiliasi Shift & Laci Kasir */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm mt-6">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              Audit Rekonsiliasi Shift & Laci Kasir
+            </h3>
+            <span className="text-xs text-slate-500 font-medium">
+              Riwayat buka-tutup shift & verifikasi fisik uang laci
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="py-3 px-4">Waktu Buka / Tutup</th>
+                  <th className="py-3 px-4">Kasir & Cabang</th>
+                  <th className="py-3 px-4 text-right">Modal Awal</th>
+                  <th className="py-3 px-4 text-right">Penjualan Tunai</th>
+                  <th className="py-3 px-4 text-right">Kas In / Out</th>
+                  <th className="py-3 px-4 text-right">Uang Seharusnya</th>
+                  <th className="py-3 px-4 text-right">Fisik Laci</th>
+                  <th className="py-3 px-4 text-center">Selisih & Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {data.shiftReconciliation && data.shiftReconciliation.length > 0 ? (
+                  data.shiftReconciliation.map((s: any) => {
+                    const diff = s.difference !== null ? Number(s.difference) : null;
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                        <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">
+                          <div>{s.openedAt}</div>
+                          <div className="text-[11px] text-slate-400">
+                            {s.closedAt ? `s/d ${s.closedAt}` : "(Sedang Berlangsung)"}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">
+                          <div>{s.cashierName}</div>
+                          <div className="text-[11px] text-slate-500 font-normal">{s.outletName} • {s.trxCount} Trx</div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                          Rp {s.openingCash.toLocaleString("id-ID")}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-emerald-600 font-semibold">
+                          + Rp {s.cashSales.toLocaleString("id-ID")}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-500 text-[11px]">
+                          <div>+{s.cashIn.toLocaleString("id-ID")}</div>
+                          <div>-{s.cashOut.toLocaleString("id-ID")}</div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
+                          Rp {s.expectedCash.toLocaleString("id-ID")}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
+                          {s.closingCash !== null ? `Rp ${s.closingCash.toLocaleString("id-ID")}` : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {!s.isClosed ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
+                              Aktif
+                            </span>
+                          ) : diff === 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700">
+                              Uang Pas ✓
+                            </span>
+                          ) : diff !== null && diff > 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-300 dark:border-blue-700">
+                              +Rp {diff.toLocaleString("id-ID")} (Lebih)
+                            </span>
+                          ) : diff !== null ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-300 dark:border-rose-700">
+                              -Rp {Math.abs(diff).toLocaleString("id-ID")} (Kurang ⚠️)
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-500 text-xs">
+                      Tidak ada riwayat shift dalam periode yang dipilih.
                     </td>
                   </tr>
                 )}

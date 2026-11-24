@@ -188,6 +188,15 @@ export async function toggleLockPayrollPeriodAction(payload: {
   const user = await requireOwner();
   const { periodMonth, isLocked } = payload;
 
+  const existingRecords = await (prisma as any).payrollRecord.findMany({
+    where: {
+      tenantId: user.tenantId,
+      periodMonth,
+    },
+  });
+
+  const wasAlreadyLocked = existingRecords.length > 0 && existingRecords.every((r: any) => r.isLocked);
+
   await (prisma as any).payrollRecord.updateMany({
     where: {
       tenantId: user.tenantId,
@@ -199,13 +208,9 @@ export async function toggleLockPayrollPeriodAction(payload: {
     },
   });
 
-  // Jika gaji dikunci (final disetujui), kurangi sisa kasbon karyawan secara otomatis
-  if (isLocked) {
-    const lockedRecords = await (prisma as any).payrollRecord.findMany({
-      where: { tenantId: user.tenantId, periodMonth },
-    });
-
-    for (const rec of lockedRecords) {
+  // Jika gaji BARU dikunci (final disetujui), kurangi sisa kasbon karyawan secara otomatis (idempoten)
+  if (isLocked && !wasAlreadyLocked) {
+    for (const rec of existingRecords) {
       const advanceCut = Number(rec.advanceDeduction || 0);
       if (advanceCut > 0) {
         const staffAdvances = await prisma.staffAdvance.findMany({
@@ -229,6 +234,38 @@ export async function toggleLockPayrollPeriodAction(payload: {
               paidOffAt: nextRem <= 0 ? new Date() : null,
             },
           });
+        }
+      }
+    }
+  } else if (!isLocked && wasAlreadyLocked) {
+    // Jika kunci dibuka kembali (unlock), pulihkan potongan kasbon karyawan yang sempat terpotong
+    for (const rec of existingRecords) {
+      const advanceCut = Number(rec.advanceDeduction || 0);
+      if (advanceCut > 0) {
+        const staffAdvances = await prisma.staffAdvance.findMany({
+          where: { tenantId: user.tenantId, staffId: rec.staffId },
+          orderBy: { createdAt: "desc" },
+        });
+
+        let restoreAmount = advanceCut;
+        for (const adv of staffAdvances) {
+          if (restoreAmount <= 0) break;
+          const origAmt = Number(adv.amount);
+          const currentRem = Number(adv.remainingAmount);
+          const deficit = origAmt - currentRem;
+          if (deficit > 0) {
+            const addBack = Math.min(deficit, restoreAmount);
+            const newRem = currentRem + addBack;
+            restoreAmount -= addBack;
+            await prisma.staffAdvance.update({
+              where: { id: adv.id },
+              data: {
+                remainingAmount: newRem,
+                status: "ACTIVE",
+                paidOffAt: null,
+              },
+            });
+          }
         }
       }
     }

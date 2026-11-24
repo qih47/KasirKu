@@ -4,8 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
 import { calculateItemCommission } from "@/modules/commission/commission-engine";
-import { deductRecipeIngredients } from "@/modules/product/recipe-actions";
+import { deductRecipeIngredients, restoreRecipeIngredients } from "@/modules/product/recipe-actions";
 
 export type PaymentMethod = "CASH" | "QRIS" | "TRANSFER" | "CARD";
 
@@ -52,6 +53,8 @@ export interface CartItemInput {
   staffId?: string;
   bookingId?: string;
   notes?: string;
+  conversionFactor?: number;
+  uomUnit?: string;
 }
 
 export type DiscountType = "PERCENT" | "FIXED" | "VOUCHER";
@@ -150,6 +153,7 @@ export async function createTransactionAction(data: {
   voucherCode?: string | null;
   taxAmount?: number;
   serviceCharge?: number;
+  barberTip?: number;
   customerId?: string | null;
   tableId?: string | null;
   orderType?: "DINE_IN" | "TAKEAWAY" | "STANDARD";
@@ -176,6 +180,7 @@ export async function createTransactionAction(data: {
     voucherCode,
     taxAmount = 0,
     serviceCharge = 0,
+    barberTip = 0,
     customerId,
     tableId,
     orderType,
@@ -207,10 +212,12 @@ export async function createTransactionAction(data: {
 
   finalDiscountAmount = Math.min(subtotalAmount, Math.max(0, finalDiscountAmount));
 
-  // Hitung grand total akhir
+  const tipAmount = Math.max(0, Number(barberTip || 0));
+
+  // Hitung grand total akhir (Termasuk Diskon, Pajak, Service Charge, dan Tip Barber)
   const totalAmount = Math.max(
     0,
-    subtotalAmount - finalDiscountAmount + Number(taxAmount || 0) + Number(serviceCharge || 0)
+    subtotalAmount - finalDiscountAmount + Number(taxAmount || 0) + Number(serviceCharge || 0) + tipAmount
   );
 
   if (splitPayments && splitPayments.length > 0) {
@@ -334,12 +341,17 @@ export async function createTransactionAction(data: {
     const staffMap = new Map<string, any>(staffUsersBatch.map((s: any) => [s.id, s]));
 
     // 4. Simpan item-item transaksi & update stok barang
+    let unassignedTip = tipAmount;
     for (const item of items) {
       const product: any = productMap.get(item.productId);
 
       if (!product) {
         throw new Error(`Produk "${item.name}" tidak ditemukan.`);
       }
+
+      // Kalkulasi faktor konversi Multi-UOM (misal: 1 DUS = 24 PCS)
+      const uomFactor = Number(item.conversionFactor && item.conversionFactor > 0 ? item.conversionFactor : 1);
+      const stockDeductionQty = item.qty * uomFactor;
 
       // Kurangi stok di OutletStock & catat pergerakan StockMovement jika bertipe BARANG & stok dilacak
       let targetOutletStock: any = outletStockMap.get(item.productId) || null;
@@ -350,24 +362,24 @@ export async function createTransactionAction(data: {
             ? targetOutletStock.stockQty
             : (product.stockQty ?? 0);
 
-          if (currentStock < item.qty) {
+          if (currentStock < stockDeductionQty) {
             throw new Error(
-              `Stok untuk "${product.name}" di cabang ini tidak mencukupi (Tersisa ${currentStock}, diminta ${item.qty}).`
+              `Stok untuk "${product.name}" di cabang ini tidak mencukupi (Tersisa ${currentStock}, diminta ${stockDeductionQty}${uomFactor > 1 ? ` [${item.qty} ${item.uomUnit || 'Unit'} x ${uomFactor}]` : ''}).`
             );
           }
 
           if (targetOutletStock) {
             await tx.outletStock.update({
               where: { id: targetOutletStock.id },
-              data: { stockQty: currentStock - item.qty },
+              data: { stockQty: currentStock - stockDeductionQty },
             });
-            targetOutletStock.stockQty = currentStock - item.qty;
+            targetOutletStock.stockQty = currentStock - stockDeductionQty;
           } else {
             targetOutletStock = await tx.outletStock.create({
               data: {
                 outletId,
                 productId: item.productId,
-                stockQty: Math.max(0, currentStock - item.qty),
+                stockQty: Math.max(0, currentStock - stockDeductionQty),
                 isAvailable: true,
               },
             });
@@ -378,7 +390,7 @@ export async function createTransactionAction(data: {
           if (product.stockQty !== null) {
             await tx.product.update({
               where: { id: item.productId },
-              data: { stockQty: Math.max(0, product.stockQty - item.qty) },
+              data: { stockQty: Math.max(0, product.stockQty - stockDeductionQty) },
             });
           }
         }
@@ -395,16 +407,16 @@ export async function createTransactionAction(data: {
         },
       });
 
-      // Catat baris ledger StockMovement (type: OUT)
+      // Catat baris ledger StockMovement (type: OUT) dengan jumlah unit riil terkonversi
       if (product.type === "BARANG" && targetOutletStock) {
         await tx.stockMovement.create({
           data: {
             outletStockId: targetOutletStock.id,
             type: "OUT",
-            qty: item.qty,
+            qty: stockDeductionQty,
             referenceId: trxItem.id,
             performedById: user.id || null,
-            note: `Penjualan Kasir POS #${transactionNumber}`,
+            note: `Penjualan Kasir POS #${transactionNumber}${uomFactor > 1 ? ` (${item.name} x${item.qty} = ${stockDeductionQty} Pcs)` : ''}`,
             status: "CONFIRMED",
           },
         });
@@ -427,6 +439,7 @@ export async function createTransactionAction(data: {
               qty: item.qty,
               price: item.price,
               staffId: item.staffId,
+              weightKg: laundryDetails?.weightKg ? Number(laundryDetails.weightKg) : undefined,
             },
             product: {
               type: product.type as any,
@@ -442,16 +455,22 @@ export async function createTransactionAction(data: {
             },
           });
 
-          if (calcResult && calcResult.amount > 0) {
+          const itemTip = unassignedTip > 0 ? unassignedTip : 0;
+          unassignedTip = 0; // Berikan tip ke staf layanan pertama
+
+          const baseCommissionAmount = calcResult ? calcResult.amount : 0;
+          const finalCommissionAmount = baseCommissionAmount + itemTip;
+
+          if (finalCommissionAmount > 0) {
             await tx.staffCommission.create({
               data: {
                 tenantId: user.tenantId,
                 outletId,
                 staffId: item.staffId,
                 transactionItemId: trxItem.id,
-                commissionType: calcResult.commissionType,
-                rate: calcResult.rate,
-                amount: calcResult.amount,
+                commissionType: calcResult?.commissionType || "FLAT",
+                rate: calcResult?.rate || itemTip,
+                amount: finalCommissionAmount,
               },
             });
           }
@@ -494,6 +513,7 @@ export async function createTransactionAction(data: {
         data: {
           tenantId: user.tenantId,
           outletId,
+          customerId: customerId || null,
           orderNumber,
           customerName: laundryDetails.customerName || "Pelanggan POS",
           customerPhone: laundryDetails.customerPhone || null,
@@ -510,14 +530,40 @@ export async function createTransactionAction(data: {
     }
 
     // 6. Catat record Pembayaran (Mendukung Split Payment / Multi-Method)
+    // Normalisasi uang kembalian agar nominal Payment yang tercatat adalah penerimaan bersih (sesuai totalAmount)
     if (splitPayments && splitPayments.length > 0) {
-      for (const sp of splitPayments) {
-        if (Number(sp.amount) > 0) {
+      const positiveSplits = splitPayments
+        .map((sp) => ({
+          method: sp.method,
+          amount: Math.max(0, Number(sp.amount || 0)),
+        }))
+        .filter((sp) => sp.amount > 0);
+      const rawSplitSum = positiveSplits.reduce((sum, sp) => sum + sp.amount, 0);
+      let remainingExcess = Math.max(0, rawSplitSum - totalAmount);
+
+      const normalizedSplits = positiveSplits.map((sp) => ({ ...sp }));
+      for (const sp of normalizedSplits) {
+        if (remainingExcess <= 0) break;
+        if (sp.method === "CASH") {
+          const deduction = Math.min(sp.amount, remainingExcess);
+          sp.amount = Math.round((sp.amount - deduction) * 100) / 100;
+          remainingExcess = Math.round((remainingExcess - deduction) * 100) / 100;
+        }
+      }
+      for (const sp of normalizedSplits) {
+        if (remainingExcess <= 0) break;
+        const deduction = Math.min(sp.amount, remainingExcess);
+        sp.amount = Math.round((sp.amount - deduction) * 100) / 100;
+        remainingExcess = Math.round((remainingExcess - deduction) * 100) / 100;
+      }
+
+      for (const sp of normalizedSplits) {
+        if (sp.amount > 0) {
           await tx.payment.create({
             data: {
               transactionId: newTransaction.id,
               method: sp.method,
-              amount: Number(sp.amount),
+              amount: sp.amount,
               status: "SUCCESS",
             },
           });
@@ -564,16 +610,22 @@ export async function createTransactionAction(data: {
       },
     });
 
+    const pointsEarned = customerId ? Math.floor(totalAmount / 10000) : 0;
+    const customerPointsTotal = fullTransaction?.customer?.points ?? 0;
+
     return {
       transaction: {
         ...(fullTransaction as any),
         receiptNumber: fullTransaction?.transactionNumber,
         queueNumber,
         orderType: orderType === "TAKEAWAY" ? "Take Away" : (orderType as string) === "DELIVERY" ? "Delivery" : "Dine In",
+        barberTip: tipAmount,
       },
       queueNumber,
       change: amountPaid - totalAmount,
       amountPaid,
+      pointsEarned,
+      customerPointsTotal,
     };
   });
 
@@ -585,6 +637,8 @@ export async function createTransactionAction(data: {
   revalidatePath("/dashboard/cafe/tables");
   revalidatePath("/dashboard/laundry/orders");
   revalidatePath("/dashboard/barbershop/bookings");
+  revalidatePath("/dashboard/barbershop/queue");
+  revalidatePath("/dashboard/barbershop/commissions");
   revalidatePath("/dashboard/reports");
 
   return JSON.parse(JSON.stringify({ success: true, ...result }));
@@ -629,12 +683,42 @@ export async function getTransactionHistoryAction(params: {
 export async function voidTransactionAction(data: {
   transactionId: string;
   reason: string;
+  supervisorPin?: string;
 }) {
   const user = await requireCashierOrOwner();
-  const { transactionId, reason } = data;
+  const { transactionId, reason, supervisorPin } = data;
 
   if (!reason || !reason.trim()) {
     throw new Error("Alasan void / refund transaksi wajib diisi.");
+  }
+
+  // Verifikasi PIN Supervisor jika pembatalan dilakukan oleh akun KASIR
+  if (user.role === "KASIR") {
+    if (!supervisorPin || !supervisorPin.trim()) {
+      throw new Error("Akses ditolak: Pembatalan (Void) transaksi oleh kasir memerlukan otorisasi PIN Supervisor.");
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { attributes: true },
+    });
+
+    const tenantAttrs = (tenant?.attributes as any) || {};
+    const storedHash = tenantAttrs.supervisorPinHash;
+
+    if (!storedHash) {
+      // Default sandbox PIN fallback (123456 / 888888)
+      const cleanPin = supervisorPin.trim();
+      const isDefaultValid = cleanPin === "123456" || cleanPin === "888888";
+      if (!isDefaultValid) {
+        throw new Error("PIN Supervisor salah. Silakan minta otorisasi Owner atau Supervisor Anda.");
+      }
+    } else {
+      const isMatch = await bcrypt.compare(supervisorPin.trim(), storedHash);
+      if (!isMatch) {
+        throw new Error("PIN Supervisor salah. Otorisasi pembatalan (Void) transaksi ditolak.");
+      }
+    }
   }
 
   const result = await prisma.$transaction(async (tx: any) => {
@@ -716,9 +800,12 @@ export async function voidTransactionAction(data: {
       });
     }
 
-    // 4. Catat pengeluaran kas refund pada shift aktif jika transaksi dibayar secara CASH
+    // 2b. Kembalikan stok bahan baku resep (BOM Cafe/Resto)
+    await restoreRecipeIngredients(tx, trx.items, trx.outletId, trx.id, reason.trim());
+
+    // 4. Penanganan Kas Laci Saat Void Transaksi Cash
     const cashPaid = (trx.payments || [])
-      .filter((p: any) => p.method === "CASH" && p.status === "SUCCESS")
+      .filter((p: any) => p.method === "CASH" && (p.status === "SUCCESS" || p.status === "PAID"))
       .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
 
     if (cashPaid > 0) {
@@ -730,35 +817,87 @@ export async function voidTransactionAction(data: {
       });
 
       if (activeShift) {
-        await tx.cashMovement.create({
-          data: {
-            shiftId: activeShift.id,
-            type: "OUT",
-            amount: cashPaid,
-            note: `Refund Void Transaksi ${trx.transactionNumber}: ${reason.trim()}`,
-          },
-        });
+        // KOREKSI DOUBLE-DEDUCTION:
+        // Jika transaksi di-void pada shift yang sama (intra-shift):
+        // Status "CANCELLED" sudah otomatis MENGELUARKAN transaksi dari `cashSalesTotal` shift ini.
+        // JANGAN membuat `CashMovement OUT` karena akan memotong kas laci 2x lipat.
+        // Mutasi OUT HANYA dibuat jika transaksi yang di-void berasal dari shift lampau / shift berbeda (cross-shift):
+        if (trx.shiftId !== activeShift.id) {
+          await tx.cashMovement.create({
+            data: {
+              shiftId: activeShift.id,
+              type: "OUT",
+              amount: cashPaid,
+              note: `Refund Void Transaksi Masa Lalu ${trx.transactionNumber}: ${reason.trim()}`,
+            },
+          });
+        }
       }
     }
 
-    // 5. Update LTV Customer jika ada
+    // 5. Update status pembayaran menjadi CANCELLED
+    await tx.payment.updateMany({
+      where: { transactionId: trx.id },
+      data: { status: "CANCELLED" },
+    });
+
+    // 6. Update LTV Customer & Loyalty Points jika ada (Pencegahan Eksploitasi Poin)
     if (trx.customerId) {
       const cust = await tx.customer.findUnique({
         where: { id: trx.customerId },
-        select: { visits: true, totalSpent: true },
+        select: { visits: true, totalSpent: true, points: true },
       });
       if (cust) {
         const newVisits = Math.max(0, (cust.visits || 0) - 1);
         const newSpent = Math.max(0, Number(cust.totalSpent || 0) - Number(trx.totalAmount || 0));
+        const pointsEarned = Math.floor(Number(trx.totalAmount || 0) / 10000);
+        const newPoints = Math.max(0, (cust.points || 0) - pointsEarned);
+
         await tx.customer.update({
           where: { id: trx.customerId },
           data: {
             visits: newVisits,
             totalSpent: newSpent,
+            points: newPoints,
           },
         });
       }
     }
+
+    // 7. Kembalikan kuota voucher jika transaksi menggunakan voucher promo
+    if (trx.voucherCode) {
+      const outletData = await tx.outlet.findUnique({
+        where: { id: trx.outletId },
+        select: { tenantId: true },
+      });
+      if (outletData?.tenantId) {
+        const normalizedCode = trx.voucherCode.trim().toUpperCase().replace(/\s+/g, "");
+        const existingVoucher = await tx.voucher.findFirst({
+          where: {
+            tenantId: outletData.tenantId,
+            code: normalizedCode,
+          },
+        });
+        if (existingVoucher && existingVoucher.usedCount > 0) {
+          await tx.voucher.update({
+            where: { id: existingVoucher.id },
+            data: { usedCount: { decrement: 1 } },
+          });
+        }
+      }
+    }
+
+    // 8. Batalkan antrean LaundryOrder fiktif terkait jika ada
+    await tx.laundryOrder.updateMany({
+      where: {
+        outletId: trx.outletId,
+        notes: { contains: trx.transactionNumber },
+        status: { in: ["RECEIVED"] },
+      },
+      data: {
+        status: "CANCELLED",
+      },
+    });
 
     return { transactionNumber: trx.transactionNumber };
   });
@@ -769,6 +908,8 @@ export async function voidTransactionAction(data: {
   revalidatePath("/dashboard/products");
   revalidatePath("/dashboard/customers");
   revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/laundry");
+  revalidatePath("/dashboard/accounting");
 
   return { success: true, message: `Transaksi ${result.transactionNumber} berhasil di-void.` };
 }

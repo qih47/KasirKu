@@ -8,6 +8,7 @@ export default withAuth(
     const isSuperAdmin = token?.role === "SUPER_ADMIN";
 
     const isKasir = token?.role === "KASIR";
+    const isBranchAdmin = token?.role === "ADMIN_CABANG";
 
     // 1. Logika untuk rute /admin/login
     if (pathname === "/admin/login") {
@@ -39,6 +40,18 @@ export default withAuth(
     // 4. Isolasi Penuh Kasir: Hanya boleh akses /pos, tidak boleh akses /dashboard & laporan owner
     if (isKasir && (pathname.startsWith("/dashboard") || pathname.startsWith("/settings") || pathname.startsWith("/onboarding"))) {
       return NextResponse.redirect(new URL("/pos", req.url));
+    }
+
+    // 5. Isolasi Admin Cabang: Scoped ke 1 cabang, dilarang mengakses modul bisnis/langganan/outlet tingkat Owner
+    if (
+      isBranchAdmin &&
+      (pathname.startsWith("/dashboard/subscription") ||
+        pathname.startsWith("/dashboard/outlets") ||
+        pathname.startsWith("/dashboard/settings") ||
+        pathname.startsWith("/dashboard/store") ||
+        pathname.startsWith("/onboarding"))
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
     return NextResponse.next();

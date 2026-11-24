@@ -149,7 +149,10 @@ export function CustomerCrmModal({
                         {cust.notes && <span className="italic text-amber-600 truncate max-w-[120px]">({cust.notes})</span>}
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-right flex-shrink-0 flex items-center gap-1.5">
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        ⭐ {cust.points || 0} Poin
+                      </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
                         {cust.visits || 0}x hadir
                       </span>

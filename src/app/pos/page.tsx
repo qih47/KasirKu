@@ -171,6 +171,8 @@ export default async function PosPage({
   const customConfig = (activeSub?.theme?.customConfig as any) || {};
   const tenantAttrs = (tenant?.attributes as any) || {};
 
+  const verticalConfig = (tenantAttrs.verticalConfig as Record<string, any>) || {};
+
   const shellConfig = {
     dashboardNavPosition: "TOP_NAV",
     sidebarCollapsedDefault: false,
@@ -188,6 +190,12 @@ export default async function PosPage({
     ...(tenantAttrs.themeShell || {}),
   };
 
+  const resolvedInitialVertical =
+    resolvedParams?.vertical ||
+    (verticalConfig.defaultStation && verticalConfig.defaultStation !== "AUTO"
+      ? verticalConfig.defaultStation
+      : undefined);
+
   return (
     <PosClient
       initialShiftData={shiftData ? JSON.parse(JSON.stringify(shiftData)) : null}
@@ -197,7 +205,8 @@ export default async function PosPage({
       staffList={staffList ? JSON.parse(JSON.stringify(staffList)) : []}
       appliedTheme={appliedPosTheme ? JSON.parse(JSON.stringify(appliedPosTheme)) : null}
       initialShellConfig={JSON.parse(JSON.stringify(shellConfig))}
-      initialVertical={resolvedParams?.vertical}
+      initialVertical={resolvedInitialVertical}
+      verticalConfig={verticalConfig}
       hasSelfOrderPlugin={isSelfOrderActive}
       hasBarbershopPlugin={isBarbershopActive}
       hasCafePlugin={isCafeActive}
@@ -210,6 +219,7 @@ export default async function PosPage({
         businessName: tenant?.businessName || "POS Universal",
         logoUrl: tenant?.logoUrl || (tenant?.receiptConfig as any)?.logoUrl || null,
         receiptConfig: tenant?.receiptConfig || null,
+        verticalConfig,
       }}
     />
   );

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { resolveProductVertical } from "@/lib/vertical-helpers";
 
 export type ProductType = "BARANG" | "JASA";
 
@@ -28,7 +29,8 @@ export async function getProductsData(explicitOutletId?: string) {
   }
 
   const user = session.user as any;
-  const targetOutletId = explicitOutletId || user.outletId;
+  const isBranchAdmin = user.role === "ADMIN_CABANG";
+  const targetOutletId = isBranchAdmin ? user.outletId : (explicitOutletId || user.outletId);
 
   const [products, outlets, activeTenantPlugins] = await Promise.all([
     prisma.product.findMany({
@@ -121,9 +123,9 @@ export async function getProductsData(explicitOutletId?: string) {
 
   return {
     products: JSON.parse(JSON.stringify(formattedProducts)),
-    outlets: JSON.parse(JSON.stringify(outlets)),
+    outlets: JSON.parse(JSON.stringify(isBranchAdmin ? outlets.filter((o: any) => o.id === user.outletId) : outlets)),
     categories,
-    selectedOutletId: targetOutletId || null,
+    selectedOutletId: isBranchAdmin ? user.outletId : (targetOutletId || null),
     activeVertical,
     verticalFlags: {
       isBarbershop: hasBarbershopPlugin,
@@ -177,6 +179,17 @@ export async function createProductAction(data: {
   // Jika tipe JASA, stockQty selalu null
   const finalStock = type === "JASA" ? null : (stockQty ?? 0);
 
+  const resolvedVertical = resolveProductVertical({
+    category: category?.trim() || "Umum",
+    type,
+    attributes: attributes || {},
+  });
+
+  const mergedAttributes = {
+    ...(attributes || {}),
+    verticalType: (attributes?.verticalType || resolvedVertical).toUpperCase(),
+  };
+
   const product = await prisma.product.create({
     data: {
       tenantId: user.tenantId,
@@ -189,7 +202,7 @@ export async function createProductAction(data: {
       category: category?.trim() || "Umum",
       stockQty: finalStock,
       minStockAlert: minStockAlert !== undefined && minStockAlert >= 0 ? minStockAlert : 5,
-      attributes: attributes || {},
+      attributes: mergedAttributes,
       isActive: true,
     },
   });
@@ -253,6 +266,18 @@ export async function updateProductAction(
 
   const finalStock = type === "JASA" ? null : (stockQty ?? 0);
 
+  const effectiveAttrs = attributes || (existing.attributes as any) || {};
+  const resolvedVertical = resolveProductVertical({
+    category: category?.trim() || existing.category,
+    type: type || (existing.type as any),
+    attributes: effectiveAttrs,
+  });
+
+  const mergedAttributes = {
+    ...effectiveAttrs,
+    verticalType: (effectiveAttrs.verticalType || resolvedVertical).toUpperCase(),
+  };
+
   const updated = await prisma.product.update({
     where: { id },
     data: {
@@ -264,7 +289,7 @@ export async function updateProductAction(
       category: category?.trim() || "Umum",
       stockQty: finalStock,
       minStockAlert: minStockAlert !== undefined && minStockAlert >= 0 ? minStockAlert : existing.minStockAlert,
-      attributes: attributes || existing.attributes || {},
+      attributes: mergedAttributes,
     },
   });
 
@@ -292,6 +317,12 @@ export async function updateProductAction(
           isAvailable: true,
           priceOverride: null,
         },
+      });
+    } else if (type === "BARANG" && finalStock !== null && finalStock !== existing.stockQty && outlet.id === (existing.outletId || activeOutlets[0]?.id)) {
+      // Jika user mengedit stok produk dari tabel utama, sinkronkan ke cabang utama
+      await prisma.outletStock.update({
+        where: { id: existingStock.id },
+        data: { stockQty: finalStock },
       });
     }
   }
@@ -337,8 +368,16 @@ export async function updateOutletStockAction(data: {
   const user = await requireTenantUser();
   const { outletId, productId, mode, qty, note } = data;
 
+  if (user.role === "ADMIN_CABANG" && outletId !== user.outletId) {
+    throw new Error("Akses ditolak: Admin Cabang hanya dapat menyesuaikan stok di cabangnya sendiri.");
+  }
+
   if (qty < 0) {
     throw new Error("Jumlah stok tidak boleh bernilai negatif.");
+  }
+
+  if (user.role === "ADMIN_CABANG" && outletId !== user.outletId) {
+    throw new Error("Akses ditolak: Admin Cabang hanya dapat mengubah ketersediaan di cabangnya sendiri.");
   }
 
   const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -360,19 +399,26 @@ export async function updateOutletStockAction(data: {
   let movementType: "IN" | "OUT" | "ADJUSTMENT" = "ADJUSTMENT";
   let movementQty = qty;
 
+  let defaultMovementNote = "Penyesuaian Stok";
   if (mode === "ADD") {
     newQty = currentQty + qty;
     movementType = "IN";
+    defaultMovementNote = "Penambahan Stok (Restock)";
   } else if (mode === "SUBTRACT") {
     if (currentQty < qty) {
       throw new Error(`Stok saat ini (${currentQty}) tidak mencukupi untuk pengurangan ${qty}.`);
     }
     newQty = currentQty - qty;
     movementType = "OUT";
+    defaultMovementNote = "Pengurangan Stok";
   } else if (mode === "SET") {
     newQty = qty;
     movementType = "ADJUSTMENT";
     movementQty = Math.abs(qty - currentQty);
+    const diff = qty - currentQty;
+    defaultMovementNote = diff >= 0
+      ? `Stok Opname: Selisih Lebih (+${diff}) [Fisik: ${qty}, Sistem: ${currentQty}]`
+      : `Stok Opname: Selisih Kurang (${diff}) [Fisik: ${qty}, Sistem: ${currentQty}]`;
   }
 
   const outletStock = await prisma.outletStock.upsert({
@@ -400,15 +446,21 @@ export async function updateOutletStockAction(data: {
       type: movementType,
       qty: movementQty,
       performedById: user.id || null,
-      note:
-        note ||
-        (mode === "ADD"
-          ? "Penambahan Stok (Restock)"
-          : mode === "SUBTRACT"
-          ? "Pengurangan Stok"
-          : "Stok Opname / Penyesuaian Fisik"),
+      note: note || defaultMovementNote,
       status: "CONFIRMED",
     },
+  });
+
+  // Sinkronkan stok agregat di tabel Product agar selalu sejalan dengan total seluruh cabang
+  const allOutletStocks = await prisma.outletStock.findMany({
+    where: { productId },
+    select: { stockQty: true },
+  });
+  const totalAggregateStock = allOutletStocks.reduce((sum: number, s: any) => sum + Number(s.stockQty || 0), 0);
+
+  await prisma.product.update({
+    where: { id: productId },
+    data: { stockQty: totalAggregateStock },
   });
 
   revalidatePath("/dashboard/products");
@@ -459,6 +511,10 @@ export async function updateProductOutletPriceAction(data: {
 }) {
   const user = await requireTenantUser();
   const { outletId, productId, priceOverride } = data;
+
+  if (user.role === "ADMIN_CABANG" && outletId !== user.outletId) {
+    throw new Error("Akses ditolak: Admin Cabang hanya dapat mengubah harga di cabangnya sendiri.");
+  }
 
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product || product.tenantId !== user.tenantId) {
@@ -567,6 +623,9 @@ export async function transferProductStockAction(data: {
   }
   if (fromOutletId === toOutletId) {
     throw new Error("Cabang asal dan tujuan tidak boleh sama.");
+  }
+  if (user.role === "ADMIN_CABANG" && fromOutletId !== user.outletId) {
+    throw new Error("Akses ditolak: Transfer stok hanya dapat diinisiasi dari cabang asal tempat Anda bertugas.");
   }
   if (isNaN(qty) || qty <= 0) {
     throw new Error("Jumlah unit yang ditransfer harus lebih besar dari 0.");

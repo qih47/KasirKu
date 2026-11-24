@@ -321,6 +321,8 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
         durationMonths: selectedDuration.months,
         totalAmount: grandTotalToday,
         tierName: selectedTier.name,
+        selectedPluginIds,
+        actionType,
       });
 
       if (qrisRes.success) {
@@ -344,7 +346,14 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
       await simulatePaymentWebhookAction(invoiceData.orderId);
       setIsPaymentVerified(true);
       setPaymentPollingActive(false);
-      await finalizeSubscriptionActivation();
+      setShowPaymentModal(false);
+      setShowDowngradeModal(false);
+      setSuccessMsg(
+        `✨ Paket ${selectedTier.name} berhasil diaktifkan untuk durasi ${selectedDuration.label}! Fitur langsung dapat digunakan.`
+      );
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (err: any) {
       setError(err.message || "Gagal melakukan simulasi pembayaran.");
     } finally {
@@ -414,6 +423,8 @@ export function SubscriptionClient({ initialData, data: propData }: Subscription
         durationMonths: selectedDuration.months,
         totalAmount: downgradeTotalAmount,
         tierName: selectedTier.name,
+        selectedPluginIds: finalPlugins,
+        actionType: "DOWNGRADE",
       });
 
       if (qrisRes.success) {

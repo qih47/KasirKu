@@ -45,8 +45,13 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
 
   // ─── 1. Penanganan Jasa Laundry Kiloan Berdasarkan Berat (Kg) ─────────────
   if (item.weightKg && item.weightKg > 0) {
+    const ironingRate = Number(productAttrs.ironingRatePerKg || staffAttrs.ironingRatePerKg || 0);
+    const washingRate = Number(productAttrs.washingRatePerKg || staffAttrs.washingRatePerKg || 0);
+    const combinedRates = ironingRate + washingRate;
     const ratePerKg = Number(
-      staffUser?.commissionFlat || productAttrs.ironingRatePerKg || staffAttrs.ironingRatePerKg || 1000
+      combinedRates > 0
+        ? combinedRates
+        : staffUser?.commissionFlat || productAttrs.ironingRatePerKg || staffAttrs.ironingRatePerKg || 1000
     );
     const amount = item.weightKg * ratePerKg;
     return {
@@ -109,7 +114,30 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
     }
   }
 
-  // Prioritas 2: Flat Rate di profil staff
+  // Prioritas 2: Konfigurasi Spesifik Skema Dinamis Staff / Barber di attributes
+  if (staffAttrs.schemeType && staffAttrs.serviceRate !== undefined && Number(staffAttrs.serviceRate) > 0) {
+    const sType = staffAttrs.schemeType === "FLAT" ? "FLAT" : "PERCENTAGE";
+    const sRate = Number(staffAttrs.serviceRate);
+    if (sType === "FLAT") {
+      const amount = sRate * item.qty;
+      return {
+        commissionType: "FLAT",
+        rate: sRate,
+        amount,
+        breakdown: `Flat Rp ${sRate.toLocaleString("id-ID")} x ${item.qty}`,
+      };
+    } else {
+      const amount = (subtotal * sRate) / 100;
+      return {
+        commissionType: "PERCENTAGE",
+        rate: sRate,
+        amount: Math.round(amount),
+        breakdown: `${sRate}% dari Rp ${subtotal.toLocaleString("id-ID")}`,
+      };
+    }
+  }
+
+  // Prioritas 3: Flat Rate di profil staff
   if (staffUser?.commissionFlat && Number(staffUser.commissionFlat) > 0) {
     const staffRate = Number(staffUser.commissionFlat);
     const amount = staffRate * item.qty;
@@ -121,7 +149,7 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
     };
   }
 
-  // Prioritas 3: Percentage Rate di profil staff
+  // Prioritas 4: Percentage Rate di profil staff
   if (staffUser?.commissionPercent && Number(staffUser.commissionPercent) > 0) {
     const staffRate = Number(staffUser.commissionPercent);
     const amount = (subtotal * staffRate) / 100;
@@ -133,25 +161,13 @@ export function calculateItemCommission(input: CalculationInput): CalculationOut
     };
   }
 
-  // Prioritas 4: Fallback attributes / standard
-  const staffScheme = staffAttrs.schemeType === "FLAT" ? "FLAT" : "PERCENTAGE";
-  const staffRate = Number(staffAttrs.serviceRate || (staffScheme === "FLAT" ? 15000 : 30));
-
-  if (staffScheme === "FLAT") {
-    const amount = staffRate * item.qty;
-    return {
-      commissionType: "FLAT",
-      rate: staffRate,
-      amount,
-      breakdown: `Flat Rp ${staffRate.toLocaleString("id-ID")} x ${item.qty}`,
-    };
-  } else {
-    const amount = (subtotal * staffRate) / 100;
-    return {
-      commissionType: "PERCENTAGE",
-      rate: staffRate,
-      amount: Math.round(amount),
-      breakdown: `${staffRate}% dari Rp ${subtotal.toLocaleString("id-ID")}`,
-    };
-  }
+  // Prioritas 5: Fallback default standard (30%)
+  const defaultRate = 30;
+  const amount = (subtotal * defaultRate) / 100;
+  return {
+    commissionType: "PERCENTAGE",
+    rate: defaultRate,
+    amount: Math.round(amount),
+    breakdown: `${defaultRate}% dari Rp ${subtotal.toLocaleString("id-ID")}`,
+  };
 }

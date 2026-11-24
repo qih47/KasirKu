@@ -42,6 +42,7 @@ import { toastSuccess, toastError } from "@/lib/swal";
 
 interface DashboardNavLinksProps {
   activePlugins?: { code: string; name: string }[];
+  userRole?: string;
   shellConfig?: ThemeShellConfig;
   themeTokens?: {
     primaryColor?: string;
@@ -63,6 +64,7 @@ const COLOR_PRESETS = [
 
 export function DashboardNavLinks({
   activePlugins = [],
+  userRole = "OWNER",
   shellConfig: initialShell = {},
   themeTokens = {},
   children,
@@ -607,7 +609,7 @@ export function DashboardNavLinks({
               )}
               {[
                 { name: "Ringkasan", href: "/dashboard", icon: LayoutDashboard, exact: true },
-                { name: "Cabang Outlet", href: "/dashboard/outlets", icon: Store },
+                ...(userRole !== "ADMIN_CABANG" ? [{ name: "Cabang Outlet", href: "/dashboard/outlets", icon: Store }] : []),
                 { name: "Produk & Stok", href: "/dashboard/products", icon: Package },
                 { name: "Pelanggan (CRM)", href: "/dashboard/customers", icon: UserCheck },
                 { name: "Promo & Voucher", href: "/dashboard/vouchers", icon: Ticket },
@@ -699,8 +701,12 @@ export function DashboardNavLinks({
                 { name: "Data & Akun Staf", href: "/dashboard/staff", icon: Users },
                 { name: "Gaji & Komisi", href: "/dashboard/payroll", icon: DollarSign },
                 { name: "Laporan & Analitik", href: "/dashboard/reports", icon: TrendingUp },
-                { name: "Store & Tema UI", href: "/dashboard/store", icon: ShoppingBag },
-                { name: "Pengaturan Bisnis", href: "/dashboard/settings", icon: Settings },
+                ...(userRole !== "ADMIN_CABANG"
+                  ? [
+                      { name: "Store & Tema UI", href: "/dashboard/store", icon: ShoppingBag },
+                      { name: "Pengaturan Bisnis", href: "/dashboard/settings", icon: Settings },
+                    ]
+                  : []),
               ].map((item) => {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.href);
@@ -795,30 +801,32 @@ export function DashboardNavLinks({
             <span className="whitespace-nowrap">Ringkasan</span>
           </Link>
 
-          {/* 2. Outlet */}
-          <Link
-            href="/dashboard/outlets"
-            prefetch={true}
-            style={
-              pathname.startsWith("/dashboard/outlets")
-                ? {
-                    backgroundColor: primaryColor,
-                    color: "#ffffff",
-                    boxShadow: `0 4px 12px ${primaryColor}35`,
-                  }
-                : undefined
-            }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95 flex-shrink-0 ${
-              pathname.startsWith("/dashboard/outlets")
-                ? "text-white"
-                : isLuxeDark
-                ? "text-slate-400 hover:text-white hover:bg-slate-800/80"
-                : "text-slate-600 hover:text-slate-950 hover:bg-slate-100/80"
-            }`}
-          >
-            <Store className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="whitespace-nowrap">Outlet</span>
-          </Link>
+          {/* 2. Outlet (Hanya Owner) */}
+          {userRole !== "ADMIN_CABANG" && (
+            <Link
+              href="/dashboard/outlets"
+              prefetch={true}
+              style={
+                pathname.startsWith("/dashboard/outlets")
+                  ? {
+                      backgroundColor: primaryColor,
+                      color: "#ffffff",
+                      boxShadow: `0 4px 12px ${primaryColor}35`,
+                    }
+                  : undefined
+              }
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95 flex-shrink-0 ${
+                pathname.startsWith("/dashboard/outlets")
+                  ? "text-white"
+                  : isLuxeDark
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800/80"
+                  : "text-slate-600 hover:text-slate-950 hover:bg-slate-100/80"
+              }`}
+            >
+              <Store className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="whitespace-nowrap">Outlet</span>
+            </Link>
+          )}
 
           {/* 3. Produk & Stok */}
           <Link

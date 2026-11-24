@@ -716,6 +716,7 @@ model Customer {
   address     String?
   notes       String?   // Preferensi pelanggan (misal: alergi, model cukur, parfum fav)
   visits      Int       @default(0)
+  points      Int       @default(0)
   totalSpent  Decimal   @default(0) @db.Decimal(14, 2)
   lastVisitAt DateTime?
   createdAt   DateTime  @default(now())

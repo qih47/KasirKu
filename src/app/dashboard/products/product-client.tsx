@@ -38,6 +38,7 @@ import { ImportProductModal } from "@/components/products/import-product-modal";
 import { StockManagementModal } from "@/components/products/stock-management-modal";
 import { VouchersClient } from "@/app/dashboard/vouchers/vouchers-client";
 import { useTranslation } from "@/lib/i18n/language-context";
+import { resolveProductVertical as getCanonicalVertical } from "@/lib/vertical-helpers";
 
 export function ProductClient({
   initialData,
@@ -334,15 +335,7 @@ export function ProductClient({
   };
 
   const resolveProductVertical = (p: any): "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" => {
-    if (p.attributes?.verticalType === "BARBERSHOP") return "BARBERSHOP";
-    if (p.attributes?.verticalType === "CAFE") return "CAFE";
-    if (p.attributes?.verticalType === "LAUNDRY") return "LAUNDRY";
-    if (p.attributes?.verticalType === "RETAIL") return "RETAIL";
-    if (p.attributes?.durationMinutes) return "BARBERSHOP";
-    if (p.attributes?.serviceUnit || p.attributes?.estimateTime) return "LAUNDRY";
-    if (p.attributes?.unit === "Porsi" || p.attributes?.unit === "Cup" || p.attributes?.unit === "Plate") return "CAFE";
-    if (p.type === "JASA") return "BARBERSHOP";
-    return "RETAIL";
+    return getCanonicalVertical(p);
   };
 
   const verticalCategories =

@@ -26,6 +26,7 @@ import {
   getLiveOrdersAction,
   updateLiveOrderStatusAction,
   checkoutLiveOrderAction,
+  submitSelfOrderAction,
   LiveOrderSummary,
 } from "@/modules/self-order/actions";
 import {
@@ -33,6 +34,7 @@ import {
   saveTableOpenBillAction,
   clearTableOpenBillAction,
 } from "@/plugins/cafe/actions";
+import { resolveProductVertical } from "@/lib/vertical-helpers";
 import { TableManagementModal } from "./components/table-management-modal";
 import { ShiftCashModal } from "./components/shift-cash-modal";
 import { CustomerCrmModal } from "./components/customer-crm-modal";
@@ -40,7 +42,7 @@ import { PaymentModal, SplitPaymentLine } from "./components/payment-modal";
 import { PosHistoryModal } from "./components/history-modal";
 import { BarberQueueModal } from "./components/barber-queue-modal";
 import { ModularThermalReceiptModal } from "@/components/receipt/modular-thermal-receipt-modal";
-import { getTodayBarbershopQueueAction } from "@/plugins/barbershop/actions";
+import { getTodayBarbershopQueueAction, getBarbershopBookingByIdAction } from "@/plugins/barbershop/actions";
 import {
   generatePosDynamicQrisAction,
   checkPosPaymentStatusAction,
@@ -146,11 +148,13 @@ interface PosClientProps {
   hasRetailPlugin?: boolean;
   initialBarberBookings?: any[];
   activeVouchers?: any[];
+  verticalConfig?: Record<string, any>;
   tenantInfo?: {
     tenantId?: string;
     businessName?: string;
     logoUrl?: string | null;
     receiptConfig?: any;
+    verticalConfig?: Record<string, any>;
   };
 }
 
@@ -170,6 +174,7 @@ export function PosClient({
   hasRetailPlugin = false,
   initialBarberBookings = [],
   activeVouchers = [],
+  verticalConfig = {},
   tenantInfo,
 }: PosClientProps) {
   const { locale, tr, t } = useTranslation();
@@ -402,6 +407,23 @@ export function PosClient({
   };
 
   const handleLoadBarberBooking = (booking: any) => {
+    setActiveBarberBookingId(booking.id);
+
+    // Otomatis aktifkan stasiun vertikal Barbershop jika plugin aktif
+    if (hasBarbershopPlugin) {
+      setActiveVerticalPos("BARBERSHOP");
+    }
+
+    // Sinkronkan kursi dan kapster terpilih
+    if (booking.chairNumber) {
+      setSelectedChair(`Kursi ${booking.chairNumber}`);
+    }
+    if (booking.barberId) {
+      setSelectedCapsterId(booking.barberId);
+      const bStaff = staffList.find((s: any) => s.id === booking.barberId);
+      if (bStaff) setSelectedCapster(bStaff.name);
+    }
+
     // 1. Bind Customer CRM
     if (booking.customer) {
       setSelectedCustomer(booking.customer);
@@ -413,7 +435,7 @@ export function PosClient({
       });
     }
 
-    // 2. Add Service item to Cart
+    // 2. Add Service item to Cart jika ada produk terdaftar
     let targetProduct = products.find((p) => p.id === booking.serviceId);
     if (!targetProduct && booking.service) {
       targetProduct = booking.service;
@@ -428,34 +450,25 @@ export function PosClient({
         price: Number(targetProduct.price),
         qty: 1,
         imageUrl: targetProduct.imageUrl || null,
-        staffId: booking.barberId || undefined,
+        staffId: booking.barberId || selectedCapsterId || undefined,
         bookingId: booking.id,
         notes: noteText,
       };
 
       setCart((prev) => {
-        // Cek jika booking ini sudah ada di cart
         const filtered = prev.filter((it) => it.bookingId !== booking.id);
         return [...filtered, newItem];
       });
-    } else {
-      // Fallback virtual item jika produk tidak ada di state lokal
-      const fallbackItem: CartItemInput = {
-        productId: booking.serviceId || "custom-barber-treatment",
-        name: booking.service?.name || "Layanan Pangkas Rambut",
-        price: Number(booking.service?.price || 0),
-        qty: 1,
-        imageUrl: null,
-        staffId: booking.barberId || undefined,
-        bookingId: booking.id,
-        notes: noteText,
-      };
-      setCart((prev) => [...prev.filter((it) => it.bookingId !== booking.id), fallbackItem]);
-    }
 
-    setShowBarberQueueModal(false);
-    setSuccessMsg(`✓ Antrean ${booking.queueNumber} (${booking.customerName}) dimuat ke kasir!`);
-    setTimeout(() => setSuccessMsg(null), 3000);
+      setShowBarberQueueModal(false);
+      setSuccessMsg(`✓ Antrean ${booking.queueNumber} (${booking.customerName}) dimuat ke kasir!`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } else {
+      // Pelanggan belum memilih layanan (Bebas / Pilih di Kasir): Jangan buat item dummy fiktif!
+      setShowBarberQueueModal(false);
+      setSuccessMsg(`✓ Antrean ${booking.queueNumber} (${booking.customerName}) aktif! Silakan pilih layanan pangkas dari menu.`);
+      setTimeout(() => setSuccessMsg(null), 3500);
+    }
   };
 
   // URL Auto-load check for ?barberBookingId=...
@@ -464,12 +477,20 @@ export function PosClient({
       const params = new URLSearchParams(window.location.search);
       const targetBookingId = params.get("barberBookingId");
       if (targetBookingId) {
-        if (barberBookings.length > 0) {
-          const found = barberBookings.find((b) => b.id === targetBookingId);
-          if (found) {
-            handleLoadBarberBooking(found);
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
+        const found = barberBookings.find((b) => b.id === targetBookingId);
+        if (found) {
+          handleLoadBarberBooking(found);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else {
+          // Ambil antrean langsung jika belum ada di state lokal
+          getBarbershopBookingByIdAction(targetBookingId)
+            .then((b) => {
+              if (b) {
+                handleLoadBarberBooking(b);
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            })
+            .catch(() => {});
         }
       }
     }
@@ -730,11 +751,9 @@ export function PosClient({
           )
         );
 
-        clearCart();
-        setSelectedCustomer(null);
-        setAppliedVoucher(null);
-        setSelectedTable("NO_TABLE");
-        toastSuccess(`✓ Pesanan ${selectedTable} berhasil disimpan (Open Bill)!`);
+        const savedTableName = selectedTable;
+        resetCompleteTransactionState();
+        toastSuccess(`✓ Pesanan ${savedTableName} berhasil disimpan (Open Bill)!`);
       }
     } catch (err: any) {
       toastError(err.message || "Gagal menyimpan open bill meja.");
@@ -831,15 +850,39 @@ export function PosClient({
   const [selectedCapsterId, setSelectedCapsterId] = useState<string>(effectiveBarbers[0]?.id || staffList[0]?.id || "");
   const [selectedCapster, setSelectedCapster] = useState<string>(effectiveBarbers[0]?.name || "Stylist");
   const [barberTip, setBarberTip] = useState<number>(0);
+  const [activeBarberBookingId, setActiveBarberBookingId] = useState<string | null>(null);
 
   // 3. Retail Fast-Barcode Workflow States
   const [showNumpad, setShowNumpad] = useState<boolean>(true);
   const [selectedCartIdx, setSelectedCartIdx] = useState<number | null>(null);
 
-  // 4. Laundry Weighing Workflow States
+  // 4. Konfigurasi Profil Vertikal Dinamis (anti-hardcode)
+  const effectiveVConfig = verticalConfig || tenantInfo?.verticalConfig || {};
+  const isTableManagementEnabled = effectiveVConfig?.cafe?.enableTableManagement !== false;
+
+  const dynamicScents = useMemo(() => {
+    const raw = effectiveVConfig?.laundry?.availableScents;
+    if (typeof raw === "string" && raw.trim().length > 0) {
+      return raw.split(",").map((s: string) => s.trim()).filter(Boolean);
+    }
+    return ["Lavender", "Sakura", "Ocean Fresh", "Vanilla"];
+  }, [effectiveVConfig]);
+
+  const dynamicRacks = useMemo(() => {
+    const prefix = effectiveVConfig?.laundry?.rackStoragePrefix || "Rak ";
+    return [
+      `${prefix}A-01`,
+      `${prefix}A-02`,
+      `${prefix}B-04`,
+      `${prefix}C-08`,
+      `${prefix}D-12`,
+    ];
+  }, [effectiveVConfig]);
+
+  // 4b. Laundry Weighing Workflow States
   const [laundryWeight, setLaundryWeight] = useState<number>(3.5);
-  const [laundryFragrance, setLaundryFragrance] = useState<string>("Lavender");
-  const [laundryRack, setLaundryRack] = useState<string>("Rak B-04");
+  const [laundryFragrance, setLaundryFragrance] = useState<string>(() => dynamicScents[0] || "Lavender");
+  const [laundryRack, setLaundryRack] = useState<string>(() => dynamicRacks[0] || "Rak B-04");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -876,28 +919,70 @@ export function PosClient({
 
   const subtotalAfterDiscount = Math.max(0, cartSubtotal - discountAmount);
 
-  // Hitung Pajak & Biaya Tambahan Tenant (PPN, PB1 Resto, Service Charge, Biaya Admin)
-  const pb1Amount = receiptConfig.showPb1
-    ? Math.round((subtotalAfterDiscount * Number(receiptConfig.pb1Percent || 10)) / 100)
+  // Ambil preset struk & konfigurasi aktif untuk vertikal yang sedang dipilih
+  const activeVerticalPreset = receiptConfig?.presets?.[activeVerticalPos] || {};
+  const effectiveReceiptConfig: any = { ...receiptConfig, ...activeVerticalPreset };
+
+  const isInclusiveTax = effectiveReceiptConfig.taxCalculationType === "INCLUSIVE";
+  const pb1Rate = Number(effectiveReceiptConfig.pb1Percent || 10);
+  const ppnRate = Number(effectiveReceiptConfig.taxPercent || 11);
+  const serviceRate = Number(effectiveReceiptConfig.servicePercent || 5);
+
+  let pb1Amount = 0;
+  let ppnAmount = 0;
+  let serviceChargeAmount = 0;
+
+  if (isInclusiveTax) {
+    const combinedRate = (effectiveReceiptConfig.showPb1 && pb1Rate > 0 ? pb1Rate : 0) +
+      (effectiveReceiptConfig.showTax && ppnRate > 0 ? ppnRate : 0) +
+      (effectiveReceiptConfig.showServiceCharge && serviceRate > 0 ? serviceRate : 0);
+    const baseDivisor = 100 + combinedRate;
+
+    pb1Amount = effectiveReceiptConfig.showPb1 && pb1Rate > 0
+      ? Math.round(subtotalAfterDiscount * (pb1Rate / baseDivisor))
+      : 0;
+    ppnAmount = effectiveReceiptConfig.showTax && ppnRate > 0
+      ? Math.round(subtotalAfterDiscount * (ppnRate / baseDivisor))
+      : 0;
+    serviceChargeAmount = effectiveReceiptConfig.showServiceCharge && serviceRate > 0
+      ? Math.round(subtotalAfterDiscount * (serviceRate / baseDivisor))
+      : 0;
+  } else {
+    pb1Amount = effectiveReceiptConfig.showPb1 && pb1Rate > 0
+      ? Math.round((subtotalAfterDiscount * pb1Rate) / 100)
+      : 0;
+    ppnAmount = effectiveReceiptConfig.showTax && ppnRate > 0
+      ? Math.round((subtotalAfterDiscount * ppnRate) / 100)
+      : 0;
+    serviceChargeAmount = effectiveReceiptConfig.showServiceCharge && serviceRate > 0
+      ? Math.round((subtotalAfterDiscount * serviceRate) / 100)
+      : 0;
+  }
+
+  const adminFeeAmount = effectiveReceiptConfig.showAdminFee
+    ? Number(effectiveReceiptConfig.adminFeeAmount || 0)
     : 0;
 
-  const ppnAmount = receiptConfig.showTax
-    ? Math.round((subtotalAfterDiscount * Number(receiptConfig.taxPercent || 11)) / 100)
-    : 0;
+  // Jika inclusive, pajak sudah ada di dalam harga barang, jadi tidak ditambahkan lagi ke subtotal
+  const totalTaxesAndChargesToAdd = isInclusiveTax
+    ? adminFeeAmount
+    : (pb1Amount + ppnAmount + serviceChargeAmount + adminFeeAmount);
 
-  const serviceChargeAmount = receiptConfig.showServiceCharge
-    ? Math.round((subtotalAfterDiscount * Number(receiptConfig.servicePercent || 5)) / 100)
-    : 0;
+  // Hitung pembulatan (Rounding Adjustment) jika diaktifkan di settings
+  let roundingAmount = 0;
+  const rawTotal = subtotalAfterDiscount + totalTaxesAndChargesToAdd + barberTip;
+  let finalGrandTotal = rawTotal;
 
-  const adminFeeAmount = receiptConfig.showAdminFee
-    ? Number(receiptConfig.adminFeeAmount || 0)
-    : 0;
+  if (effectiveReceiptConfig.showRounding) {
+    const roundStep = Number(effectiveReceiptConfig.roundingAmount || 100);
+    if (roundStep > 0) {
+      finalGrandTotal = Math.round(rawTotal / roundStep) * roundStep;
+      roundingAmount = finalGrandTotal - rawTotal;
+    }
+  }
 
-  const totalTaxesAndCharges = pb1Amount + ppnAmount + serviceChargeAmount + adminFeeAmount;
-
-  // Grand Total Belanja (Termasuk Pajak, Biaya Tambahan, dan Tip)
-  const totalAmount = subtotalAfterDiscount + totalTaxesAndCharges;
-  const grandTotalWithTip = totalAmount + barberTip;
+  const totalAmount = finalGrandTotal - barberTip;
+  const grandTotalWithTip = finalGrandTotal;
 
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
@@ -1054,6 +1139,8 @@ export function PosClient({
     laundryWeight?: number;
     laundryFragrance?: string;
     laundryRack?: string;
+    barberTip?: number;
+    activeBarberBookingId?: string | null;
   }
 
   const [heldCarts, setHeldCarts] = useState<HeldCartItem[]>([]);
@@ -1108,13 +1195,13 @@ export function PosClient({
       laundryWeight,
       laundryFragrance,
       laundryRack,
+      barberTip,
+      activeBarberBookingId,
     };
 
     const updated = [newHeldItem, ...heldCarts];
     saveHeldCarts(updated);
-    clearCart();
-    handleResetDiscount();
-    setSelectedCustomer(null);
+    resetCompleteTransactionState();
     setShowHoldPromptModal(false);
     setHoldCartLabelInput("");
     setSuccessMsg(`Transaksi "${newHeldItem.label}" berhasil ditunda!`);
@@ -1141,6 +1228,8 @@ export function PosClient({
     if (heldItem.laundryWeight) setLaundryWeight(heldItem.laundryWeight);
     if (heldItem.laundryFragrance) setLaundryFragrance(heldItem.laundryFragrance);
     if (heldItem.laundryRack) setLaundryRack(heldItem.laundryRack);
+    if (heldItem.barberTip !== undefined) setBarberTip(heldItem.barberTip);
+    if (heldItem.activeBarberBookingId !== undefined) setActiveBarberBookingId(heldItem.activeBarberBookingId);
 
     const updated = heldCarts.filter((h) => h.id !== heldItem.id);
     saveHeldCarts(updated);
@@ -1251,7 +1340,7 @@ export function PosClient({
   const handleOpenLiveOrderPayment = (order: LiveOrderSummary) => {
     setSelectedLiveOrderForPay(order);
     setLiveOrderPaidInput(order.totalAmount);
-    setLiveOrderPaymentMethod("CASH");
+    setLiveOrderPaymentMethod(order.paymentStatus === "PAID_ONLINE" ? "QRIS" : "CASH");
   };
 
   const handleConfirmLiveOrderPayment = async (e: React.FormEvent) => {
@@ -1277,8 +1366,114 @@ export function PosClient({
       });
 
       if (res.success) {
+        playPosBeep("success");
+        const paidOrder = selectedLiveOrderForPay;
         setSelectedLiveOrderForPay(null);
-        setSuccessMsg(`Pesanan ${selectedLiveOrderForPay.orderNumber} berhasil dilunasi & dicatat ke shift kasir!`);
+
+        // 1. Sinkronisasi transaksi baru ke shift aktif kasir
+        if (res.transaction) {
+          setShiftData((prev: any) => {
+            if (!prev.activeShift) return prev;
+            return {
+              ...prev,
+              activeShift: {
+                ...prev.activeShift,
+                transactions: [
+                  res.transaction,
+                  ...(prev.activeShift.transactions || []),
+                ],
+              },
+            };
+          });
+        }
+
+        // 2. Sinkronisasi status denah meja lokal kasir menjadi AVAILABLE
+        if (paidOrder.tableNumber) {
+          setLocalCafeTables((prev) =>
+            prev.map((t) =>
+              t.tableNumber === paidOrder.tableNumber
+                ? { ...t, status: "AVAILABLE", currentGuestName: null, currentOrderNotes: null }
+                : t
+            )
+          );
+        }
+
+        // 3. Susun data struk thermal resmi & tampilkan modal struk
+        const activeOutlet = shiftData.outlets.find((o) => o.id === shiftData.currentOutletId);
+        const trx = res.transaction;
+        const dateObj = new Date(trx?.createdAt || Date.now());
+        const formattedDateStr = `${dateObj.toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })} ${dateObj.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })} WIB`;
+
+        const receiptItems = (trx?.items && trx.items.length > 0
+          ? trx.items
+          : paidOrder.items
+        ).map((it: any) => ({
+          name: it.product?.name || it.name || "Menu",
+          qty: it.qty,
+          price: Number(it.price),
+          subtotal: Number(it.subtotal || it.price * it.qty),
+          notes: it.notes,
+        }));
+
+        const fixedReceiptData: TransactionReceiptData = {
+          storeName: tenantInfo?.businessName || activeOutlet?.name || "POS STORE",
+          legalName: receiptConfig.legalName,
+          npwp: receiptConfig.npwp,
+          outletName: activeOutlet?.name || "Outlet Utama",
+          address: activeOutlet?.address || receiptConfig.address || "Alamat Outlet",
+          phone: activeOutlet?.phone || receiptConfig.phone || "",
+          headerNote: receiptConfig.headerText,
+          logoUrl: receiptConfig.logoUrl || tenantInfo?.logoUrl || null,
+          invoiceNo: trx?.receiptNumber || trx?.transactionNumber || `#INV-${Date.now().toString().slice(-6)}`,
+          dateTime: formattedDateStr,
+          cashierName: shiftData.currentUser.name,
+          customerName: paidOrder.customerName || trx?.customer?.name || undefined,
+          customerPhone: paidOrder.customerPhone || trx?.customer?.phone || undefined,
+          tableNumber: paidOrder.tableNumber || undefined,
+          orderType: "Dine In (Self-Order)",
+          items: receiptItems,
+          subtotal: Number(trx?.subtotalAmount ?? paidOrder.subtotal ?? 0),
+          discountAmount: 0,
+          taxPb1Amount: Number(trx?.taxAmount ?? 0),
+          taxPpnAmount: 0,
+          serviceChargeAmount: Number(trx?.serviceCharge ?? 0),
+          adminFeeAmount: 0,
+          grandTotal: Number(trx?.totalAmount ?? paidOrder.totalAmount ?? 0),
+          paymentMethod: liveOrderPaymentMethod === "CASH" ? "CASH" : "QRIS",
+          amountPaid: paidNum,
+          changeAmount: Math.max(0, paidNum - Number(trx?.totalAmount ?? paidOrder.totalAmount ?? 0)),
+          footerNote: receiptConfig.footerText || "Terima kasih atas pesanan Anda!",
+          promoBannerText: receiptConfig.promoBannerText || undefined,
+          socialMediaText: receiptConfig.socialMediaText || undefined,
+          vertical: "CAFE",
+          loyaltyPointsEarned: res.pointsEarned ?? (paidOrder.customerId ? Math.floor(paidOrder.totalAmount / 10000) : 0),
+          loyaltyPointsTotal: res.customerPointsTotal ?? 0,
+        };
+
+        setCompletedReceiptData({
+          ...fixedReceiptData,
+          roundingAmount: roundingAmount !== 0 ? roundingAmount : undefined,
+        });
+        setCompletedTrx(res);
+        setShowReceiptModal(true);
+
+        // Otomatisasi cetak struk jika auto-print aktif di pengaturan
+        if (autoPrintEnabled || effectiveReceiptConfig.autoPrintReceipt) {
+          setTimeout(() => {
+            if (typeof window !== "undefined") {
+              window.print();
+            }
+          }, 400);
+        }
+
+        setSuccessMsg(`Pesanan ${paidOrder.orderNumber} berhasil dilunasi & dicatat ke shift kasir!`);
         setTimeout(() => setSuccessMsg(null), 3000);
         loadLiveOrders();
       }
@@ -1350,6 +1545,15 @@ export function PosClient({
       staffIdToAssign = selectedCapsterId || (barbersList[0]?.id || staffList[0]?.id);
     }
 
+    // Tautkan antrean barbershop aktif jika ada
+    let bookingIdToAssign: string | undefined = undefined;
+    if (activeBarberBookingId && (posLayout === "BARBERSHOP_STATION" || product.type === "JASA")) {
+      const hasBookingInCart = cart.some((c) => c.bookingId === activeBarberBookingId);
+      if (!hasBookingInCart) {
+        bookingIdToAssign = activeBarberBookingId;
+      }
+    }
+
     const existing = cart.find((item) => item.productId === product.id && item.notes === defaultNote);
     if (
       existing &&
@@ -1383,6 +1587,7 @@ export function PosClient({
             qty: 1,
             notes: defaultNote,
             staffId: staffIdToAssign,
+            bookingId: bookingIdToAssign,
           },
         ];
       }
@@ -1433,21 +1638,65 @@ export function PosClient({
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   };
 
-  const clearCart = () => {
+  const resetCompleteTransactionState = () => {
     setCart([]);
     setAmountPaid("");
+    setBarberTip(0);
+    setActiveBarberBookingId(null);
+    setSelectedCustomer(null);
+    setSelectedTable("NO_TABLE");
+    setIsDineIn(true);
+    setCustomTableInput("");
+    setDiscountPercent("");
+    setDiscountFixed("");
+    setVoucherCodeInput("");
+    setAppliedVoucher(null);
+    setDiscountType("PERCENT");
+    setIsSplitPayment(false);
+    setSplitPayments([]);
+    setSelectedChair("Kursi 1");
+    setLaundryRack("Rak B-04");
+    setLaundryWeight(3.5);
   };
 
-  // Pencarian otomatis saat scan barcode tekan enter
+  const clearCart = () => {
+    resetCompleteTransactionState();
+  };
+
+  // Pencarian otomatis saat scan barcode tekan enter (Mendukung Barcode UOM)
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchQuery.trim() !== "") {
-      const found = products.find(
+      const clean = searchQuery.toLowerCase().trim();
+      let found = products.find(
         (p) =>
-          p.barcode?.toLowerCase() === searchQuery.toLowerCase().trim() ||
-          p.name.toLowerCase() === searchQuery.toLowerCase().trim()
+          p.barcode?.toLowerCase() === clean ||
+          p.sku?.toLowerCase() === clean ||
+          p.name.toLowerCase() === clean
       );
+
+      let matchedUom: any = null;
+      if (!found) {
+        for (const p of products) {
+          const uomLevels = p.attributes?.uomLevels;
+          if (Array.isArray(uomLevels)) {
+            const u = uomLevels.find(
+              (lvl: any) => lvl.barcode && lvl.barcode.toLowerCase() === clean
+            );
+            if (u) {
+              found = p;
+              matchedUom = u;
+              break;
+            }
+          }
+        }
+      }
+
       if (found) {
-        addToCart(found);
+        if (matchedUom) {
+          addUomItemToCart(found, matchedUom);
+        } else {
+          addToCart(found);
+        }
         setSearchQuery("");
       }
     }
@@ -1523,22 +1772,93 @@ export function PosClient({
     }
   };
 
-  // Handle Quick Barcode Scan in Cart
+  // Helper tambah item dengan satuan bertingkat (Multi-UOM)
+  const addUomItemToCart = (product: any, uom: any) => {
+    if (!activeShift) {
+      swalWarning("Shift Belum Dibuka", "Harap buka shift kasir terlebih dahulu.");
+      return;
+    }
+
+    const conversion = Number(uom.conversionFactor || 1);
+    const requiredStock = conversion;
+    if (product.type === "BARANG" && product.stockQty !== null && (product.stockQty ?? 0) < requiredStock) {
+      swalWarning("Stok Tidak Cukup", `Stok tersisa (${product.stockQty}) tidak mencukupi untuk 1 ${uom.unitName} (membutuhkan ${requiredStock} pcs).`);
+      return;
+    }
+
+    const uomPrice = Number(uom.price || product.price);
+    const uomNote = `[UOM: ${uom.unitName} (x${conversion})]`;
+
+    setCart((prev) => {
+      const existing = prev.find(
+        (item) => item.productId === product.id && item.notes === uomNote
+      );
+      if (existing) {
+        return prev.map((item) =>
+          item.productId === product.id && item.notes === uomNote
+            ? { ...item, qty: item.qty + 1 }
+            : item
+        );
+      } else {
+        return [
+          ...prev,
+          {
+            productId: product.id,
+            name: `${product.name} (${uom.unitName})`,
+            imageUrl: product.imageUrl,
+            price: uomPrice,
+            qty: 1,
+            notes: uomNote,
+            conversionFactor: conversion,
+            uomUnit: uom.unitName,
+          },
+        ];
+      }
+    });
+    playPosBeep("scan");
+    setSuccessMsg(`✓ ${product.name} (${uom.unitName}) ditambahkan ke keranjang!`);
+    setTimeout(() => setSuccessMsg(null), 2000);
+  };
+
+  // Handle Quick Barcode Scan in Cart (Mendukung Barcode UOM)
   const handleBarcodeScanSubmit = (query: string) => {
     const clean = query.trim();
     if (!clean) return;
-    const found = products.find(
+
+    let found = products.find(
       (p) =>
         (p.barcode && p.barcode.toLowerCase() === clean.toLowerCase()) ||
         (p.sku && p.sku.toLowerCase() === clean.toLowerCase()) ||
         p.name.toLowerCase() === clean.toLowerCase()
     );
+
+    let matchedUom: any = null;
+    if (!found) {
+      for (const p of products) {
+        const uomLevels = p.attributes?.uomLevels;
+        if (Array.isArray(uomLevels)) {
+          const u = uomLevels.find(
+            (lvl: any) => lvl.barcode && lvl.barcode.toLowerCase() === clean.toLowerCase()
+          );
+          if (u) {
+            found = p;
+            matchedUom = u;
+            break;
+          }
+        }
+      }
+    }
+
     if (found) {
-      playPosBeep("scan");
-      addToCart(found);
+      if (matchedUom) {
+        addUomItemToCart(found, matchedUom);
+      } else {
+        playPosBeep("scan");
+        addToCart(found);
+        setSuccessMsg(`✓ ${found.name} ditambahkan`);
+        setTimeout(() => setSuccessMsg(null), 1500);
+      }
       setCartBarcodeQuery("");
-      setSuccessMsg(`✓ ${found.name} ditambahkan`);
-      setTimeout(() => setSuccessMsg(null), 1500);
     } else {
       playPosBeep("error");
       setError(`Produk dengan barcode/SKU "${clean}" tidak ditemukan.`);
@@ -1612,6 +1932,7 @@ export function PosClient({
         voucherCode: discountType === "VOUCHER" && appliedVoucher ? appliedVoucher.code : null,
         taxAmount: pb1Amount + ppnAmount + adminFeeAmount,
         serviceCharge: serviceChargeAmount,
+        barberTip: barberTip > 0 ? barberTip : undefined,
         tableId: isDineIn && selectedTblObj ? selectedTblObj.id : null,
         orderType: isDineIn ? "DINE_IN" : "TAKEAWAY",
         splitPayments: isSplitPayment && splitPayments.length > 0 ? splitPayments : undefined,
@@ -1631,7 +1952,11 @@ export function PosClient({
         playPosBeep("success");
         if (selectedTblObj) {
           setLocalCafeTables((prev) =>
-            prev.map((t) => (t.id === selectedTblObj.id ? { ...t, status: "OCCUPIED" } : t))
+            prev.map((t) =>
+              t.id === selectedTblObj.id
+                ? { ...t, status: "AVAILABLE", currentGuestName: null, currentOrderNotes: null }
+                : t
+            )
           );
         }
 
@@ -1709,7 +2034,15 @@ export function PosClient({
                 password: receiptConfig.wifiPassword || "",
               }
             : undefined,
+          loyaltyPointsEarned: (res as any)?.pointsEarned > 0 ? (res as any).pointsEarned : undefined,
+          loyaltyPointsTotal: (res as any)?.customerPointsTotal !== undefined ? (res as any).customerPointsTotal : (selectedCustomer?.points || undefined),
         };
+
+        if (selectedCustomer && (res as any)?.pointsEarned > 0) {
+          setSelectedCustomer((prev: any) =>
+            prev ? { ...prev, points: (res as any).customerPointsTotal } : null
+          );
+        }
 
         setCompletedReceiptData(fixedReceiptData);
         setCompletedTrx(res);
@@ -1741,7 +2074,8 @@ export function PosClient({
           };
         });
 
-        clearCart();
+        resetCompleteTransactionState();
+        refreshBarberBookings();
       }
     } catch (err: any) {
       setError(err.message || "Gagal memproses transaksi kasir.");
@@ -1869,21 +2203,7 @@ export function PosClient({
   const [filterAllVerticalsInPos, setFilterAllVerticalsInPos] = useState<boolean>(false);
 
   const getProductVertical = (p: any): "BARBERSHOP" | "CAFE" | "LAUNDRY" | "RETAIL" => {
-    // 1. Explicit vertical registration from product attributes
-    if (p.attributes?.verticalType === "BARBERSHOP") return "BARBERSHOP";
-    if (p.attributes?.verticalType === "CAFE") return "CAFE";
-    if (p.attributes?.verticalType === "LAUNDRY") return "LAUNDRY";
-    if (p.attributes?.verticalType === "RETAIL") return "RETAIL";
-
-    // 2. Fallback heuristic for legacy products without explicit verticalType
-    if (p.attributes?.durationMinutes !== undefined) return "BARBERSHOP";
-    if (p.attributes?.serviceUnit !== undefined || p.attributes?.estimateTime !== undefined) return "LAUNDRY";
-    if (["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean"].includes(p.category || "")) return "LAUNDRY";
-    if (["Pangkas", "Pangkas Rambut", "Haircut", "Shaving", "Styling"].includes(p.category || "")) return "BARBERSHOP";
-    if (p.attributes?.unit === "Porsi" || p.attributes?.unit === "Cup" || p.attributes?.unit === "Plate" || p.attributes?.unit === "Glass") return "CAFE";
-    if (p.type === "JASA") return "BARBERSHOP";
-
-    return "RETAIL";
+    return resolveProductVertical(p);
   };
 
   const checkProductMatchesVertical = (p: any, vertPos: string): boolean => {
@@ -2706,17 +3026,18 @@ export function PosClient({
                   <span className="text-[10px] font-black text-indigo-600">Kg</span>
                 </div>
 
-                {/* Fragrance & Rack */}
+                {/* Fragrance & Rack (Dinamis Sesuai Settings Vertikal) */}
                 <div className="flex items-center gap-2">
                   <select
                     value={laundryFragrance}
                     onChange={(e) => setLaundryFragrance(e.target.value)}
                     className="px-2.5 py-1 rounded-lg border font-bold text-xs cursor-pointer"
                   >
-                    <option value="Lavender">🌸 Lavender</option>
-                    <option value="Sakura">🌺 Sakura</option>
-                    <option value="Ocean Fresh">🌊 Ocean Fresh</option>
-                    <option value="Vanilla">🍦 Vanilla</option>
+                    {dynamicScents.map((scent: string) => (
+                      <option key={scent} value={scent}>
+                        🌸 {scent}
+                      </option>
+                    ))}
                   </select>
 
                   <select
@@ -2724,10 +3045,11 @@ export function PosClient({
                     onChange={(e) => setLaundryRack(e.target.value)}
                     className="px-2.5 py-1 rounded-lg border font-black text-xs cursor-pointer"
                   >
-                    <option value="Rak A-01">🧺 Rak A-01</option>
-                    <option value="Rak A-02">🧺 Rak A-02</option>
-                    <option value="Rak B-04">🧺 Rak B-04</option>
-                    <option value="Rak C-08">🧺 Rak C-08</option>
+                    {dynamicRacks.map((rack: string) => (
+                      <option key={rack} value={rack}>
+                        🧺 {rack}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3162,6 +3484,42 @@ export function PosClient({
                             </span>
                           </div>
 
+                          {/* Kitchen Status Controls & Quick Actions */}
+                          <div className="flex items-center gap-1 pt-1 border-t text-[10px]" style={{ borderColor: cardBorder }}>
+                            {order.status === "PENDING" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateLiveOrderStatus(order.id, "PREPARING")}
+                                className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 border border-amber-500/20 font-bold hover:bg-amber-500/20 transition cursor-pointer"
+                                title="Kirim ke dapur untuk dimasak"
+                              >
+                                Masak (Dapur)
+                              </button>
+                            )}
+                            {order.status === "PREPARING" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateLiveOrderStatus(order.id, "READY")}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-bold hover:bg-emerald-500/20 transition cursor-pointer"
+                                title="Tandai hidangan siap disajikan ke meja"
+                              >
+                                Siap Saji
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm(`Batalkan pesanan ${order.orderNumber} ini?`)) {
+                                  await handleUpdateLiveOrderStatus(order.id, "CANCELLED");
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-bold ml-auto transition cursor-pointer"
+                              title="Batalkan pesanan ini dan bebaskan meja"
+                            >
+                              Batalkan
+                            </button>
+                          </div>
+
                           {/* Action Buttons per Vertical */}
                           <div className="grid grid-cols-2 gap-1.5 pt-1">
                             {/* Tombol Cetak Struk Dapur / Slip */}
@@ -3174,30 +3532,19 @@ export function PosClient({
                               className="py-1.5 px-2 rounded-xl border text-[10px] font-bold flex items-center justify-center gap-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
                               style={{ borderColor: cardBorder, color: textPrimary }}
                             >
-                              <Printer className="w-3 h-3 text-slate-500" />
+                              <Printer className="w-3.5 h-3.5 text-slate-500" />
                               <span>Struk Dapur</span>
                             </button>
 
-                            {/* Tombol Aksi Kasir Utama */}
-                            {isOnlinePaid ? (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateLiveOrderStatus(order.id, "COMPLETED")}
-                                className="py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Selesaikan Meja</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenLiveOrderPayment(order)}
-                                className="py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition"
-                              >
-                                <DollarSign className="w-3 h-3" />
-                                <span>Terima Bayar</span>
-                              </button>
-                            )}
+                            {/* Tombol Pembayaran Kasir Resmi */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenLiveOrderPayment(order)}
+                              className="py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-sm transition cursor-pointer"
+                            >
+                              {isOnlinePaid ? <QrCode className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
+                              <span>{isOnlinePaid ? "Konfirmasi QRIS" : "Terima Bayar"}</span>
+                            </button>
                           </div>
                         </div>
                       );
@@ -3270,6 +3617,7 @@ export function PosClient({
                           <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5">
                             {selectedCustomer.phone && <span>{selectedCustomer.phone}</span>}
                             <span className="text-indigo-600 font-bold">• {selectedCustomer.visits || 0}x hadir</span>
+                            <span className="text-amber-600 font-extrabold flex items-center gap-0.5">• ⭐ {selectedCustomer.points || 0} Poin</span>
                           </div>
                         </div>
                       </div>
@@ -3522,9 +3870,51 @@ export function PosClient({
                   {posLayout === "CAFE_RESTO" && cart.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
+                        const effectiveTableNumber = isDineIn
+                          ? selectedTable === "CUSTOM_TENT_CARD"
+                            ? customTableInput.trim() || undefined
+                            : selectedTable !== "NO_TABLE"
+                              ? selectedTable
+                              : undefined
+                          : undefined;
+
                         setKitchenSlipSent(true);
-                        setTimeout(() => setKitchenSlipSent(false), 3000);
+                        try {
+                          const itemsPayload = cart.map((c) => ({
+                            productId: c.productId,
+                            name: c.name,
+                            qty: c.qty,
+                            price: c.price,
+                            notes: c.notes || undefined,
+                            type: (c as any).type || "BARANG",
+                          }));
+
+                          const res = await submitSelfOrderAction({
+                            tenantId: tenantInfo?.tenantId || (shiftData as any)?.currentUser?.tenantId || "",
+                            outletId: shiftData?.currentOutletId || "",
+                            verticalType: "CAFE",
+                            customerName: selectedCustomer?.name || (effectiveTableNumber ? `Meja ${effectiveTableNumber}` : "Tamu POS"),
+                            customerPhone: selectedCustomer?.phone || undefined,
+                            tableNumber: effectiveTableNumber,
+                            items: itemsPayload,
+                            customerNotes: "Tiket KOT dari Kasir POS",
+                            paymentStatus: "UNPAID_CASH",
+                          });
+
+                          if (res.success && res.order) {
+                            toastSuccess(`✓ Tiket KOT #${res.order.orderNumber} berhasil dikirim ke antrean dapur!`);
+                            // Muat ulang daftar live orders agar KDS & Meja langsung sinkron
+                            try {
+                              const updatedOrders = await getLiveOrdersAction({ outletId: shiftData.currentOutletId });
+                              setLiveOrders(updatedOrders || []);
+                            } catch (_) {}
+                          }
+                        } catch (err: any) {
+                          toastError(err.message || "Gagal mengirim pesanan ke dapur.");
+                        } finally {
+                          setTimeout(() => setKitchenSlipSent(false), 3000);
+                        }
                       }}
                       className="w-full py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                     >
@@ -5192,17 +5582,13 @@ export function PosClient({
           }}
           receiptData={{
             ...completedReceiptData,
-            vertical:
-              (receiptConfig as any)?.vertical ||
-              (hasBarbershopPlugin
-                ? "BARBERSHOP"
-                : hasCafePlugin
-                ? "CAFE"
-                : hasLaundryPlugin
-                ? "LAUNDRY"
-                : "RETAIL"),
+            vertical: activeVerticalPos || (receiptConfig as any)?.vertical || "CAFE",
+            roundingAmount: completedReceiptData.roundingAmount ?? roundingAmount,
           }}
-          receiptConfig={receiptConfig}
+          receiptConfig={{
+            ...receiptConfig,
+            ...(receiptConfig?.presets?.[activeVerticalPos] || {}),
+          }}
         />
       )}
 

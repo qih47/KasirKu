@@ -114,6 +114,7 @@ export function StaffClient({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [outletId, setOutletId] = useState(data.outlets[0]?.id || "");
+  const [role, setRole] = useState<"KASIR" | "ADMIN_CABANG">("KASIR");
   const [position, setPosition] = useState("KASIR");
   const [hasPosAccess, setHasPosAccess] = useState(true);
   const [employmentType, setEmploymentType] = useState("FULL_TIME");
@@ -148,6 +149,7 @@ export function StaffClient({
     setPhone("");
     setPassword("");
     setOutletId(data.outlets[0]?.id || "");
+    setRole("KASIR");
     setPosition("KASIR");
     setHasPosAccess(true);
     setEmploymentType("FULL_TIME");
@@ -172,6 +174,7 @@ export function StaffClient({
     setPhone(staff.phone || "");
     setPassword("");
     setOutletId(staff.outletId || (data.outlets[0]?.id || ""));
+    setRole(staff.role === "ADMIN_CABANG" ? "ADMIN_CABANG" : "KASIR");
     setPosition(staff.position || "KASIR");
     setHasPosAccess(staff.hasPosAccess !== false);
     setEmploymentType(staff.employmentType || "FULL_TIME");
@@ -201,6 +204,13 @@ export function StaffClient({
 
     try {
       if (editItem) {
+        // Validasi Admin Cabang
+        if (role === "ADMIN_CABANG" && (!outletId || outletId === "ALL")) {
+          toastError("Admin Cabang wajib ditugaskan ke salah satu cabang outlet spesifik.");
+          setLoading(false);
+          return;
+        }
+
         // Update Action
         await updateStaffAction({
           id: editItem.id,
@@ -209,6 +219,7 @@ export function StaffClient({
           phone: phone || undefined,
           password: password || undefined,
           outletId: outletId || null,
+          role,
           position,
           hasPosAccess,
           employmentType,
@@ -226,6 +237,20 @@ export function StaffClient({
 
         toastSuccess(`Data staf "${name}" berhasil diperbarui!`);
       } else {
+        // Validasi Admin Cabang
+        if (role === "ADMIN_CABANG") {
+          if (!outletId || outletId === "ALL") {
+            toastError("Admin Cabang wajib ditugaskan ke salah satu cabang outlet spesifik.");
+            setLoading(false);
+            return;
+          }
+          if (!password || password.trim().length < 6) {
+            toastError("Password login dashboard Admin Cabang minimal 6 karakter.");
+            setLoading(false);
+            return;
+          }
+        }
+
         // Create Action
         await createStaffAction({
           name,
@@ -233,6 +258,7 @@ export function StaffClient({
           phone: phone || undefined,
           password: password || undefined,
           outletId: outletId || null,
+          role,
           position,
           hasPosAccess,
           employmentType,
@@ -623,6 +649,11 @@ export function StaffClient({
                                   OWNER
                                 </span>
                               )}
+                              {staff.role === "ADMIN_CABANG" && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-purple-600 text-white flex items-center gap-0.5">
+                                  🛡️ ADMIN CABANG
+                                </span>
+                              )}
                             </div>
                             <span className="text-[11px] text-slate-400 block font-mono">
                               {staff.email}
@@ -852,20 +883,76 @@ export function StaffClient({
 
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    Penempatan Cabang
+                    Penempatan Cabang {role === "ADMIN_CABANG" && <span className="text-red-500">*</span>}
                   </label>
                   <select
                     value={outletId}
                     onChange={(e) => setOutletId(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer"
                   >
-                    <option value="">Semua Cabang (Mobile)</option>
+                    {role !== "ADMIN_CABANG" && <option value="">Semua Cabang (Mobile)</option>}
                     {data.outlets.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.name}
                       </option>
                     ))}
                   </select>
+                  {role === "ADMIN_CABANG" && (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold block">
+                      Admin Cabang terikat penuh mengelola 1 cabang outlet ini.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Peran Otorisasi Sistem (Role Assignment) */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/50">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                  Peran Otorisasi Akun (Hak Akses):
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRole("KASIR");
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer space-y-0.5 ${
+                      role === "KASIR"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🛒 Kasir & Operasional</span>
+                    </div>
+                    <p className={`text-[10px] leading-tight ${role === "KASIR" ? "text-indigo-100" : "text-slate-400"}`}>
+                      Akses Terminal Kasir POS, pesanan, & layanan cabang.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRole("ADMIN_CABANG");
+                      if (!outletId && data.outlets[0]?.id) {
+                        setOutletId(data.outlets[0].id);
+                      }
+                      setPosition("SUPERVISOR");
+                      setHasPosAccess(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer space-y-0.5 ${
+                      role === "ADMIN_CABANG"
+                        ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🛡️ Admin / Manajer Cabang</span>
+                    </div>
+                    <p className={`text-[10px] leading-tight ${role === "ADMIN_CABANG" ? "text-purple-100" : "text-slate-400"}`}>
+                      Akses Dashboard Cabang, stok cabang, & laporan cabangnya.
+                    </p>
+                  </button>
                 </div>
               </div>
 

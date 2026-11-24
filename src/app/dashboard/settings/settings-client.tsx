@@ -46,6 +46,7 @@ import {
   updateTenantShiftModeAction,
   updateTenantVerticalConfigAction,
 } from "@/modules/tenant/settings-actions";
+import { setSupervisorPinAction } from "@/modules/auth/supervisor-pin-actions";
 import {
   ReceiptConfig,
   defaultReceiptConfig,
@@ -60,6 +61,7 @@ import {
   TransactionReceiptData,
 } from "@/components/receipt/dynamic-receipt-renderer";
 import Link from "next/link";
+import { toastSuccess, toastError } from "@/lib/swal";
 
 interface SettingsClientProps {
   initialData: {
@@ -85,6 +87,8 @@ interface SettingsClientProps {
     activeReceiptTemplate: string;
     shiftMode?: "FAST" | "STRICT";
     verticalConfig?: Record<string, any>;
+    hasSupervisorPin?: boolean;
+    supervisorPinUpdatedAt?: string | null;
     themeShell?: {
       dashboardNavPosition?: "TOP_NAV" | "SIDEBAR_LEFT";
       sidebarCollapsedDefault?: boolean;
@@ -117,6 +121,36 @@ export function SettingsClient({ initialData, initialTab }: SettingsClientProps)
     initialData.shiftMode || "FAST"
   );
   const [savingShiftMode, setSavingShiftMode] = useState(false);
+
+  // Supervisor PIN State
+  const [hasSupervisorPin, setHasSupervisorPin] = useState(Boolean(initialData.hasSupervisorPin));
+  const [supervisorPin, setSupervisorPin] = useState("");
+  const [confirmSupervisorPin, setConfirmSupervisorPin] = useState("");
+  const [savingSupervisorPin, setSavingSupervisorPin] = useState(false);
+
+  const handleSaveSupervisorPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supervisorPin || supervisorPin.length < 4 || supervisorPin.length > 8) {
+      toastError("PIN Supervisor harus terdiri dari 4 hingga 8 digit angka.");
+      return;
+    }
+    if (supervisorPin !== confirmSupervisorPin) {
+      toastError("Konfirmasi PIN tidak cocok dengan PIN baru.");
+      return;
+    }
+    setSavingSupervisorPin(true);
+    try {
+      const res = await setSupervisorPinAction(supervisorPin);
+      toastSuccess(res.message || "PIN Supervisor berhasil disimpan!");
+      setHasSupervisorPin(true);
+      setSupervisorPin("");
+      setConfirmSupervisorPin("");
+    } catch (err: any) {
+      toastError(err.message || "Gagal menyimpan PIN Supervisor.");
+    } finally {
+      setSavingSupervisorPin(false);
+    }
+  };
 
   // Outlet Address map for switching between outlets
   const [outletAddresses, setOutletAddresses] = useState<Record<string, string>>(() => {
@@ -1068,6 +1102,114 @@ export function SettingsClient({ initialData, initialTab }: SettingsClientProps)
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Kartu: Keamanan & PIN Otorisasi Supervisor POS */}
+          <div
+            className="p-6 sm:p-7 border shadow-sm space-y-6"
+            style={{
+              backgroundColor: "var(--theme-card-bg, #ffffff)",
+              borderColor: "var(--theme-card-border, #e2e8f0)",
+              borderRadius: "var(--theme-radius, 1.5rem)",
+            }}
+          >
+            <div className="border-b pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" style={{ borderColor: "var(--theme-card-border, #e2e8f0)" }}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-600 flex items-center justify-center font-bold">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-base font-black" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Keamanan &amp; PIN Otorisasi Supervisor POS
+                  </h2>
+                </div>
+                <p className="text-xs" style={{ color: "var(--theme-text-secondary, #64748b)" }}>
+                  PIN rahasia 4-8 digit untuk mengotorisasi tindakan sensitif di kasir: pembatalan nota (Void), pembukaan laci kas darurat, dan diskon manual khusus.
+                </p>
+              </div>
+
+              <div>
+                {hasSupervisorPin ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    PIN Aktif &amp; Terlindungi
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                    <Clock className="w-3.5 h-3.5" />
+                    Belum Diatur (PIN Standar: 123456)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSupervisorPin} className="space-y-4 max-w-xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    {hasSupervisorPin ? "PIN Supervisor Baru" : "Atur PIN Supervisor"} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    minLength={4}
+                    value={supervisorPin}
+                    onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="4 - 8 digit angka rahasia"
+                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-500/30 transition"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400 block">Hanya angka (contoh: 829102)</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold" style={{ color: "var(--theme-text-primary, #0f172a)" }}>
+                    Konfirmasi PIN Baru <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    minLength={4}
+                    value={confirmSupervisorPin}
+                    onChange={(e) => setConfirmSupervisorPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Ulangi digit angka"
+                    className="w-full px-4 py-2.5 rounded-xl border text-xs font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-500/30 transition"
+                    style={{
+                      backgroundColor: "var(--theme-input-bg, #ffffff)",
+                      borderColor: "var(--theme-card-border, #e2e8f0)",
+                      color: "var(--theme-text-primary, #0f172a)",
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <p className="text-[11px] text-slate-500 italic">
+                  Catatan: Hanya Owner dan Supervisor yang boleh mengetahui kode PIN ini.
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={savingSupervisorPin || !supervisorPin}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {savingSupervisorPin ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4" />
+                  )}
+                  <span>Simpan PIN Supervisor</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

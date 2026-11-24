@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay, subDays, startOfMonth, format } from "date-fns";
+import { resolveProductVertical } from "@/lib/vertical-helpers";
 
 async function requireTenantUser() {
   const session = await getServerSession(authOptions);
@@ -74,6 +75,18 @@ export async function getSalesReportData(params: {
       fromDate = startOfDay(subDays(now, 6));
   }
 
+  const isBranchAdmin = user.role === "ADMIN_CABANG";
+  if (isBranchAdmin && !user.outletId) {
+    throw new Error("Akses ditolak: Akun Admin Cabang belum diasosiasikan ke cabang outlet spesifik.");
+  }
+
+  // Jika ADMIN_CABANG, paksa ke user.outletId; Jika OWNER, ikuti params.outletId
+  const effectiveOutletId = isBranchAdmin
+    ? user.outletId
+    : params.outletId && params.outletId !== "ALL"
+    ? params.outletId
+    : null;
+
   const whereClause: any = {
     outlet: { tenantId: user.tenantId },
     status: "PAID",
@@ -83,10 +96,10 @@ export async function getSalesReportData(params: {
     },
   };
 
-  const outletFilter = params.outletId && params.outletId !== "ALL" ? { outletId: params.outletId } : {};
+  const outletFilter = effectiveOutletId ? { outletId: effectiveOutletId } : {};
 
-  if (params.outletId && params.outletId !== "ALL") {
-    whereClause.outletId = params.outletId;
+  if (effectiveOutletId) {
+    whereClause.outletId = effectiveOutletId;
   }
 
   // 1. Fetch Transaksi & Data 4 Vertikal secara Paralel
@@ -101,6 +114,7 @@ export async function getSalesReportData(params: {
     outletStocks,
     stockMovements,
     payrollCostTrend,
+    rawShifts,
   ] = await Promise.all([
     prisma.transaction.findMany({
       where: whereClause,
@@ -156,7 +170,7 @@ export async function getSalesReportData(params: {
       where: {
         outlet: {
           tenantId: user.tenantId,
-          ...(params.outletId && params.outletId !== "ALL" ? { id: params.outletId } : {}),
+          ...(effectiveOutletId ? { id: effectiveOutletId } : {}),
         },
       },
       include: { product: true, outlet: true },
@@ -166,7 +180,7 @@ export async function getSalesReportData(params: {
         outletStock: {
           outlet: {
             tenantId: user.tenantId,
-            ...(params.outletId && params.outletId !== "ALL" ? { id: params.outletId } : {}),
+            ...(effectiveOutletId ? { id: effectiveOutletId } : {}),
           },
         },
         createdAt: { gte: fromDate, lte: toDate },
@@ -192,6 +206,7 @@ export async function getSalesReportData(params: {
       const rows = await (prisma as any).payrollRecord.findMany({
         where: {
           tenantId: user.tenantId,
+          ...(effectiveOutletId ? { staff: { outletId: effectiveOutletId } } : {}),
           periodMonth: { in: months },
         },
         select: { periodMonth: true, takeHomePay: true },
@@ -210,6 +225,24 @@ export async function getSalesReportData(params: {
         totalPayrollCost: map[m],
       }));
     })(),
+    // Query histori shift untuk Rekonsiliasi & Audit Kasir
+    prisma.shift.findMany({
+      where: {
+        outlet: { tenantId: user.tenantId },
+        ...(effectiveOutletId ? { outletId: effectiveOutletId } : {}),
+        openedAt: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        kasir: true,
+        outlet: true,
+        cashMovements: true,
+        transactions: {
+          where: { status: "PAID" },
+          include: { payments: true },
+        },
+      },
+      orderBy: { openedAt: "desc" },
+    }),
   ]);
 
   // 2. Hitung Metrik Utama (Core KPIs)
@@ -415,6 +448,10 @@ export async function getSalesReportData(params: {
 
   transactions.forEach((t: any) => {
     (t.items || []).forEach((item: any) => {
+      if (!item.product) return;
+      const vert = resolveProductVertical(item.product);
+      if (vert !== "CAFE") return; // Isolasi: Hanya hitung penjualan produk Kafe
+
       const cat = (item.product?.category || "").toLowerCase();
       const sub = Number(item.subtotal || 0);
       if (cat.includes("kopi") || cat.includes("coffee") || cat.includes("signature")) {
@@ -454,10 +491,15 @@ export async function getSalesReportData(params: {
 
   transactions.forEach((t: any) => {
     (t.items || []).forEach((item: any) => {
+      if (!item.product) return;
+      const vert = resolveProductVertical(item.product);
+      if (vert !== "BARBERSHOP") return; // Isolasi: Hanya hitung layanan & produk Barbershop
+
+      const sub = Number(item.subtotal || 0);
       if (item.product?.type === "JASA") {
-        barberServiceRevenue += Number(item.subtotal || 0);
+        barberServiceRevenue += sub;
       } else {
-        barberRetailProductRevenue += Number(item.subtotal || 0);
+        barberRetailProductRevenue += sub;
       }
     });
   });
@@ -530,6 +572,10 @@ export async function getSalesReportData(params: {
   const deadStockSku: any[] = [];
 
   (outletStocks as any[]).forEach((os: any) => {
+    if (!os.product) return;
+    const vert = resolveProductVertical(os.product);
+    if (vert !== "RETAIL") return; // Isolasi: Hanya hitung valuasi & pergerakan stok Retail
+
     const qty = os.stockQty ?? 0;
     const price = os.priceOverride ? Number(os.priceOverride) : Number(os.product?.price || 0);
     totalStockValuation += qty * price;
@@ -587,11 +633,55 @@ export async function getSalesReportData(params: {
     movements: ledgerMovements,
   };
 
+  // ── Hitung Metrik Rekonsiliasi & Audit Shift Kasir ──────────────────────
+  const shiftReconciliation = (rawShifts || []).map((s: any) => {
+    const opening = Number(s.openingCash || 0);
+    const closing = s.closingCash !== null ? Number(s.closingCash) : null;
+    let cashSales = 0;
+    let nonCashSales = 0;
+    (s.transactions || []).forEach((trx: any) => {
+      (trx.payments || []).forEach((p: any) => {
+        const amt = Number(p.amount || 0);
+        if (p.method === "CASH") cashSales += amt;
+        else nonCashSales += amt;
+      });
+    });
+    let cashIn = 0;
+    let cashOut = 0;
+    (s.cashMovements || []).forEach((cm: any) => {
+      if (cm.type === "IN") cashIn += Number(cm.amount);
+      if (cm.type === "OUT") cashOut += Number(cm.amount);
+    });
+    const expectedCash = opening + cashSales + cashIn - cashOut;
+    const difference = closing !== null ? closing - expectedCash : null;
+
+    return {
+      id: s.id,
+      cashierName: s.kasir?.name || "Kasir",
+      outletName: s.outlet?.name || "Outlet",
+      openedAt: format(new Date(s.openedAt), "dd/MM/yyyy HH:mm"),
+      closedAt: s.closedAt ? format(new Date(s.closedAt), "dd/MM/yyyy HH:mm") : null,
+      isClosed: s.closedAt !== null,
+      openingCash: opening,
+      cashSales,
+      nonCashSales,
+      cashIn,
+      cashOut,
+      expectedCash,
+      closingCash: closing,
+      difference,
+      trxCount: (s.transactions || []).length,
+    };
+  });
+
   return JSON.parse(
     JSON.stringify({
       tenantName: tenant?.businessName || "POS Universal",
-      allOutlets,
-      selectedOutletId: params.outletId || "ALL",
+      allOutlets: isBranchAdmin
+        ? allOutlets.filter((o: any) => o.id === user.outletId)
+        : allOutlets,
+      selectedOutletId: isBranchAdmin ? user.outletId : (params.outletId || "ALL"),
+      canViewConsolidated: !isBranchAdmin,
       dateRange: {
         from: format(fromDate, "yyyy-MM-dd"),
         to: format(toDate, "yyyy-MM-dd"),
@@ -621,6 +711,7 @@ export async function getSalesReportData(params: {
       laundryAnalytics,
       retailAnalytics,
       stockLedger: stockLedgerSummary,
+      shiftReconciliation,
       // ── Payroll Cost Trend (6 bulan terakhir) ──────────────────────────
       payrollCostTrend,
       // Kalkulasi rasio gaji vs omzet bulan ini

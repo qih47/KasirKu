@@ -182,13 +182,29 @@ export async function upgradeSubscriptionAction(data: {
     }
   }
 
-  // Cek langganan aktif saat ini untuk akumulasi hari & migrasi tema
+  // Cek langganan aktif saat ini untuk akumulasi hari, migrasi tema, dan preservasi plugin
   const existingActiveSub = await prisma.tenantSubscription.findFirst({
     where: { tenantId: user.tenantId, isActive: true },
-    include: { theme: true },
+    include: { theme: true, plugins: { where: { isActive: true } } },
   });
 
+  // Jika selectedPluginIds kosong dan bukan tindakan downgrade, warisi plugin aktif sebelumnya (mencegah wipeout saat renewal)
+  if ((!selectedPluginIds || selectedPluginIds.length === 0) && actionType !== "DOWNGRADE" && existingActiveSub) {
+    selectedPluginIds = (existingActiveSub.plugins || []).map((p: any) => p.pluginId);
+  }
+
   const now = new Date();
+
+  // Idempotent Guard: Cegah pemanggilan ganda dari Webhook + Client Polling dalam kurun waktu 60 detik
+  if (
+    existingActiveSub &&
+    existingActiveSub.licenseTierId === licenseTierId &&
+    now.getTime() - new Date(existingActiveSub.createdAt).getTime() < 60000 &&
+    (existingActiveSub.plugins || []).length >= (selectedPluginIds || []).length
+  ) {
+    return { success: true, message: "Subscription already activated idempotently." };
+  }
+
   let periodEnd: Date;
 
   if (

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasTenantPlugin } from "@/modules/tenant/plugin-helpers";
 import { revalidatePath } from "next/cache";
+import { resolveProductVertical } from "@/lib/vertical-helpers";
 import { startOfDay, endOfDay, subDays, format } from "date-fns";
 
 export type BookingStatusType = "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
@@ -80,9 +81,6 @@ export async function getBarbershopQueueData(explicitOutletId?: string) {
         tenantId: user.tenantId,
         type: "JASA",
         isActive: true,
-        NOT: {
-          category: { in: ["Laundry", "Cuci Kiloan", "Cuci Satuan", "Dry Clean", "Setrika"] },
-        },
       },
       orderBy: { name: "asc" },
     }),
@@ -96,13 +94,17 @@ export async function getBarbershopQueueData(explicitOutletId?: string) {
   const inProgressList = (bookings as any[]).filter((b: any) => b.status === "IN_PROGRESS");
   const completedList = (bookings as any[]).filter((b: any) => b.status === "COMPLETED");
 
+  const barbershopServices = (services as any[]).filter(
+    (s: any) => resolveProductVertical(s) === "BARBERSHOP"
+  );
+
   return {
     bookings,
     waitingList,
     inProgressList,
     completedList,
     barbers,
-    services,
+    services: barbershopServices,
     outlets: tenant?.outlets || [],
     currentOutletId: targetOutletId,
   };
@@ -284,7 +286,12 @@ export async function getBarberCommissionsReport(params?: {
     }),
   ]);
 
-  const totalCommissionsPaid = (commissions as any[]).reduce(
+  // Saring hanya komisi dari layanan / produk barbershop
+  const barberCommissions = (commissions as any[]).filter(
+    (c: any) => resolveProductVertical(c.transactionItem?.product) === "BARBERSHOP"
+  );
+
+  const totalCommissionsPaid = barberCommissions.reduce(
     (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
@@ -305,7 +312,7 @@ export async function getBarberCommissionsReport(params?: {
     };
   });
 
-  (commissions as any[]).forEach((c: any) => {
+  barberCommissions.forEach((c: any) => {
     if (barberSummaryMap[c.staffId]) {
       barberSummaryMap[c.staffId].totalServices += 1;
       barberSummaryMap[c.staffId].totalCommission += Number(c.amount || 0);
@@ -351,6 +358,9 @@ export async function updateStaffBarberRateAction(data: {
   await prisma.user.update({
     where: { id: staffId },
     data: {
+      isCommissionActive: true,
+      commissionPercent: schemeType === "PERCENTAGE" ? Number(serviceRate) : (staff.commissionPercent || 0),
+      commissionFlat: schemeType === "FLAT" ? Number(serviceRate) : (staff.commissionFlat || 0),
       attributes: {
         ...currentAttrs,
         schemeType,

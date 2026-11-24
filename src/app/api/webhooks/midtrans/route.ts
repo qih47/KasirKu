@@ -169,12 +169,22 @@ export async function POST(req: NextRequest) {
           if (licenseTier) {
             const effDuration = durationMonths || 1;
             const startDate = new Date();
-            const endDate = addMonths(startDate, effDuration);
 
             const existingSub = await prisma.tenantSubscription.findFirst({
               where: { tenantId, isActive: true },
-              include: { theme: true },
+              include: { theme: true, plugins: { where: { isActive: true } } },
             });
+
+            // Akumulasi sisa hari aktif jika tier sama dan belum expired
+            let baseEndDate = startDate;
+            if (
+              existingSub &&
+              existingSub.licenseTierId === licenseTier.id &&
+              new Date(existingSub.currentPeriodEnd) > startDate
+            ) {
+              baseEndDate = new Date(existingSub.currentPeriodEnd);
+            }
+            const endDate = addMonths(baseEndDate, effDuration);
 
             await prisma.$transaction(async (tx: any) => {
               await tx.tenantSubscription.updateMany({
@@ -205,7 +215,13 @@ export async function POST(req: NextRequest) {
                 });
               }
 
-              for (const pid of selectedPluginIds) {
+              // Warisi plugin aktif dari subscription sebelumnya jika selectedPluginIds kosong (mencegah wipeout saat renewal)
+              const effectivePluginIds =
+                selectedPluginIds && selectedPluginIds.length > 0
+                  ? selectedPluginIds
+                  : (existingSub?.plugins || []).map((p: any) => p.pluginId);
+
+              for (const pid of effectivePluginIds) {
                 await tx.tenantPlugin.create({
                   data: {
                     subscriptionId: newSub.id,

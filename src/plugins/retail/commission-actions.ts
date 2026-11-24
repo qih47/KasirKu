@@ -1,5 +1,7 @@
 "use server";
 
+import { resolveProductVertical } from "@/lib/vertical-helpers";
+
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -60,17 +62,25 @@ export async function getRetailIncentivesData(params?: {
     }),
   ]);
 
-  const totalIncentivesPaid = (commissions as any[]).reduce(
+  // Saring komisi dan produk khusus vertikal Retail
+  const retailCommissions = (commissions as any[]).filter(
+    (c: any) => resolveProductVertical(c.transactionItem?.product) === "RETAIL"
+  );
+  const retailProducts = (highMarginProducts as any[]).filter(
+    (p: any) => resolveProductVertical(p) === "RETAIL"
+  );
+
+  const totalIncentivesPaid = retailCommissions.reduce(
     (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
 
   return {
-    commissions,
+    commissions: retailCommissions,
     staffList,
-    highMarginProducts,
+    highMarginProducts: retailProducts,
     totalIncentivesPaid,
-    totalCommissionedItemsSold: commissions.length,
+    totalCommissionedItemsSold: retailCommissions.length,
     dateRange: {
       from: format(fromDate, "dd MMM yyyy"),
       to: format(toDate, "dd MMM yyyy"),

@@ -35,6 +35,14 @@ export async function getCurrentShiftData(explicitOutletId?: string) {
     throw new Error("Masa percobaan (Trial) bisnis Anda telah berakhir. Silakan upgrade paket langganan Anda.");
   }
 
+  // Cek apakah paket langganan berbayar (ACTIVE) sudah melewati batas masa aktif
+  const activeSubForCheck = await prisma.tenantSubscription.findFirst({
+    where: { tenantId: user.tenantId, isActive: true },
+  });
+  if (tenant.status === "ACTIVE" && activeSubForCheck && new Date(activeSubForCheck.currentPeriodEnd) < new Date()) {
+    throw new Error("Masa aktif langganan lisensi bisnis Anda telah berakhir. Silakan perpanjang paket langganan Anda melalui menu Langganan di Dashboard Owner.");
+  }
+
   const shiftMode = tenant?.shiftMode || "FAST";
 
   // Jika user adalah Owner tanpa outletId spesifik, ambil outlet pertama

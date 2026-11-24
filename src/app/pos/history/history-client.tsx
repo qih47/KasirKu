@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { voidTransactionAction } from "@/modules/transaction/actions";
+import { toastError, toastSuccess, swalConfirm } from "@/lib/swal";
 import {
   ArrowLeft,
   Search,
@@ -12,6 +14,11 @@ import {
   User,
   History,
   X,
+  Ban,
+  Loader2,
+  Lock,
+  AlertTriangle,
+  ShieldAlert,
 } from "lucide-react";
 
 interface PosHistoryClientProps {
@@ -27,9 +34,61 @@ export function PosHistoryClient({
   initialTransactions,
   appliedTheme,
 }: PosHistoryClientProps) {
-  const [transactions] = useState<any[]>(initialTransactions);
+  const [transactions, setTransactions] = useState<any[]>(initialTransactions);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrx, setSelectedTrx] = useState<any | null>(null);
+  // Void Modal State
+  const [voidModalOpen, setVoidModalOpen] = useState(false);
+  const [targetVoidTrx, setTargetVoidTrx] = useState<any | null>(null);
+  const [voidReasonPreset, setVoidReasonPreset] = useState("Salah Input Pesanan");
+  const [voidCustomReason, setVoidCustomReason] = useState("");
+  const [supervisorPin, setSupervisorPin] = useState("");
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
+
+  const openVoidModal = (trx: any) => {
+    setTargetVoidTrx(trx);
+    setVoidReasonPreset("Salah Input Pesanan");
+    setVoidCustomReason("");
+    setSupervisorPin("");
+    setVoidModalOpen(true);
+  };
+
+  const handleConfirmVoid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetVoidTrx) return;
+
+    const finalReason =
+      voidReasonPreset === "Lainnya"
+        ? voidCustomReason.trim()
+        : voidCustomReason.trim()
+        ? `${voidReasonPreset}: ${voidCustomReason.trim()}`
+        : voidReasonPreset;
+
+    if (!finalReason) {
+      toastError("Alasan pembatalan transaksi wajib diisi.");
+      return;
+    }
+
+    setVoidSubmitting(true);
+    try {
+      const res = await voidTransactionAction({
+        transactionId: targetVoidTrx.id,
+        reason: finalReason,
+        supervisorPin: supervisorPin.trim() || undefined,
+      });
+
+      toastSuccess(res.message || "Transaksi berhasil dibatalkan (Void).");
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === targetVoidTrx.id ? { ...t, status: "CANCELLED" } : t))
+      );
+      setVoidModalOpen(false);
+      setTargetVoidTrx(null);
+    } catch (err: any) {
+      toastError(err.message || "Gagal melakukan void transaksi.");
+    } finally {
+      setVoidSubmitting(false);
+    }
+  };
 
   // Dynamic Theme Engine
   const tokens = (appliedTheme?.tokens as any) || {};
@@ -182,31 +241,50 @@ export function PosHistoryClient({
                       </td>
 
                       <td className="py-4 px-6">
-                        <span
-                          className="px-2.5 py-1 rounded-full font-bold text-[10px] border"
-                          style={{
-                            backgroundColor: `${primaryColor}15`,
-                            borderColor: `${primaryColor}40`,
-                            color: primaryColor,
-                          }}
-                        >
-                          {payment?.method || "CASH"}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="px-2.5 py-1 rounded-full font-bold text-[10px] border"
+                            style={{
+                              backgroundColor: `${primaryColor}15`,
+                              borderColor: `${primaryColor}40`,
+                              color: primaryColor,
+                            }}
+                          >
+                            {payment?.method || "CASH"}
+                          </span>
+                          {t.status === "CANCELLED" && (
+                            <span className="px-2 py-0.5 rounded-full font-black text-[10px] border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                              VOID
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => setSelectedTrx(t)}
-                          className="px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1 ml-auto border"
-                          style={{
-                            backgroundColor: innerBoxBg,
-                            borderColor: cardBorder,
-                            color: textPrimary,
-                          }}
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Cetak Struk</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedTrx(t)}
+                            className="px-3.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1 border"
+                            style={{
+                              backgroundColor: innerBoxBg,
+                              borderColor: cardBorder,
+                              color: textPrimary,
+                            }}
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Cetak Struk</span>
+                          </button>
+                          {t.status !== "CANCELLED" && (
+                            <button
+                              onClick={() => openVoidModal(t)}
+                              className="px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1 border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer shadow-xs"
+                              title="Otorisasi pembatalan nota kasir (Void)"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              <span>Void</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -349,6 +427,154 @@ export function PosHistoryClient({
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Otorisasi Void Transaksi Kasir Modern */}
+      {voidModalOpen && targetVoidTrx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-md rounded-3xl p-6 border shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: cardBg,
+              borderColor: cardBorder,
+              color: textPrimary,
+            }}
+          >
+            <div className="flex items-start justify-between border-b pb-3.5" style={{ borderColor: cardBorder }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black" style={{ color: textPrimary }}>
+                    Otorisasi Void Transaksi
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-400">
+                    Nota: {targetVoidTrx.transactionNumber} &bull; Rp {Number(targetVoidTrx.totalAmount).toLocaleString("id-ID")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setVoidModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <p className="leading-snug">
+                Pembatalan transaksi akan mengembalikan stok produk &amp; bahan baku resep BOM ke cabang, serta membatalkan komisi staf terkait.
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmVoid} className="space-y-4">
+              {/* Preset Alasan Pembatalan */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold block" style={{ color: textPrimary }}>
+                  Alasan Pembatalan Nota <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    "Salah Input Pesanan",
+                    "Pelanggan Membatalkan",
+                    "Salah Metode Bayar",
+                    "Lainnya",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setVoidReasonPreset(preset)}
+                      className={`px-3 py-2 rounded-xl border text-[11px] font-bold text-left transition cursor-pointer ${
+                        voidReasonPreset === preset
+                          ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                          : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Catatan Alasan Tambahan */}
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={voidCustomReason}
+                  onChange={(e) => setVoidCustomReason(e.target.value)}
+                  placeholder={voidReasonPreset === "Lainnya" ? "Ketik alasan spesifik pembatalan (wajib)..." : "Catatan tambahan (opsional)..."}
+                  className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                  style={{
+                    backgroundColor: innerBoxBg,
+                    borderColor: cardBorder,
+                    color: textPrimary,
+                  }}
+                  required={voidReasonPreset === "Lainnya"}
+                />
+              </div>
+
+              {/* PIN Supervisor Otorisasi */}
+              <div className="p-3.5 rounded-2xl border space-y-2" style={{ backgroundColor: innerBoxBg, borderColor: cardBorder }}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold flex items-center gap-1.5" style={{ color: textPrimary }}>
+                    <Lock className="w-3.5 h-3.5 text-purple-600" />
+                    <span>PIN Supervisor / Owner <span className="text-rose-500">*</span></span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">4 - 8 Digit Angka</span>
+                </div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  minLength={4}
+                  value={supervisorPin}
+                  onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Ketik PIN Otorisasi Supervisor..."
+                  className="w-full px-3.5 py-2 rounded-xl border text-center font-mono font-bold tracking-widest text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 transition"
+                  style={{
+                    backgroundColor: cardBg,
+                    borderColor: cardBorder,
+                    color: textPrimary,
+                  }}
+                  required
+                />
+                <p className="text-[10px] text-slate-400 text-center">
+                  Minta izin ke Supervisor atau Owner untuk otorisasi pembatalan nota kasir ini.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setVoidModalOpen(false)}
+                  className="w-1/2 py-2.5 rounded-xl border font-bold text-xs transition cursor-pointer"
+                  style={{
+                    backgroundColor: innerBoxBg,
+                    borderColor: cardBorder,
+                    color: textPrimary,
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={voidSubmitting || !supervisorPin}
+                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {voidSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Ban className="w-3.5 h-3.5" />
+                  )}
+                  <span>Konfirmasi Void</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

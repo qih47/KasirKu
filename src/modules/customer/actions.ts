@@ -34,6 +34,7 @@ export interface CustomerSummaryItem {
   address: string | null;
   notes: string | null;
   visits: number;
+  points: number;
   totalSpent: number;
   lastVisitAt: string | null;
   createdAt: string;
@@ -81,6 +82,14 @@ export async function getCustomersData(params?: {
     };
   }
 
+  const isAdminCabang = user.role === "ADMIN_CABANG";
+  const effectiveOutletId =
+    isAdminCabang && user.outletId
+      ? user.outletId
+      : params?.outletId && params.outletId !== "ALL"
+        ? params.outletId
+        : null;
+
   const andConditions: any[] = [{ tenantId: user.tenantId }];
 
   if (params?.search && params.search.trim() !== "") {
@@ -95,12 +104,12 @@ export async function getCustomersData(params?: {
     });
   }
 
-  if (params?.outletId && params.outletId !== "ALL") {
+  if (effectiveOutletId) {
     andConditions.push({
       OR: [
-        { transactions: { some: { outletId: params.outletId } } },
-        { bookings: { some: { outletId: params.outletId } } },
-        { laundryOrders: { some: { outletId: params.outletId } } },
+        { transactions: { some: { outletId: effectiveOutletId } } },
+        { bookings: { some: { outletId: effectiveOutletId } } },
+        { laundryOrders: { some: { outletId: effectiveOutletId } } },
       ],
     });
   }
@@ -141,7 +150,18 @@ export async function getCustomersData(params?: {
       },
     }),
     prisma.customer.findMany({
-      where: { tenantId: user.tenantId },
+      where: {
+        tenantId: user.tenantId,
+        ...(isAdminCabang && effectiveOutletId
+          ? {
+              OR: [
+                { transactions: { some: { outletId: effectiveOutletId } } },
+                { bookings: { some: { outletId: effectiveOutletId } } },
+                { laundryOrders: { some: { outletId: effectiveOutletId } } },
+              ],
+            }
+          : {}),
+      },
       select: {
         id: true,
         totalSpent: true,
@@ -149,7 +169,11 @@ export async function getCustomersData(params?: {
       },
     }),
     prisma.outlet.findMany({
-      where: { tenantId: user.tenantId, isActive: true },
+      where: {
+        tenantId: user.tenantId,
+        isActive: true,
+        ...(isAdminCabang && effectiveOutletId ? { id: effectiveOutletId } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { createdAt: "asc" },
     }),
@@ -179,6 +203,7 @@ export async function getCustomersData(params?: {
     address: c.address,
     notes: c.notes,
     visits: c.visits,
+    points: Number(c.points || 0),
     totalSpent: Number(c.totalSpent || 0),
     lastVisitAt: c.lastVisitAt ? new Date(c.lastVisitAt).toISOString() : null,
     createdAt: new Date(c.createdAt).toISOString(),
@@ -195,7 +220,7 @@ export async function getCustomersData(params?: {
       averageSpentPerCustomer,
     },
     outlets: allOutlets,
-    selectedOutletId: params?.outletId || "ALL",
+    selectedOutletId: effectiveOutletId || "ALL",
     totalCount: rawCustomers.length,
   };
 }
@@ -413,6 +438,7 @@ export async function searchCustomerQuickAction(query: string) {
       address: true,
       notes: true,
       visits: true,
+      points: true,
       totalSpent: true,
       lastVisitAt: true,
     },

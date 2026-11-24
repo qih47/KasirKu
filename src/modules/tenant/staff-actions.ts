@@ -15,12 +15,24 @@ async function requireOwner() {
   return session.user as any;
 }
 
+async function requireStaffAccess() {
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as any)?.role;
+  if (!session || (role !== "OWNER" && role !== "ADMIN_CABANG")) {
+    throw new Error("Akses ditolak: Anda tidak memiliki wewenang untuk melihat data staf.");
+  }
+  return session.user as any;
+}
+
 export async function getStaffData(filterOutletId?: string) {
-  const user = await requireOwner();
+  const user = await requireStaffAccess();
+
+  const isBranchAdmin = user.role === "ADMIN_CABANG";
+  const effectiveOutletId = isBranchAdmin ? user.outletId : filterOutletId;
 
   const whereClause: any = { tenantId: user.tenantId };
-  if (filterOutletId && filterOutletId !== "ALL") {
-    whereClause.outletId = filterOutletId;
+  if (effectiveOutletId && effectiveOutletId !== "ALL") {
+    whereClause.outletId = effectiveOutletId;
   }
 
   const [tenant, staffList, activePlugins] = await Promise.all([
@@ -28,6 +40,7 @@ export async function getStaffData(filterOutletId?: string) {
       where: { id: user.tenantId },
       include: {
         outlets: {
+          where: isBranchAdmin && user.outletId ? { id: user.outletId } : undefined,
           orderBy: { name: "asc" },
         },
         subscriptions: {
@@ -77,6 +90,7 @@ export async function createStaffAction(data: {
   phone?: string;
   password?: string;
   outletId?: string | null;
+  role?: "ADMIN_CABANG" | "KASIR";
   position: string;
   hasPosAccess: boolean;
   employmentType?: string;
@@ -98,6 +112,7 @@ export async function createStaffAction(data: {
     phone,
     password,
     outletId,
+    role = "KASIR",
     position,
     hasPosAccess,
     employmentType = "FULL_TIME",
@@ -179,11 +194,20 @@ export async function createStaffAction(data: {
 
   const effectiveJoinDate = joinDate ? new Date(joinDate) : new Date();
 
+  if (role === "ADMIN_CABANG") {
+    if (!outletId || outletId === "ALL") {
+      throw new Error("Admin Cabang wajib ditugaskan ke salah satu cabang outlet spesifik.");
+    }
+    if (!password || password.trim().length < 6) {
+      throw new Error("Password akses Admin Cabang minimal harus 6 karakter.");
+    }
+  }
+
   const newStaff = await prisma.user.create({
     data: {
       tenantId: user.tenantId,
       outletId: outletId && outletId !== "ALL" ? outletId : null,
-      role: hasPosAccess ? "KASIR" : "KASIR",
+      role: role === "ADMIN_CABANG" ? "ADMIN_CABANG" : "KASIR",
       name: name.trim(),
       email: normalizedEmail,
       phone: phone?.trim() || null,
@@ -217,6 +241,7 @@ export async function updateStaffAction(data: {
   phone?: string | null;
   password?: string;
   outletId?: string | null;
+  role?: "ADMIN_CABANG" | "KASIR";
   position?: string;
   hasPosAccess?: boolean;
   employmentType?: string;
@@ -239,6 +264,7 @@ export async function updateStaffAction(data: {
     phone,
     password,
     outletId,
+    role,
     position,
     hasPosAccess,
     employmentType,
@@ -278,10 +304,18 @@ export async function updateStaffAction(data: {
     }
   }
 
+  if (role === "ADMIN_CABANG") {
+    const finalOutletId = outletId && outletId !== "ALL" ? outletId : existingStaff.outletId;
+    if (!finalOutletId) {
+      throw new Error("Admin Cabang wajib ditugaskan ke salah satu cabang outlet spesifik.");
+    }
+  }
+
   const updatePayload: any = {
     name: name.trim(),
     email: normalizedEmail,
     phone: phone?.trim() || null,
+    ...(role ? { role: role === "ADMIN_CABANG" ? "ADMIN_CABANG" : "KASIR" } : {}),
     outletId: outletId && outletId !== "ALL" ? outletId : null,
     position: position || (existingStaff as any).position || "KASIR",
     hasPosAccess: hasPosAccess !== undefined ? Boolean(hasPosAccess) : (existingStaff as any).hasPosAccess,

@@ -238,6 +238,8 @@ export async function getTenantSettingsData(explicitOutletId?: string) {
       activeReceiptTemplate: mergedConfig.templateStyle || "DEFAULT",
       shiftMode: tenant.shiftMode || "FAST",
       verticalConfig: (tenant.attributes as any)?.verticalConfig || {},
+      hasSupervisorPin: Boolean((tenant.attributes as any)?.supervisorPinHash),
+      supervisorPinUpdatedAt: (tenant.attributes as any)?.supervisorPinUpdatedAt || null,
       themeShell,
     })
   );

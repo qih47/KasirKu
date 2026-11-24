@@ -284,7 +284,7 @@ export function BarbershopQueueClient({
                       <span>Selesai Pangkas</span>
                     </button>
                     <Link
-                      href={`/pos?barberBookingId=${item.id}`}
+                      href={`/pos?vertical=BARBERSHOP&barberBookingId=${item.id}&outletId=${data.currentOutletId}`}
                       className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
                     >
                       <ShoppingCart className="w-3.5 h-3.5" />
@@ -343,7 +343,7 @@ export function BarbershopQueueClient({
                   </div>
 
                   <Link
-                    href={`/pos?barberBookingId=${item.id}`}
+                    href={`/pos?vertical=BARBERSHOP&barberBookingId=${item.id}&outletId=${data.currentOutletId}`}
                     className="w-full py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition flex items-center justify-center gap-1.5"
                   >
                     <ShoppingCart className="w-3 h-3" />

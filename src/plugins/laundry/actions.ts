@@ -194,16 +194,124 @@ export async function updateLaundryStatusAction(
   if (status === "COMPLETED") {
     updateData.completedAt = new Date();
 
-    // Update akumulasi LTV Customer jika terkait pelanggan CRM
-    if (order.customerId) {
-      await prisma.customer.update({
-        where: { id: order.customerId },
+    const isPaidFromPos = (order.notes || "").includes("Pembayaran Kasir POS #");
+
+    if (isPaidFromPos) {
+      // Jika order dibuat & sudah lunas via Kasir POS, akumulasi LTV sudah tercatat saat transaksi POS dibuat.
+      // Tidak perlu increment ulang agar tidak terjadi double-counting.
+    } else {
+      // Jika order diinput dari Dashboard Laundry dan belum memiliki transaksi POS:
+      // Otomatis buatkan transaksi kasir lunas resmi pada shift aktif outlet
+      let activeShift = await prisma.shift.findFirst({
+        where: { outletId: order.outletId, closedAt: null },
+      });
+
+      if (!activeShift) {
+        activeShift = await prisma.shift.create({
+          data: {
+            outletId: order.outletId,
+            kasirId: user.id,
+            openingCash: 0,
+          },
+        });
+      }
+
+      const todayStr = format(new Date(), "yyyyMMdd");
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const transactionNumber = `TRX-${todayStr}-${randomSuffix}`;
+      const finalAmount = Number(order.totalAmount || 0);
+
+      const trx = await prisma.transaction.create({
         data: {
-          visits: { increment: 1 },
-          totalSpent: { increment: Number(order.totalAmount || 0) },
-          lastVisitAt: new Date(),
+          outletId: order.outletId,
+          shiftId: activeShift.id,
+          customerId: order.customerId || null,
+          transactionNumber,
+          subtotalAmount: finalAmount,
+          discountAmount: 0,
+          taxAmount: 0,
+          serviceCharge: 0,
+          totalAmount: finalAmount,
+          status: "PAID",
         },
       });
+
+      await prisma.payment.create({
+        data: {
+          transactionId: trx.id,
+          method: "CASH",
+          amount: finalAmount,
+          status: "SUCCESS",
+        },
+      });
+
+      // Hubungkan ke item transaksi (TransactionItem) agar tercatat rapi di laporan penjualan & akuntansi
+      let laundryProduct = await prisma.product.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          type: "JASA",
+          name: { contains: order.serviceType === "KILOAN" ? "Kiloan" : "Satuan", mode: "insensitive" },
+        },
+      });
+
+      if (!laundryProduct) {
+        laundryProduct = await prisma.product.findFirst({
+          where: {
+            tenantId: user.tenantId,
+            name: { contains: "Laundry", mode: "insensitive" },
+          },
+        });
+      }
+
+      if (!laundryProduct) {
+        laundryProduct = await prisma.product.findFirst({
+          where: {
+            tenantId: user.tenantId,
+          },
+        });
+      }
+
+      if (!laundryProduct) {
+        laundryProduct = await prisma.product.create({
+          data: {
+            tenantId: user.tenantId,
+            name: `Jasa Laundry ${order.serviceType === "KILOAN" ? "Kiloan" : "Satuan"}`,
+            category: "Laundry",
+            price: Number(order.pricePerUnit || finalAmount),
+            type: "JASA",
+          },
+        });
+      }
+
+      const itemQty = order.serviceType === "KILOAN" && order.weightKg
+        ? Math.max(1, Math.round(Number(order.weightKg)))
+        : (order.unitQty || 1);
+
+      await prisma.transactionItem.create({
+        data: {
+          transactionId: trx.id,
+          productId: laundryProduct.id,
+          qty: itemQty,
+          price: Number(order.pricePerUnit || (itemQty > 0 ? Math.round(finalAmount / itemQty) : finalAmount)),
+          subtotal: finalAmount,
+        },
+      });
+
+      // Update akumulasi LTV Customer & Loyalty Points jika terkait CRM
+      if (order.customerId) {
+        const pointsEarned = Math.floor(finalAmount / 10000);
+        await prisma.customer.update({
+          where: { id: order.customerId },
+          data: {
+            visits: { increment: 1 },
+            totalSpent: { increment: finalAmount },
+            points: { increment: pointsEarned },
+            lastVisitAt: new Date(),
+          },
+        });
+      }
+
+      updateData.notes = (order.notes ? order.notes + " | " : "") + `[Pelunasan Nota: ${transactionNumber}]`;
     }
   }
 

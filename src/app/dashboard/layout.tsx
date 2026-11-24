@@ -357,21 +357,23 @@ export default async function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Store & Marketplace CTA */}
-            <Link
-              href="/dashboard/store"
-              className={`hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-2xl border font-black text-xs transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md ${
-                isLuxeDark
-                  ? "bg-slate-800/90 hover:bg-slate-800 border-amber-500/40 text-amber-300 hover:border-amber-400"
-                  : "bg-amber-50 hover:bg-amber-100/90 border-amber-300 text-amber-950 hover:border-amber-400"
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-              <span>Store &amp; Tema</span>
-              <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                PRO
-              </span>
-            </Link>
+            {/* Store & Marketplace CTA (Hanya untuk Owner) */}
+            {user.role !== "ADMIN_CABANG" && (
+              <Link
+                href="/dashboard/store"
+                className={`hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-2xl border font-black text-xs transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md ${
+                  isLuxeDark
+                    ? "bg-slate-800/90 hover:bg-slate-800 border-amber-500/40 text-amber-300 hover:border-amber-400"
+                    : "bg-amber-50 hover:bg-amber-100/90 border-amber-300 text-amber-950 hover:border-amber-400"
+                }`}
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                <span>Store &amp; Tema</span>
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  PRO
+                </span>
+              </Link>
+            )}
 
             <OpenPosButton
               outlets={tenant?.outlets || []}
@@ -398,6 +400,7 @@ export default async function DashboardLayout({
       <div className={`flex-1 ${containerWidthClass} mx-auto w-full px-4 sm:px-6 lg:px-8 py-6`}>
         <DashboardNavLinks
           activePlugins={activePlugins}
+          userRole={user.role}
           themeTokens={{ primaryColor, accentColor, layoutStyle, isLuxeDark }}
           shellConfig={shellConfig}
         >

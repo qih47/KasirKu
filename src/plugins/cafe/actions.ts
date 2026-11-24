@@ -280,7 +280,7 @@ export async function transferTableAction(data: {
         where: {
           outletId: sourceTable.outletId,
           tableNumber: sourceTable.tableNumber,
-          status: { in: ["PENDING", "PREPARING", "READY"] },
+          status: { in: ["PENDING", "CONFIRMED", "PREPARING", "READY"] },
         },
         data: {
           tableNumber: targetTable.tableNumber,

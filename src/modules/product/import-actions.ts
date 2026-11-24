@@ -50,6 +50,11 @@ export async function importProductsBatchAction(params: {
   const tenantId = user.tenantId;
   const outletId = targetOutletId || user.outletId || null;
 
+  // Ambil cabang-cabang aktif tenant untuk pembuatan OutletStock otomatis
+  const activeOutlets = await prisma.outlet.findMany({
+    where: { tenantId, isActive: true },
+  });
+
   // Ambil semua produk tenant yang ada saat ini untuk pengecekan duplikat
   const existingProducts = await prisma.product.findMany({
     where: { tenantId },
@@ -130,6 +135,44 @@ export async function importProductsBatchAction(params: {
             },
           });
 
+          // Sinkronkan OutletStock untuk cabang terkait
+          const targetOutletsForUpdate = outletId
+            ? activeOutlets.filter((o: any) => o.id === outletId)
+            : activeOutlets.slice(0, 1);
+
+          for (const targetOut of (targetOutletsForUpdate.length > 0 ? targetOutletsForUpdate : activeOutlets)) {
+            const outStock = await prisma.outletStock.upsert({
+              where: {
+                outletId_productId: {
+                  outletId: targetOut.id,
+                  productId: existingMatch.id,
+                },
+              },
+              create: {
+                outletId: targetOut.id,
+                productId: existingMatch.id,
+                stockQty: cleanStock ?? 0,
+                isAvailable: true,
+              },
+              update: {
+                stockQty: { increment: cleanStock ?? 0 },
+              },
+            });
+
+            if (cleanType === "BARANG" && (cleanStock ?? 0) > 0) {
+              await prisma.stockMovement.create({
+                data: {
+                  outletStockId: outStock.id,
+                  type: "IN",
+                  qty: cleanStock ?? 0,
+                  note: `Penambahan stok via Impor Excel/CSV (${cleanName})`,
+                  performedById: user.id || null,
+                  status: "CONFIRMED",
+                },
+              });
+            }
+          }
+
           totalUpdated += 1;
           continue;
         }
@@ -178,6 +221,60 @@ export async function importProductsBatchAction(params: {
       data: chunk,
     });
     totalImported += chunk.length;
+  }
+
+  // Buatkan OutletStock & StockMovement otomatis untuk seluruh produk baru yang diimpor
+  if (itemsToCreate.length > 0 && activeOutlets.length > 0) {
+    const createdNames = itemsToCreate.map((item) => item.name);
+    const createdProducts = await prisma.product.findMany({
+      where: {
+        tenantId,
+        name: { in: createdNames },
+        outletStocks: { none: {} },
+      },
+      select: { id: true, name: true, stockQty: true, type: true },
+    });
+
+    const outletStockData = [];
+    for (const prod of createdProducts) {
+      for (const outlet of activeOutlets) {
+        outletStockData.push({
+          outletId: outlet.id,
+          productId: prod.id,
+          stockQty: prod.type === "JASA" ? 0 : (prod.stockQty ?? 0),
+          isAvailable: true,
+          priceOverride: null,
+        });
+      }
+    }
+
+    if (outletStockData.length > 0) {
+      await prisma.outletStock.createMany({
+        data: outletStockData,
+      });
+
+      // Catat pergerakan awal stok jika ada stok fisik
+      const newOutletStocks = await prisma.outletStock.findMany({
+        where: {
+          productId: { in: createdProducts.map((p: any) => p.id) },
+          stockQty: { gt: 0 },
+        },
+        select: { id: true, stockQty: true },
+      });
+
+      if (newOutletStocks.length > 0) {
+        await prisma.stockMovement.createMany({
+          data: newOutletStocks.map((os: any) => ({
+            outletStockId: os.id,
+            type: "IN",
+            qty: os.stockQty,
+            note: "Stok awal impor batch Excel/CSV",
+            performedById: user.id || null,
+            status: "CONFIRMED",
+          })),
+        });
+      }
+    }
   }
 
   revalidatePath("/dashboard/products");

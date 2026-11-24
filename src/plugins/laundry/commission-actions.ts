@@ -1,5 +1,7 @@
 "use server";
 
+import { resolveProductVertical } from "@/lib/vertical-helpers";
+
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -70,7 +72,12 @@ export async function getLaundryCommissionsData(params?: {
     }),
   ]);
 
-  const totalCommissionsPaid = (commissions as any[]).reduce(
+  // Saring hanya komisi dari layanan / produk laundry
+  const laundryCommissions = (commissions as any[]).filter(
+    (c: any) => resolveProductVertical(c.transactionItem?.product) === "LAUNDRY"
+  );
+
+  const totalCommissionsPaid = laundryCommissions.reduce(
     (sum: number, c: any) => sum + Number(c.amount || 0),
     0
   );
@@ -97,7 +104,7 @@ export async function getLaundryCommissionsData(params?: {
     };
   });
 
-  (commissions as any[]).forEach((c: any) => {
+  laundryCommissions.forEach((c: any) => {
     if (staffSummaryMap[c.staffId]) {
       staffSummaryMap[c.staffId].totalTasks += 1;
       staffSummaryMap[c.staffId].totalCommission += Number(c.amount || 0);
@@ -143,9 +150,11 @@ export async function updateStaffLaundryRatesAction(data: {
 
   const currentAttrs: Record<string, any> = ((staff as any).attributes as any) || {};
 
+  const hasActiveRate = Number(ironingRatePerKg || 0) > 0 || Number(washingRatePerKg || 0) > 0;
   await prisma.user.update({
     where: { id: staffId },
     data: {
+      isCommissionActive: hasActiveRate ? true : staff.isCommissionActive,
       attributes: {
         ...currentAttrs,
         ironingRatePerKg,

@@ -48,6 +48,7 @@ interface CustomerMenuClientProps {
     logoUrl?: string | null;
     outletId: string;
     outletName: string;
+    receiptConfig?: any;
   };
   tables: TableItem[];
   initialTableQuery?: string;
@@ -103,10 +104,28 @@ export function CustomerMenuClient({
     });
   };
 
-  const totalAmount = Object.values(cart).reduce(
+  const rc = (tenant?.receiptConfig as any) || {};
+
+  const cartSubtotal = Object.values(cart).reduce(
     (sum, item) => sum + item.product.price * item.qty,
     0
   );
+
+  const isPb1 = Boolean(rc.showPb1 || rc.taxPb1Active);
+  const pb1Percent = Number(rc.pb1Percent || rc.taxPb1Percent || 0);
+  const pb1Amount = isPb1 && pb1Percent > 0 ? Math.round((cartSubtotal * pb1Percent) / 100) : 0;
+
+  const isPpn = Boolean(rc.showTax || rc.taxPpnActive);
+  const ppnPercent = Number(rc.taxPercent || rc.taxPpnPercent || 0);
+  const ppnAmount = isPpn && ppnPercent > 0 ? Math.round((cartSubtotal * ppnPercent) / 100) : 0;
+
+  const isService = Boolean(rc.showServiceCharge || rc.serviceChargeActive);
+  const servicePercent = Number(rc.servicePercent || rc.serviceChargePercent || 0);
+  const serviceAmount = isService && servicePercent > 0 ? Math.round((cartSubtotal * servicePercent) / 100) : 0;
+
+  const adminFee = rc.showAdminFee && Number(rc.adminFeeAmount || 0) > 0 ? Number(rc.adminFeeAmount) : 0;
+
+  const totalAmount = cartSubtotal + pb1Amount + ppnAmount + serviceAmount + adminFee;
 
   const totalCount = Object.values(cart).reduce((sum, item) => sum + item.qty, 0);
 
@@ -414,9 +433,39 @@ export function CustomerMenuClient({
                     </span>
                   </div>
                 ))}
-                <div className="border-t border-slate-200 pt-2 flex justify-between font-black text-sm text-slate-900">
-                  <span>Total Tagihan:</span>
-                  <span className="text-indigo-600">Rp {totalAmount.toLocaleString("id-ID")}</span>
+                <div className="border-t border-slate-200 pt-2 space-y-1">
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Subtotal Menu:</span>
+                    <span className="font-mono">Rp {cartSubtotal.toLocaleString("id-ID")}</span>
+                  </div>
+                  {pb1Amount > 0 && (
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Pajak Restoran (PB1 {pb1Percent}%):</span>
+                      <span className="font-mono text-indigo-600">+Rp {pb1Amount.toLocaleString("id-ID")}</span>
+                    </div>
+                  )}
+                  {ppnAmount > 0 && (
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>PPN ({ppnPercent}%):</span>
+                      <span className="font-mono text-indigo-600">+Rp {ppnAmount.toLocaleString("id-ID")}</span>
+                    </div>
+                  )}
+                  {serviceAmount > 0 && (
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Service Charge ({servicePercent}%):</span>
+                      <span className="font-mono text-indigo-600">+Rp {serviceAmount.toLocaleString("id-ID")}</span>
+                    </div>
+                  )}
+                  {adminFee > 0 && (
+                    <div className="flex justify-between text-[11px] text-slate-600">
+                      <span>Biaya Tambahan:</span>
+                      <span className="font-mono text-indigo-600">+Rp {adminFee.toLocaleString("id-ID")}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-200 pt-1.5 flex justify-between font-black text-sm text-slate-900">
+                    <span>Total Tagihan:</span>
+                    <span className="text-indigo-600 font-mono">Rp {totalAmount.toLocaleString("id-ID")}</span>
+                  </div>
                 </div>
               </div>
 

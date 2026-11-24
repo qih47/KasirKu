@@ -112,10 +112,12 @@ export async function deductRecipeIngredients(
     if (recipe.length === 0) continue;
 
     for (const ing of recipe) {
-      const totalQtyToDeduct = Math.round(ing.quantity * item.qty);
+      // Pastikan takaran pecahan (misal 0.018 kg atau 0.2 L) minimal memotong 1 satuan terkecil di DB
+      const rawDeduct = Number(ing.quantity || 0) * Number(item.qty || 1);
+      const totalQtyToDeduct = rawDeduct > 0 && rawDeduct < 1 ? 1 : Math.round(rawDeduct);
       if (totalQtyToDeduct <= 0) continue;
 
-      // Kurangi stok di produk bahan baku
+      // Kurangi stok di produk bahan baku master
       await tx.product.update({
         where: { id: ing.ingredientProductId },
         data: {
@@ -125,27 +127,114 @@ export async function deductRecipeIngredients(
         },
       }).catch(() => {});
 
-      // Catat mutasi stok bahan baku di outlet jika ada outlet stock
-      const outletStock = await tx.outletStock.findFirst({
+      // Sinkronkan ke OutletStock cabang (buat otomatis jika belum ada)
+      let targetOutletStock = await tx.outletStock.findFirst({
         where: { outletId, productId: ing.ingredientProductId },
       });
 
-      if (outletStock) {
-        await tx.outletStock.update({
-          where: { id: outletStock.id },
+      if (!targetOutletStock) {
+        targetOutletStock = await tx.outletStock.create({
+          data: {
+            outletId,
+            productId: ing.ingredientProductId,
+            stockQty: 0 - totalQtyToDeduct,
+            isAvailable: true,
+          },
+        }).catch(() => null);
+      } else {
+        targetOutletStock = await tx.outletStock.update({
+          where: { id: targetOutletStock.id },
           data: {
             stockQty: {
               decrement: totalQtyToDeduct,
             },
           },
-        }).catch(() => {});
+        }).catch(() => null);
+      }
 
+      if (targetOutletStock) {
         await tx.stockMovement.create({
           data: {
-            outletStockId: outletStock.id,
+            outletStockId: targetOutletStock.id,
             type: "OUT",
             qty: totalQtyToDeduct,
             note: `BOM: Pemakaian resep ${item.qty}x ${product.name}`,
+            referenceId,
+            status: "CONFIRMED",
+          },
+        }).catch(() => {});
+      }
+    }
+  }
+}
+
+/**
+ * Mengembalikan stok bahan baku secara otomatis saat transaksi kasir di-void/dibatalkan.
+ */
+export async function restoreRecipeIngredients(
+  tx: any,
+  items: Array<{ productId: string; qty: number }>,
+  outletId: string,
+  referenceId: string,
+  reason?: string
+) {
+  for (const item of items) {
+    const product = await tx.product.findUnique({
+      where: { id: item.productId },
+    });
+
+    if (!product) continue;
+
+    const recipe: RecipeIngredient[] = (product.attributes as any)?.recipe || [];
+    if (recipe.length === 0) continue;
+
+    for (const ing of recipe) {
+      const rawRestore = Number(ing.quantity || 0) * Number(item.qty || 1);
+      const totalQtyToRestore = rawRestore > 0 && rawRestore < 1 ? 1 : Math.round(rawRestore);
+      if (totalQtyToRestore <= 0) continue;
+
+      // Kembalikan stok di produk bahan baku master
+      await tx.product.update({
+        where: { id: ing.ingredientProductId },
+        data: {
+          stockQty: {
+            increment: totalQtyToRestore,
+          },
+        },
+      }).catch(() => {});
+
+      // Kembalikan stok bahan baku di outlet
+      let targetOutletStock = await tx.outletStock.findFirst({
+        where: { outletId, productId: ing.ingredientProductId },
+      });
+
+      if (!targetOutletStock) {
+        targetOutletStock = await tx.outletStock.create({
+          data: {
+            outletId,
+            productId: ing.ingredientProductId,
+            stockQty: totalQtyToRestore,
+            isAvailable: true,
+          },
+        }).catch(() => null);
+      } else {
+        targetOutletStock = await tx.outletStock.update({
+          where: { id: targetOutletStock.id },
+          data: {
+            stockQty: {
+              increment: totalQtyToRestore,
+            },
+          },
+        }).catch(() => null);
+      }
+
+      if (targetOutletStock) {
+        await tx.stockMovement.create({
+          data: {
+            outletStockId: targetOutletStock.id,
+            type: "IN",
+            qty: totalQtyToRestore,
+            note: `BOM Void: Pengembalian resep ${item.qty}x ${product.name}${reason ? ` (${reason})` : ""}`,
             referenceId,
             status: "CONFIRMED",
           },

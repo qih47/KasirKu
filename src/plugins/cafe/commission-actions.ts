@@ -1,3 +1,4 @@
+import { resolveProductVertical } from "@/lib/vertical-helpers";
 "use server";
 
 import { getServerSession } from "next-auth";
@@ -59,11 +60,18 @@ export async function getCafeServiceChargePoolData(params?: {
     }),
   ]);
 
+  const rc = ((tenant as any)?.receiptConfig as any) || {};
   const tenantAttrs: Record<string, any> = ((tenant as any)?.attributes as any) || {};
-  const serviceChargePercent = Number(tenantAttrs.serviceChargePercent || 5);
+  const serviceChargePercent = Number(rc.servicePercent || tenantAttrs.serviceChargePercent || 5);
 
-  const totalOmzet = (transactions as any[]).reduce((sum: number, t: any) => sum + Number(t.totalAmount || 0), 0);
-  const totalServiceChargeCollected = Math.round((totalOmzet * serviceChargePercent) / 100);
+  // Saring hanya transaksi yang memuat menu F&B Kafe
+  const cafeTransactions = (transactions as any[]).filter((t: any) =>
+    t.items.some((it: any) => resolveProductVertical(it.product) === "CAFE")
+  );
+
+  const totalOmzet = cafeTransactions.reduce((sum: number, t: any) => sum + Number(t.totalAmount || 0), 0);
+  const actualService = cafeTransactions.reduce((sum: number, t: any) => sum + Number(t.serviceCharge || 0), 0);
+  const totalServiceChargeCollected = actualService > 0 ? actualService : Math.round((totalOmzet * serviceChargePercent) / 100);
 
   // Bagi rata service charge ke seluruh staf aktif
   const staffCount = staffList.length || 1;
@@ -98,6 +106,7 @@ export async function updateCafeServiceChargeConfigAction(data: {
   if (!tenant) throw new Error("Tenant tidak ditemukan.");
 
   const currentAttrs: Record<string, any> = ((tenant as any).attributes as any) || {};
+  const currentRc: Record<string, any> = ((tenant as any).receiptConfig as any) || {};
 
   await prisma.tenant.update({
     where: { id: user.tenantId },
@@ -107,9 +116,16 @@ export async function updateCafeServiceChargeConfigAction(data: {
         serviceChargePercent: Number(serviceChargePercent),
         poolDistributionMethod: poolDistributionMethod || "EQUAL_SPLIT",
       },
+      receiptConfig: {
+        ...currentRc,
+        servicePercent: Number(serviceChargePercent),
+        showServiceCharge: Number(serviceChargePercent) > 0,
+      },
     } as any,
   });
 
   revalidatePath("/dashboard/cafe/commissions");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/pos");
   return { success: true };
 }
